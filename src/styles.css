@@ -1355,3 +1355,5 @@ label.field, fieldset.field legend { font-size: 16px; }
     linear-gradient(135deg, rgba(32, 184, 202, 0.24) 0%, rgba(60, 140, 215, 0.18) 55%, rgba(9, 82, 158, 0.20) 100%),
     #fff;
 }
+.blend-row .blend-btn { height: 42px; min-height: 42px; box-sizing: border-box; padding-top: 0; padding-bottom: 0; } /* D-098 글씨 키움 후에도 입력란(42px)과 세로 가운데 일치 */
+.progress-tbl td .cell-in { vertical-align: middle; } /* D-098 글씨 키움 후 셀 세로 가운데 오차 방지 */
