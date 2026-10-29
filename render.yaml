@@ -1,0 +1,18 @@
+# 시연용 정적 사이트(Render Static Site, 무료). hr-evaluation과 같은 방식: Private GitHub 저장소 → Render Blueprint.
+# 서버·DB 없음 — 데이터는 방문자 브라우저(localStorage)에만 저장된다. 비밀 환경변수 없음.
+services:
+  - type: web
+    name: daeyang-hr-mockup
+    runtime: static
+    buildCommand: npm ci && npm run build
+    staticPublishPath: ./dist
+    pullRequestPreviewsEnabled: false
+    headers:
+      - path: /*
+        name: X-Robots-Tag
+        value: noindex, nofollow
+    routes:
+      # 화면 주소는 #/... 해시 방식 — 혹시 다른 경로로 들어와도 앱을 연다(직접 주소·새로고침)
+      - type: rewrite
+        source: /*
+        destination: /index.html

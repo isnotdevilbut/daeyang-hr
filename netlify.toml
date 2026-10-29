@@ -1,0 +1,17 @@
+# 시연용 정적 배포(Netlify). 서버·DB 없음 — 데이터는 방문자 브라우저(localStorage)에만 저장된다.
+# 배포 명령: npm run deploy (빌드 후 dist 폴더만 업로드 — 원본 자료·문서는 올라가지 않음)
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+# 직접 주소·새로고침: 해시 주소(#/...)라 서버 경로는 항상 / — 혹시 다른 경로로 들어와도 앱을 연다
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# 시연 사이트는 검색 엔진에 노출하지 않음
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"

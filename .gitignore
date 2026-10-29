@@ -1,0 +1,14 @@
+node_modules
+dist
+.DS_Store
+# 실제 인사 양식·메모 원본은 저장소에 올리지 않는다
+대양롤랜트_ClaudeCode_전달자료/
+
+# Netlify 연결 정보(사이트 ID) — 로컬 전용
+.netlify/
+tsconfig.tsbuildinfo
+.env
+.env.*
+*.log
+# 원본 회사 자료(전달자료·회의 메모·양식)를 상세 분석한 문서 — 로컬에만 둔다
+docs/analysis.md

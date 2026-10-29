@@ -1,0 +1,160 @@
+// ⚠ 개발용 가정 계산. 회사의 현재 산식이 아니다. (docs/scoring.md)
+import type { Adjustment, AppState, Cycle, Direction, Response, Template } from './types'
+import { appliedStages, pathFor, stageAssignments } from './progress'
+import { applies, ctxFor, weightErrors, type QCtx } from './questions'
+import { applyBlend, deptKpi, type DeptKpi } from './kpi'
+import type { KpiBlend } from './types'
+
+/** 단계 점수 = 점수 문항(숫자 값이 있는 선택지)의 응답 합 ÷ 최고점 합 × 100 */
+export function stageScore(t: Template, r: Response | undefined, ctxOrDir: QCtx | Direction): number | null {
+  if (!r) return null
+  const ctx: QCtx = typeof ctxOrDir === 'string' ? { direction: ctxOrDir } : ctxOrDir
+  let got = 0
+  let max = 0
+  for (const s of t.sections)
+    for (const q of s.questions) {
+      if (q.purpose !== 'score' || !applies(q, ctx)) continue
+      const values = q.options.map((o) => o.value).filter((v): v is number => v !== null)
+      if (values.length === 0) continue // 등급(A~D)처럼 점수 환산이 정해지지 않은 문항은 제외
+      const picked = q.options.find((o) => o.id === r.answers[q.id])
+      if (!picked || picked.value === null) continue
+      got += picked.value
+      max += Math.max(...values)
+    }
+  return max === 0 ? null : (got / max) * 100
+}
+
+/** 점수 환산이 없는 등급 문항(A~D)의 선택 라벨 */
+export function gradeAnswer(t: Template, r: Response | undefined): string | null {
+  if (!r) return null
+  for (const s of t.sections)
+    for (const q of s.questions)
+      if (q.active && q.type === 'grade' && q.options.every((o) => o.value === null)) {
+        const o = q.options.find((x) => x.id === r.answers[q.id])
+        if (o) return o.label
+      }
+  return null
+}
+
+export interface CombineInput {
+  stages: { score: number | null; weight: number | null; submitted: boolean }[]
+  weightError?: string | null
+  dept: number | null
+  person: number | null
+  ceoScore: number | null
+  /** 부서 KPI 반영 (없거나 꺼져 있으면 기초 점수 그대로) */
+  kpi?: { blend: KpiBlend; deptScore: number | null }
+}
+export interface CombineResult {
+  base: number | null // 개인평가 기초 점수
+  afterKpi: number | null // KPI 반영 후 (반영 안 하면 base와 같음)
+  kpiApplied: boolean
+  kpiNote: string
+  afterAdjust: number | null
+  final: number | null
+  incomplete: boolean
+  note: string
+}
+
+/** 순수 함수 — 자동 테스트 대상 */
+export function combine(i: CombineInput): CombineResult {
+  const scored = i.stages.filter((s) => (s.weight ?? 0) > 0)
+  const missing = scored.some((s) => !s.submitted || s.score === null)
+  let base: number | null = null
+  let note = ''
+  if (i.weightError || i.stages.some((s) => s.weight === null)) note = i.weightError || '단계 반영 비율이 입력되지 않아 계산하지 않음'
+  else if (scored.length === 0) note = '점수 단계 없음'
+  else if (missing) note = '미제출 단계가 있어 계산하지 않음 (0점 처리·가중치 재분배 안 함)'
+  else {
+    const wsum = scored.reduce((a, s) => a + s.weight!, 0)
+    base = scored.reduce((a, s) => a + s.score! * s.weight!, 0) / wsum
+  }
+  // 1·2·3. 개인 기초 점수 → (켜져 있으면) 부서 KPI 반영. KPI는 보정점과 별개라 여기서 한 번만 섞는다
+  const b = applyBlend(base, i.kpi?.blend, i.kpi?.deptScore ?? null)
+  // 4. 부서 보정·개인 보정 (가산)
+  const afterAdjust = b.afterKpi === null ? null : b.afterKpi + (i.dept ?? 0) + (i.person ?? 0)
+  // 5. 최종 지정값이 있으면 그 값 (0은 유효한 값, null만 "없음")
+  const final = i.ceoScore !== null ? i.ceoScore : afterAdjust
+  return { base, afterKpi: b.afterKpi, kpiApplied: b.applied, kpiNote: b.note, afterAdjust, final, incomplete: base === null || b.afterKpi === null, note: note || b.note }
+}
+
+export function latestAdjustment(adjs: Adjustment[], cycleId: string, kind: Adjustment['kind'], key: string) {
+  const list = adjs.filter((a) => a.cycleId === cycleId && a.kind === kind && a.targetKey === key)
+  return list.length ? list[list.length - 1] : null
+}
+const num = (a: Adjustment | null) => (a && typeof a.value === 'number' ? a.value : null)
+
+export interface PersonResult {
+  stages: { order: number; label: string; evaluators: string[]; score: number | null; grade: string | null; submitted: boolean; weight: number | null }[]
+  kpi: number | null // 부서 KPI 점수 (출처에 따라 직접 입력 또는 지표 계산, 미완료면 null)
+  kpiDetail: DeptKpi
+  kpiBlend: KpiBlend
+  dept: number | null
+  person: number | null
+  ceoScore: number | null
+  ceoGrade: string | null
+  combined: CombineResult
+}
+
+export function personResult(state: AppState, cycle: Cycle, targetId: string): PersonResult | null {
+  const target = cycle.targets.find((t) => t.employeeId === targetId)
+  if (!target) return null
+  const nameOf = (id: string) => state.employees.find((e) => e.id === id)?.name ?? '(알 수 없음)'
+  // 이 대상자에게 적용되는 단계만 (끈 자기평가 제외, D-068). 기초 점수는 적용 단계의 반영 비율 합으로 나눈다
+  const stages = appliedStages(cycle, target).map((st) => {
+    const as = stageAssignments(cycle, targetId, st.order)
+    const scores: number[] = []
+    let grade: string | null = null
+    let submitted = as.length > 0
+    for (const a of as) {
+      const r = state.responses[a.id]
+      if (!r || r.status !== 'submitted') { submitted = false; continue }
+      const t = cycle.templates[a.templateId]
+      const sc = stageScore(t, r, ctxFor(cycle, a))
+      if (sc !== null) scores.push(sc)
+      grade = gradeAnswer(t, r) ?? grade
+    }
+    return {
+      order: st.order,
+      label: st.label,
+      evaluators: as.map((a) => nameOf(a.evaluatorId)),
+      // 같은 단계 평가자가 여럿(임원 4명 등, D-081)이면 평가자별 단계 점수를 같은 비중으로 평균. 모두 제출 전에는 점수 없음(부분 평균을 완료처럼 보이지 않게)
+      score: submitted && scores.length ? scores.reduce((x, y) => x + y, 0) / scores.length : null,
+      grade,
+      submitted,
+      weight: weightsFor(cycle, target)[st.order] ?? null,
+    }
+  })
+  // 조직 단위는 회차 시작 시점 소속(스냅샷) 기준 — 나중에 팀을 옮겨도 과거 회차 KPI는 그대로
+  const kpiDetail = deptKpi(state, cycle.id, target.departmentId)
+  const kpi = kpiDetail.score
+  const kpiBlend = cycle.kpiBlend ?? { enabled: false, personal: null, kpi: null }
+  // 팀 보정: 새 팀에 기록이 있으면 그것, 없으면 네 팀 정리 전 조직의 기록(D-065 — 정리 때문에 점수가 바뀌지 않게)
+  const deptRec = latestAdjustment(state.adjustments, cycle.id, 'dept', target.departmentId)
+    ?? (target.legacyUnitId ? latestAdjustment(state.adjustments, cycle.id, 'dept', target.legacyUnitId) : null)
+  const dept = num(deptRec)
+  const person = num(latestAdjustment(state.adjustments, cycle.id, 'person', targetId))
+  const ceoScore = num(latestAdjustment(state.adjustments, cycle.id, 'ceoScore', targetId))
+  const g = latestAdjustment(state.adjustments, cycle.id, 'ceoGrade', targetId)
+  const ceoGrade = g && typeof g.value === 'string' ? g.value : null
+  return {
+    stages,
+    kpi,
+    kpiDetail,
+    kpiBlend,
+    dept,
+    person,
+    ceoScore,
+    ceoGrade,
+    combined: combine({ stages, dept, person, ceoScore, kpi: { blend: kpiBlend, deptScore: kpi }, weightError: weightErrors(pathFor(cycle, target), weightsFor(cycle, target))[0] ?? null }),
+  }
+}
+
+export const fmt = (n: number | null, digits = 1) => (n === null ? '—' : n.toFixed(digits))
+export const fmtSigned = (n: number | null) => (n === null ? '—' : (n > 0 ? '+' : '') + n.toFixed(1))
+
+/** 회차의 경로별 단계 반영 비율(%). 이전 데이터에 없으면 빈 값(미입력). 임원 경로는 자기평가 하나라 기본 100% */
+export function weightsFor(cycle: Cycle, target: { isTeamLead: boolean; isExecutive?: boolean }): Record<number, number | null> {
+  if (target.isExecutive) return cycle.stageWeights?.exec ?? { 1: 100 }
+  return (target.isTeamLead ? cycle.stageWeights?.lead : cycle.stageWeights?.member) ?? {}
+}
