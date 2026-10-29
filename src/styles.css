@@ -1324,3 +1324,20 @@ ul.target-list { list-style: none; margin: 4px 0 0; padding: 0; }
   100% { box-shadow: 0 0 0 2px rgba(32, 184, 202, 0.18), 0 0 12px 0 rgba(22, 168, 192, 0.32), 0 6px 20px -8px rgba(9, 82, 158, 0.34); }
 }
 @media (prefers-reduced-motion: reduce) { .stats5 button.stat[aria-pressed='true'] { animation: none; } }
+/* ── D-098: 화면 표·입력·버튼·배지 글씨 한 단계(약 1~1.5px) 키움 — 페이지 제목·상단 메뉴·카드 큰 숫자·A4 리포트(.a4, 별도 크기)는 제외 ── */
+table.tbl { font-size: 17px; }
+.tbl th { font-size: 16px; }
+.btn { font-size: 17px; }
+.btn.small { font-size: 16px; min-height: 38px; padding: 4px 13px; }
+input[type=text], input[type=search], input[type=number], input[type=date], select:not(.lang-select), textarea { font-size: 17px; }
+label.field, fieldset.field legend { font-size: 16px; }
+.chip { font-size: 14.5px; }
+.chip.tag { font-size: 13.5px; }
+.chip.stage { font-size: 15px; min-width: 82px; padding: 3px 11px; }
+.writes-sum { font-size: 15.5px; }
+.task-tbl .tk-name b { font-size: 17.5px; }
+.task-tbl .tk-wait { font-size: 14.5px; }
+.exec-people .small, .write-st .small, .ws-note { font-size: 14.5px; }
+.exec-team-n, .pick-n { font-size: 15.5px; }
+.score-sum dd { font-size: 18px; }
+@media (max-width: 640px) { .task-tbl .tk-team { font-size: 15.5px; } .settings-bar .btn { font-size: 15px; } }
