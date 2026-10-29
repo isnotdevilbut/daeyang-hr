@@ -1341,3 +1341,6 @@ label.field, fieldset.field legend { font-size: 16px; }
 .exec-team-n, .pick-n { font-size: 15.5px; }
 .score-sum dd { font-size: 18px; }
 @media (max-width: 640px) { .task-tbl .tk-team { font-size: 15.5px; } .settings-bar .btn { font-size: 15px; } }
+/* D-099: 선택된 카드 안쪽도 옅은 파랑·청록으로 채워 선택 상태가 한눈에 보이게(숫자 뒤 별도 박스 없음, 글자색 그대로) */
+.stats5 button.stat[aria-pressed='true'] { background: linear-gradient(160deg, rgba(32, 184, 202, 0.13) 0%, rgba(9, 82, 158, 0.10) 100%), #fff; }
+@media (forced-colors: active) { .stats5 button.stat[aria-pressed='true'] { background: Highlight; } }
