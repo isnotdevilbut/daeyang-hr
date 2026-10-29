@@ -1344,3 +1344,14 @@ label.field, fieldset.field legend { font-size: 16px; }
 /* D-099: 선택된 카드 안쪽도 옅은 파랑·청록으로 채워 선택 상태가 한눈에 보이게(숫자 뒤 별도 박스 없음, 글자색 그대로) */
 .stats5 button.stat[aria-pressed='true'] { background: linear-gradient(160deg, rgba(32, 184, 202, 0.13) 0%, rgba(9, 82, 158, 0.10) 100%), #fff; }
 @media (forced-colors: active) { .stats5 button.stat[aria-pressed='true'] { background: Highlight; } }
+/* D-100: 선택 카드 안 = 은은하지만 분명한 파랑·청록 글라스 그라데이션(위쪽 옅은 반사광 + 대각 색), 선택 안 된 카드는 흰색.
+   aria-pressed 기준이라 마우스를 떼거나 다른 곳을 눌러도 유지. 글자·숫자 색 그대로(남색) */
+.stats5 button.stat[aria-pressed='true'],
+.stats5 button.stat[aria-pressed='true']:hover,
+.stats5 button.stat[aria-pressed='true']:active,
+.stats5 button.stat[aria-pressed='true']:focus {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0) 48%),
+    linear-gradient(135deg, rgba(32, 184, 202, 0.24) 0%, rgba(60, 140, 215, 0.18) 55%, rgba(9, 82, 158, 0.20) 100%),
+    #fff;
+}
