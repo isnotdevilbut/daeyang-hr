@@ -102,6 +102,7 @@ export function setLoggedIn(key: string | null) {
   try {
     if (key) sessionStorage.setItem(KEY, key)
     else sessionStorage.removeItem(KEY)
+    sessionStorage.removeItem('daeyang-hr-progress-filters') // 로그인·로그아웃마다 진행 현황 카드·검색 선택 초기화(첫 화면은 '평가 참여자' 선택, D-096)
   } catch { /* 저장 불가 시 메모리에서만 유지 */ }
   emit()
 }

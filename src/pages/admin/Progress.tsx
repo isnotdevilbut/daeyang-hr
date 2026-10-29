@@ -52,7 +52,8 @@ function Body({ s, cycle }: { s: AppState; cycle: Cycle }) {
   // 직급 필터 = 직급 ID (D-080). 이전에 저장된 값이 직급 ID가 아니면 읽지 않음(숨은 필터 방지)
   const [tier, setTier] = useState<string>(positionById(s, saved.tier) ? saved.tier! : '')
   const [onlyOpen, setOnlyOpen] = useState<boolean>(!!saved.onlyOpen)
-  const [pick, setPick] = useState<CardPick>(validPick(saved.pick))
+  // 처음 들어오면(이 탭에 저장된 카드 선택 없음) '평가 참여자' 카드가 선택된 상태 — 카드를 눌러 명단을 바꿀 수 있다는 점이 보이게(D-096). 명단은 선택 없음과 같음
+  const [pick, setPick] = useState<CardPick>(saved.pick === undefined ? { kind: 'all' } : validPick(saved.pick))
   useEffect(() => { try { sessionStorage.setItem(FILTER_KEY, JSON.stringify({ cycleId: cycle.id, q, tier, onlyOpen, pick })) } catch { /* 무시 */ } }, [cycle.id, q, tier, onlyOpen, pick])
   // 상세에서 돌아오면 그때의 스크롤 위치로
   useEffect(() => {
