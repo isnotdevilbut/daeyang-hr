@@ -1315,3 +1315,12 @@ ul.target-list { list-style: none; margin: 4px 0 0; padding: 0; }
 .blend-row .bl-l { text-align: center; justify-self: center; }
 .blend-row .blend-f { justify-items: stretch; }
 .blend-row .bl-ok { margin: 8px 0 0; } .blend-row .bl-ok .feedback { margin: 0; }
+/* ── D-097: 진행 현황 카드 선택 강조 조금 더 선명하게 — 테두리 2→3px(안쪽 덮개라 크기·배치 그대로)·색 진하게, 가장자리 가까운 빛만 조금 강화. hover(::after 안쪽 빛)와 구분 ── */
+.stats5 button.stat::before { padding: 3px; background: linear-gradient(135deg, rgba(9, 82, 158, 1), rgba(22, 168, 192, 1) 55%, rgba(88, 118, 214, 0.95)); }
+.stats5 button.stat[aria-pressed='true'] { box-shadow: 0 0 0 2px rgba(32, 184, 202, 0.18), 0 0 12px 0 rgba(22, 168, 192, 0.32), 0 6px 20px -8px rgba(9, 82, 158, 0.34); animation: stat-pick2 650ms ease-out; }
+@keyframes stat-pick2 {
+  0% { box-shadow: 0 0 0 0 rgba(32, 184, 202, 0.38), 0 0 12px 0 rgba(22, 168, 192, 0.32), 0 6px 20px -8px rgba(9, 82, 158, 0.34); }
+  45% { box-shadow: 0 0 0 7px rgba(32, 184, 202, 0.14), 0 0 12px 0 rgba(22, 168, 192, 0.32), 0 6px 20px -8px rgba(9, 82, 158, 0.34); }
+  100% { box-shadow: 0 0 0 2px rgba(32, 184, 202, 0.18), 0 0 12px 0 rgba(22, 168, 192, 0.32), 0 6px 20px -8px rgba(9, 82, 158, 0.34); }
+}
+@media (prefers-reduced-motion: reduce) { .stats5 button.stat[aria-pressed='true'] { animation: none; } }
