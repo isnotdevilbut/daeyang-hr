@@ -39,7 +39,7 @@ export default function Report() {
 }
 
 /** 평가 유형별 배정과 그 배정에 적용되는 문항 */
-function evalParts(s: AppState, cycle: Cycle, t: TargetSnapshot) {
+export function evalParts(s: AppState, cycle: Cycle, t: TargetSnapshot) {
   const path = pathFor(cycle, t)
   const mine = cycle.assignments.filter((a) => a.targetId === t.employeeId && isActiveAssignment(a))
   const of = (rule: 'self' | 'teamLead' | 'executive') => {
@@ -57,9 +57,7 @@ function evalParts(s: AppState, cycle: Cycle, t: TargetSnapshot) {
 }
 
 function ReportBody({ s, cycle, t, from }: { s: AppState; cycle: Cycle; t: TargetSnapshot; from: string }) {
-  const r = personResult(s, cycle, t.employeeId)!
   const parts = useMemo(() => evalParts(s, cycle, t), [s, cycle, t])
-  const emp = s.employees.find((e) => e.id === t.employeeId)
   const qItems = (prefix: string, qs: Question[]): Item[] => qs.map((q) => ({ key: `${prefix}:q:${q.id}`, label: q.title }))
   // 포함 항목 = 평가 답변(자기·팀장·임원평가)만 고름(D-128). 기본 정보·평가 회차·점수는 항상, 추가 기록은 저장한 경우 항상 리포트에 들어감
   const groups: Group[] = [
@@ -91,25 +89,8 @@ function ReportBody({ s, cycle, t, from }: { s: AppState; cycle: Cycle; t: Targe
     setNoteMsg(draft.trim() ? '저장했습니다.' : '추가 기록을 비웠습니다.')
   }
   useEffect(() => { if (!noteMsg) return; const x = setTimeout(() => setNoteMsg(''), 3000); return () => clearTimeout(x) }, [noteMsg])
-  const noteText = saved.trim() ? saved : '' // 출력은 저장된 내용 기준
-
-  const info = [
-    on('info.name') && ['이름', <b key="n">{t.name}</b>],
-    on('info.empNo') && ['사번', emp?.empNo ?? t.empNo],
-    on('info.team') && ['팀', t.teamName],
-    on('info.position') && ['직급', targetPosition(s, cycle, t)],
-    on('info.job') && ['직무', jobName(s, t.jobType)],
-    on('cycle.name') && ['평가 회차', cycle.name],
-    on('cycle.period') && ['평가 기간', cycle.period || '—'],
-  ].filter(Boolean) as [string, ReactNode][]
-  const qShown = (prefix: string, qs: Question[]) => qs.filter((q) => on(`${prefix}:q:${q.id}`))
-  const selfQ = qShown('self', parts.selfQ), leadQ = qShown('lead', parts.leadQ), execQ = qShown('exec', parts.execQ)
-  const execShown = parts.exec.filter((a) => on(`exec:e:${a.evaluatorId}`))
-  const history = s.adjustments.filter((a) => a.cycleId === cycle.id && (a.targetKey === t.employeeId || a.targetKey === t.departmentId || (!!t.legacyUnitId && a.targetKey === t.legacyUnitId)))
-  const scoreRows = on('scores.base') || on('scores.kpi') || on('scores.final')
-  const showNote = on('note') && !!noteText
-  const empty = !info.length && !selfQ.length && !leadQ.length && !(execShown.length && execQ.length) && !on('scores.stage') && !scoreRows && !showNote
-  const complete = !r.combined.incomplete && r.ceoGrade !== null
+  const m = sheetModel(s, cycle, t, parts, on)
+  const empty = m.empty
   const fileBase = `${t.name}_${cycleLabel(cycle)}_개인리포트`.replace(/[\\/:*?"<>|]/g, '_')
   const download = (kind: 'xlsx' | 'doc' | 'csv') => {
     const a4 = document.querySelector<HTMLElement>('.report-shell .a4')
@@ -178,69 +159,103 @@ function ReportBody({ s, cycle, t, from }: { s: AppState; cycle: Cycle; t: Targe
       </div>
       {/* 리포트 본문은 화면에서 숨기고 인쇄(브라우저 인쇄 미리보기·PDF로 저장)에서만 나옴(D-128) */}
       <div className="report-shell print-only">
-        <div className="a4">
-          <div className="watermark">{complete ? '검토용 초안 · 가상 데이터' : '미완료 초안 · 가상 데이터'}</div>
-          <div className="row" style={{ marginBottom: 6 }}>
-            <img src={logoKo} alt="ROLLENT 대양롤랜트(주)" style={{ height: 34 }} />
-          </div>
-          <h1>개인 인사평가 리포트</h1>
-          <div className="muted">내부 보관 자료 · 직원 비공개</div>
-          {empty && <p className="report-empty">포함한 항목이 없습니다.</p>}
-          {info.length > 0 && (
-            <table className="rp-info"><tbody>
-              {pairs(info).map((row, i) => (
-                <tr key={i}>{row.map(([k, v]) => [<th key={`${k}h`}>{k}</th>, <td key={`${k}d`}>{v}</td>])}{row.length === 1 && <td className="rp-blank" colSpan={2} />}</tr>
-              ))}
-            </tbody></table>
-          )}
-          {selfQ.length > 0 && <Answers title="자기평가" as={parts.self} qs={selfQ} s={s} cycle={cycle} />}
-          {leadQ.length > 0 && <Answers title="팀장평가" as={parts.lead} qs={leadQ} s={s} cycle={cycle} showWho name={parts.name} />}
-          {execShown.length > 0 && execQ.length > 0 && <Answers title="임원평가" as={execShown} qs={execQ} s={s} cycle={cycle} showWho name={parts.name} />}
-          {on('scores.stage') && (
-            <div className="rp-block">
-              <h3>단계별 점수 <span className="rp-assume">※ 개발용 가정 계산 · 회사 산식 아님</span></h3>
-              <table>
-                <thead><tr><th style={{ width: '24%' }}>단계</th><th>평가자</th><th style={{ width: '14%' }}>점수</th><th style={{ width: '10%' }}>등급</th></tr></thead>
-                <tbody>
-                  {r.stages.map((st) => (
-                    <tr key={st.order}><td>{st.order}단계 {st.label}{st.evaluators.length > 1 && <div className="muted">{st.evaluators.length}명 평균</div>}</td><td>{st.evaluators.join(', ')}</td><td>{st.submitted ? fmt(st.score) : '미제출'}</td><td>{st.submitted ? st.grade?.slice(0, 1) ?? '—' : '—'}</td></tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-          {scoreRows && (
-            <div className="rp-block">
-              <h3>점수 구성</h3>
-              <table><tbody>
-                {on('scores.base') && <tr><th>개인 평가 점수</th><td>{r.combined.base === null ? '미완료' : fmt(r.combined.base)}</td></tr>}
-                {on('scores.kpi') && <tr><th>팀 KPI</th><td>{r.kpi === null ? '—' : `${fmt(r.kpi)} (${r.combined.kpiApplied ? `반영 ${r.kpiBlend.kpi}%` : '미반영'})`}</td></tr>}
-                {on('scores.kpi') && r.kpiBlend.enabled && <tr><th>KPI 반영 후 점수</th><td>{r.combined.kpiApplied && r.combined.afterKpi !== null ? fmt(r.combined.afterKpi) : '—'}</td></tr>}
-                {on('scores.final') && <>
-                  <tr><th>팀 보정</th><td>{fmtSigned(r.dept)}</td></tr>
-                  <tr><th>개인 보정</th><td>{fmtSigned(r.person)}</td></tr>
-                  <tr><th>최종 지정</th><td>{fmt(r.ceoScore)}</td></tr>
-                  <tr><th>최종 점수</th><td><b>{fmt(r.combined.final)}</b></td></tr>
-                  <tr><th>최종 등급</th><td><b>{r.ceoGrade ?? '미확정'}</b></td></tr>
-                </>}
-              </tbody></table>
-              {on('scores.final') && history.length > 0 && (
-                <table className="rp-hist">
-                  <thead><tr><th style={{ width: '24%' }}>보정 항목</th><th style={{ width: '18%' }}>값</th><th>사유</th></tr></thead>
-                  <tbody>{history.map((h) => <tr key={h.id}><td>{KIND_TEXT[h.kind]}</td><td>{h.value === null || h.value === '' ? '없음' : String(h.value)}</td><td className="ans">{h.reason || '—'}</td></tr>)}</tbody>
-                </table>
-              )}
-            </div>
-          )}
-          {showNote && (
-            <div className="rp-block">
-              <h3>추가 기록</h3>
-              <div className="rp-note ans">{noteText}</div>
-            </div>
-          )}
-          <p className="muted rp-foot">출력 시각 {new Date().toLocaleString('ko-KR')} · 계산 정책 {s.policy.name} · 이 문서는 가상 데이터로 만든 시연용입니다.</p>
-        </div>
+        <ReportSheet s={s} cycle={cycle} t={t} parts={parts} m={m} />
       </div>
+    </div>
+  )
+}
+
+/** 리포트 본문에 들어갈 내용(포함 항목 on 반영) — 개인 리포트·선택 항목 다운로드(D-167) 공통 */
+export function sheetModel(s: AppState, cycle: Cycle, t: TargetSnapshot, parts: ReturnType<typeof evalParts>, on: (k: string) => boolean) {
+  const r = personResult(s, cycle, t.employeeId)!
+  const emp = s.employees.find((e) => e.id === t.employeeId)
+  const saved = s.reportNotes?.[noteKey(cycle.id, t.employeeId)] ?? ''
+  const noteText = saved.trim() ? saved : '' // 출력은 저장된 내용 기준
+  const info = [
+    on('info.name') && ['이름', <b key="n">{t.name}</b>],
+    on('info.empNo') && ['사번', emp?.empNo ?? t.empNo],
+    on('info.team') && ['팀', t.teamName],
+    on('info.position') && ['직급', targetPosition(s, cycle, t)],
+    on('info.job') && ['직무', jobName(s, t.jobType)],
+    on('cycle.name') && ['평가 회차', cycle.name],
+    on('cycle.period') && ['평가 기간', cycle.period || '—'],
+  ].filter(Boolean) as [string, ReactNode][]
+  const qShown = (prefix: string, qs: Question[]) => qs.filter((q) => on(`${prefix}:q:${q.id}`))
+  const selfQ = qShown('self', parts.selfQ), leadQ = qShown('lead', parts.leadQ), execQ = qShown('exec', parts.execQ)
+  const execShown = parts.exec.filter((a) => on(`exec:e:${a.evaluatorId}`))
+  const history = s.adjustments.filter((a) => a.cycleId === cycle.id && (a.targetKey === t.employeeId || a.targetKey === t.departmentId || (!!t.legacyUnitId && a.targetKey === t.legacyUnitId)))
+  const scoreRows = on('scores.base') || on('scores.kpi') || on('scores.final')
+  const showNote = on('note') && !!noteText
+  const empty = !info.length && !selfQ.length && !leadQ.length && !(execShown.length && execQ.length) && !on('scores.stage') && !scoreRows && !showNote
+  const complete = !r.combined.incomplete && r.ceoGrade !== null
+  return { r, info, selfQ, leadQ, execQ, execShown, history, scoreRows, showNote, noteText, empty, complete, on }
+}
+
+/** 리포트 본문(A4 한 장 분량 — 길면 다음 쪽으로) */
+export function ReportSheet({ s, cycle, parts, m }: { s: AppState; cycle: Cycle; t: TargetSnapshot; parts: ReturnType<typeof evalParts>; m: ReturnType<typeof sheetModel> }) {
+  const { r, info, selfQ, leadQ, execQ, execShown, history, scoreRows, showNote, noteText, complete, on } = m
+  return (
+    <div className="a4">
+      <div className="watermark">{complete ? '검토용 초안 · 가상 데이터' : '미완료 초안 · 가상 데이터'}</div>
+      <div className="row" style={{ marginBottom: 6 }}>
+        <img src={logoKo} alt="ROLLENT 대양롤랜트(주)" style={{ height: 34 }} />
+      </div>
+      <h1>개인 인사평가 리포트</h1>
+      <div className="muted">내부 보관 자료 · 직원 비공개</div>
+      {m.empty && <p className="report-empty">포함한 항목이 없습니다.</p>}
+      {info.length > 0 && (
+        <table className="rp-info"><tbody>
+          {pairs(info).map((row, i) => (
+            <tr key={i}>{row.map(([k, v]) => [<th key={`${k}h`}>{k}</th>, <td key={`${k}d`}>{v}</td>])}{row.length === 1 && <td className="rp-blank" colSpan={2} />}</tr>
+          ))}
+        </tbody></table>
+      )}
+      {selfQ.length > 0 && <Answers title="자기평가" as={parts.self} qs={selfQ} s={s} cycle={cycle} />}
+      {leadQ.length > 0 && <Answers title="팀장평가" as={parts.lead} qs={leadQ} s={s} cycle={cycle} showWho name={parts.name} />}
+      {execShown.length > 0 && execQ.length > 0 && <Answers title="임원평가" as={execShown} qs={execQ} s={s} cycle={cycle} showWho name={parts.name} />}
+      {on('scores.stage') && (
+        <div className="rp-block">
+          <h3>단계별 점수 <span className="rp-assume">※ 개발용 가정 계산 · 회사 산식 아님</span></h3>
+          <table>
+            <thead><tr><th style={{ width: '24%' }}>단계</th><th>평가자</th><th style={{ width: '14%' }}>점수</th><th style={{ width: '10%' }}>등급</th></tr></thead>
+            <tbody>
+              {r.stages.map((st) => (
+                <tr key={st.order}><td>{st.order}단계 {st.label}{st.evaluators.length > 1 && <div className="muted">{st.evaluators.length}명 평균</div>}</td><td>{st.evaluators.join(', ')}</td><td>{st.submitted ? fmt(st.score) : '미제출'}</td><td>{st.submitted ? st.grade?.slice(0, 1) ?? '—' : '—'}</td></tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {scoreRows && (
+        <div className="rp-block">
+          <h3>점수 구성</h3>
+          <table><tbody>
+            {on('scores.base') && <tr><th>개인 평가 점수</th><td>{r.combined.base === null ? '미완료' : fmt(r.combined.base)}</td></tr>}
+            {on('scores.kpi') && <tr><th>팀 KPI</th><td>{r.kpi === null ? '—' : `${fmt(r.kpi)} (${r.combined.kpiApplied ? `반영 ${r.kpiBlend.kpi}%` : '미반영'})`}</td></tr>}
+            {on('scores.kpi') && r.kpiBlend.enabled && <tr><th>KPI 반영 후 점수</th><td>{r.combined.kpiApplied && r.combined.afterKpi !== null ? fmt(r.combined.afterKpi) : '—'}</td></tr>}
+            {on('scores.final') && <>
+              <tr><th>팀 보정</th><td>{fmtSigned(r.dept)}</td></tr>
+              <tr><th>개인 보정</th><td>{fmtSigned(r.person)}</td></tr>
+              <tr><th>최종 지정</th><td>{fmt(r.ceoScore)}</td></tr>
+              <tr><th>최종 점수</th><td><b>{fmt(r.combined.final)}</b></td></tr>
+              <tr><th>최종 등급</th><td><b>{r.ceoGrade ?? '미확정'}</b></td></tr>
+            </>}
+          </tbody></table>
+          {on('scores.final') && history.length > 0 && (
+            <table className="rp-hist">
+              <thead><tr><th style={{ width: '24%' }}>보정 항목</th><th style={{ width: '18%' }}>값</th><th>사유</th></tr></thead>
+              <tbody>{history.map((h) => <tr key={h.id}><td>{KIND_TEXT[h.kind]}</td><td>{h.value === null || h.value === '' ? '없음' : String(h.value)}</td><td className="ans">{h.reason || '—'}</td></tr>)}</tbody>
+            </table>
+          )}
+        </div>
+      )}
+      {showNote && (
+        <div className="rp-block">
+          <h3>추가 기록</h3>
+          <div className="rp-note ans">{noteText}</div>
+        </div>
+      )}
+      <p className="muted rp-foot">출력 시각 {new Date().toLocaleString('ko-KR')} · 계산 정책 {s.policy.name} · 이 문서는 가상 데이터로 만든 시연용입니다.</p>
     </div>
   )
 }
@@ -277,8 +292,8 @@ function Answers({ title, as, qs, s, cycle, showWho, name }: { title: string; as
 // 화면에 그린 리포트 본문(.a4 — 포함 항목 선택 반영)을 그대로 읽어 표(구분·항목·내용·비고)·워드 문서로 만든다
 const clean = (x: string) => x.replace(/\s+/g, ' ').trim()
 /** 열: 구분(리포트 소제목) · 항목 · 내용 · 값 · 비고 — 점수 표(단계·평가자·점수·등급)도 잘리지 않게 다섯 칸 */
-const REPORT_HEAD = ['구분', '항목', '내용', '값', '비고']
-function reportRows(a4: HTMLElement): string[][] {
+export const REPORT_HEAD = ['구분', '항목', '내용', '값', '비고']
+export function reportRows(a4: HTMLElement): string[][] {
   const out: string[][] = []
   let section = '기본 정보'
   a4.querySelectorAll('h3, table tr, .rp-note').forEach((el) => {
@@ -291,9 +306,10 @@ function reportRows(a4: HTMLElement): string[][] {
   })
   return out
 }
-function reportHtml(a4: HTMLElement): string {
-  const body = a4.cloneNode(true) as HTMLElement
-  body.querySelectorAll('img').forEach((img) => img.remove())
+/** 여러 명이면 사람마다 새 쪽에서 시작(D-167) */
+export function reportHtml(a4s: HTMLElement | HTMLElement[]): string {
+  const bodies = (Array.isArray(a4s) ? a4s : [a4s]).map((a4) => { const b = a4.cloneNode(true) as HTMLElement; b.querySelectorAll('img').forEach((img) => img.remove()); return b.innerHTML })
+  const body = { innerHTML: bodies.join('<br clear="all" style="page-break-before:always">') }
   return `<html><head><meta charset="utf-8"><title>개인 인사평가 리포트</title><style>
 body{font-family:'Malgun Gothic','맑은 고딕',sans-serif;font-size:11pt;color:#1b1e4d}
 h1{font-size:18pt;margin:0 0 4pt} h3{font-size:12pt;margin:14pt 0 4pt}
@@ -301,8 +317,8 @@ table{border-collapse:collapse;width:100%;margin:4pt 0} th,td{border:1px solid #
 th{background:#eef2f8} .watermark{color:#8a93a8;font-size:9pt} .muted,.rp-assume{color:#6b7385;font-size:9pt}
 </style></head><body>${body.innerHTML}</body></html>`
 }
-const csvCell = (v: string) => (/[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v)
-function saveFile(name: string, type: string, data: string | Uint8Array) {
+export const csvCell = (v: string) => (/[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v)
+export function saveFile(name: string, type: string, data: string | Uint8Array) {
   const url = URL.createObjectURL(new Blob([data], { type }))
   const a = document.createElement('a')
   a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove()

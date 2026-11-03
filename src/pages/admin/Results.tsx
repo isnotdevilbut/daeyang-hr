@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { update, useAppState } from '../../data/store'
 import { useSelectedCycle } from '../../data/hooks'
@@ -7,6 +8,7 @@ import { fmt, latestAdjustment, personResult, type PersonResult } from '../../do
 import type { AdjustKind, Cycle, TargetSnapshot } from '../../domain/types'
 import { Forbidden } from '../../components/ui'
 import { positionsOf, targetPosition } from '../../domain/catalog'
+import { BulkDownload } from './ReportBulk'
 
 export function addAdjustment(cycleId: string, kind: AdjustKind, key: string, value: number | string | null, reason: string, by: string) {
   update((d) => {
@@ -18,7 +20,13 @@ export function addAdjustment(cycleId: string, kind: AdjustKind, key: string, va
 export default function Results() {
   const s = useAppState()
   const [cycle, selectCycle, cycles] = useSelectedCycle()
+  // D-167: 선택 항목 다운로드 — 회차를 바꾸면 선택을 비움
+  const [picked, setPicked] = useState<{ cycleId: string; ids: string[] }>({ cycleId: '', ids: [] })
+  const [bulk, setBulk] = useState(false)
   if (!can(s.session.role, 'viewResults')) return <Forbidden />
+  const ids = picked.cycleId === cycle?.id ? picked.ids : []
+  const setIds = (next: string[]) => setPicked({ cycleId: cycle?.id ?? '', ids: next })
+  const canReport = can(s.session.role, 'reportPreview')
   return (
     <div className="page">
       <div className="page-head">
@@ -31,15 +39,17 @@ export default function Results() {
                 {cycles.map((c) => <option key={c.id} value={c.id}>{cycleLabel(c)}</option>)}
               </select>
             </label>
+            {canReport && ids.length > 0 && <button className="btn primary small" onClick={() => setBulk(true)}>선택 항목 다운로드 ({ids.length}명)</button>}
           </div>
         )}
       </div>
-      {!cycle ? <div className="panel pad empty-start"><p>평가 회차가 없습니다.</p></div> : <Body key={cycle.id} cycle={cycle} />}
+      {!cycle ? <div className="panel pad empty-start"><p>평가 회차가 없습니다.</p></div> : <Body key={cycle.id} cycle={cycle} ids={ids} setIds={setIds} pickable={canReport} />}
+      {cycle && bulk && <BulkDownload cycle={cycle} ids={ids} onClose={() => setBulk(false)} />}
     </div>
   )
 }
 
-function Body({ cycle }: { cycle: Cycle }) {
+function Body({ cycle, ids, setIds, pickable }: { cycle: Cycle; ids: string[]; setIds: (x: string[]) => void; pickable: boolean }) {
   const s = useAppState()
   const kpiOn = !!cycle.kpiBlend?.enabled // 이 회차의 실제 반영 설정
   const depts = [...new Map(cycle.targets.map((t) => [t.departmentId, t.departmentName])).entries()]
@@ -51,6 +61,8 @@ function Body({ cycle }: { cycle: Cycle }) {
       {depts.map(([deptId, deptName]) => {
         const targets = cycle.targets.filter((t) => t.departmentId === deptId)
         const rows = targets.sort((a, b) => posRank(a) - posRank(b) || a.name.localeCompare(b.name, 'ko')).map((t) => ({ t, r: personResult(s, cycle, t.employeeId)! }))
+        const teamIds = rows.map((x) => x.t.employeeId)
+        const n = teamIds.filter((id) => ids.includes(id)).length
         return (
           <section className="panel result-dept" key={deptId} aria-label={`${deptName} 결과`}>
             <DeptHead cycle={cycle} deptId={deptId} deptName={deptName} count={targets.length} />
@@ -58,6 +70,8 @@ function Body({ cycle }: { cycle: Cycle }) {
               <table className="tbl result-tbl">
                 <thead>
                   <tr>
+                    {pickable && <th className="c-pick"><input type="checkbox" aria-label={`${deptName} 전체 선택`} checked={n === teamIds.length} ref={(el) => { if (el) el.indeterminate = n > 0 && n < teamIds.length }}
+                      onChange={(e) => setIds(e.target.checked ? [...new Set([...ids, ...teamIds])] : ids.filter((id) => !teamIds.includes(id)))} /></th>}
                     <th className="c-team">팀</th><th className="c-pos">직급</th><th className="c-name">이름</th>
                     <th className="num c-score">개인 평가 점수</th>
                     {kpiOn && <><th className="num c-score">팀 KPI</th><th className="num c-score">KPI 반영 후 점수</th></>}
@@ -66,7 +80,7 @@ function Body({ cycle }: { cycle: Cycle }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map(({ t, r }) => <ResultRow key={t.employeeId} cycle={cycle} t={t} r={r} kpiOn={kpiOn} />)}
+                  {rows.map(({ t, r }) => <ResultRow key={t.employeeId} cycle={cycle} t={t} r={r} kpiOn={kpiOn} pick={pickable ? { on: ids.includes(t.employeeId), set: (v) => setIds(v ? [...ids, t.employeeId] : ids.filter((x) => x !== t.employeeId)) } : undefined} />)}
                 </tbody>
               </table>
             </div>
@@ -80,12 +94,13 @@ function Body({ cycle }: { cycle: Cycle }) {
 /** 점수가 없을 때의 짧은 상태 표시 — 0점이나 정상 점수처럼 보이지 않게 */
 const Pending = ({ text }: { text: string }) => <span className="chip stage todo">{text}</span>
 
-function ResultRow({ cycle, t, r, kpiOn }: { cycle: Cycle; t: TargetSnapshot; r: PersonResult; kpiOn: boolean }) {
+function ResultRow({ cycle, t, r, kpiOn, pick }: { cycle: Cycle; t: TargetSnapshot; r: PersonResult; kpiOn: boolean; pick?: { on: boolean; set: (v: boolean) => void } }) {
   const s = useAppState()
   const c = r.combined
   const baseState = r.stages.some((x) => !x.submitted) ? '미완료' : '계산 안 됨'
   return (
-    <tr>
+    <tr className={pick?.on ? 'picked' : ''}>
+      {pick && <td className="c-pick"><input type="checkbox" aria-label={`${t.name} 선택`} checked={pick.on} onChange={(e) => pick.set(e.target.checked)} /></td>}
       <td>{t.teamName}</td><td>{targetPosition(s, cycle, t)}</td><td><b>{t.name}</b></td>
       <td className="num">{c.base !== null ? fmt(c.base) : <Pending text={baseState} />}</td>
       {kpiOn && (
