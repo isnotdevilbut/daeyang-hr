@@ -6,9 +6,10 @@ import { cycleLabel } from '../../domain/cycle'
 import {
   blendErrors, BLEND_START, deptKpi, indicatorErrors, indicatorResult, kpiEntry, kpiLocked, orgUnits, UNIT_LABEL, withUnit, type DeptKpi,
 } from '../../domain/kpi'
-import type { Cycle, FinalBlendItem, FinalBlendPlan, FinalPart, KpiIndicator, KpiUnit } from '../../domain/types'
+import type { Cycle, FinalBlendItem, FinalBlendPlan, FinalPart, JobType, KpiIndicator, KpiUnit } from '../../domain/types'
 import { FINAL_BLEND_EXAMPLE } from '../../domain/scoringV16'
 import { Forbidden, Modal } from '../../components/ui'
+import { activeJobs, jobName } from '../../domain/catalog'
 
 const f1 = (n: number) => (Math.round(n * 10) / 10).toFixed(1)
 /** 숫자 칸: 빈 칸 = 미입력(null), 숫자 아님 = NaN(검증에서 오류) */
@@ -57,7 +58,7 @@ function Body({ cycle }: { cycle: Cycle }) {
           <div className="panel-head"><h2 id="dept-list-title">팀별 KPI 점수</h2></div>
           <ul className="dept-list">
             {units.map((d) => {
-              const k = deptKpi(s, cycle.id, d.id)
+              const k = deptKpi(s, cycle.id, d.id, undefined, activeJobs(s).map((j) => j.id))
               return (
                 <li key={d.id}>
                   <button className={`dept-row ${d.id === deptId ? 'on' : ''}`} aria-pressed={d.id === deptId} onClick={() => setDeptId(d.id)}>
@@ -77,6 +78,8 @@ function Body({ cycle }: { cycle: Cycle }) {
 }
 
 function ScoreTag({ k }: { k: DeptKpi }) {
+  const s = useAppState()
+  if (k.byJob) return <span className="dept-score by-job">{k.byJob.length ? k.byJob.map((x) => <span key={x.jobType}>{jobName(s, x.jobType)} {x.k.score !== null ? <b>{f1(x.k.score)}</b> : <span className="bad">미완료</span>}</span>) : <span className="chip stage todo">설정 미완료</span>}</span> // 직무별 점수(D-150)
   if (k.score !== null) return <span className="dept-score">{f1(k.score)}<small>점</small></span>
   return <span className="chip stage todo">{k.status === 'empty' ? '지표 없음' : k.mode === 'manual' ? '미입력' : '설정 미완료'}</span>
 }
@@ -87,7 +90,8 @@ function ScoreTag({ k }: { k: DeptKpi }) {
  */
 function DeptEditor({ cycle, deptId, deptName, editable }: { cycle: Cycle; deptId: string; deptName: string; editable: boolean }) {
   const s = useAppState()
-  const k = deptKpi(s, cycle.id, deptId)
+  const jobIds = activeJobs(s).map((j) => j.id)
+  const k = deptKpi(s, cycle.id, deptId, undefined, jobIds)
   const [dialog, setDialog] = useState<Dialog | null>(null)
   const [msg, setMsg] = useState('')
   const blank: KpiIndicator = { id: '', cycleId: cycle.id, departmentId: deptId, name: '', unit: 'percent', direction: 'higher', target: null, actual: null, weight: null }
@@ -118,8 +122,10 @@ function DeptEditor({ cycle, deptId, deptName, editable }: { cycle: Cycle; deptI
         </div>
         <div className="kh-cell kpi-total">
           <span className="l">팀 KPI 점수</span>
-          {k.score !== null ? <span className="n">{f1(k.score)}<small>점</small></span> : <span className="chip stage todo">{k.status === 'empty' ? '지표 없음' : manualOn ? '미입력' : '설정 미완료'}</span>}
-          {k.score === null && k.reason && k.status !== 'empty' && !manualOn && <small className="reason">{k.reason}</small>}
+          {k.byJob ? (
+            <span className="kh-byjob">{k.byJob.map((x) => <span key={x.jobType}><small>{jobName(s, x.jobType)}</small> {x.k.score !== null ? <b className="n">{f1(x.k.score)}<small>점</small></b> : <span className="chip stage todo" title={x.k.reason}>설정 미완료</span>}</span>)}</span>
+          ) : k.score !== null ? <span className="n">{f1(k.score)}<small>점</small></span> : <span className="chip stage todo">{k.status === 'empty' ? '지표 없음' : manualOn ? '미입력' : '설정 미완료'}</span>}
+          {!k.byJob && k.score === null && k.reason && k.status !== 'empty' && !manualOn && <small className="reason">{k.reason}</small>}
         </div>
         <div className="kh-cell kh-act">
           {editable && <button className="btn primary" onClick={() => { setMsg(''); setDialog({ kind: 'add' }) }}>+ 지표 추가</button>}
@@ -156,6 +162,7 @@ function DeptEditor({ cycle, deptId, deptName, editable }: { cycle: Cycle; deptI
               <article className="kpi-ind" key={ind.id} aria-label={ind.name}>
                 <div className="ki-head">
                   <h3>{ind.name}</h3>
+                  <span className={`chip tag ${ind.jobs?.length ? 'info' : 'na'}`}>{ind.jobs?.length ? ind.jobs.map((j) => jobName(s, j)).join('·') : '전체 직무'}</span>
                   <span className="spacer" />
                   {editable && <>
                     <button className="btn small ki-btn" onClick={() => { setMsg(''); setDialog({ kind: 'indicator', ind }) }}><EditIc /> 수정</button>
@@ -171,7 +178,11 @@ function DeptEditor({ cycle, deptId, deptName, editable }: { cycle: Cycle; deptI
                 <p className="ki-cap">{ind.direction === 'higher' ? '높을수록 좋음 (실적 ÷ 목표)' : '낮을수록 좋음 (목표 ÷ 실적)'}<span className="ki-score">환산점수 <b>{r.score !== null ? f1(r.score) : '—'}</b></span></p>
               </article>
             ))}
-            <p className="ki-sum">가중치 합계 <b className={k.weightSum !== null && Math.abs(k.weightSum - 100) < 0.001 ? 'good' : 'bad'}>{k.weightSum === null ? '미입력 있음' : `${+k.weightSum.toFixed(2)}%`}</b></p>
+            {k.byJob ? (
+              <p className="ki-sum">가중치 합계 {k.byJob.map((x) => <span key={x.jobType} className="ki-sum-j">{jobName(s, x.jobType)} <b className={x.k.weightSum !== null && Math.abs(x.k.weightSum - 100) < 0.001 ? 'good' : 'bad'}>{x.k.weightSum === null ? '미입력 있음' : `${+x.k.weightSum.toFixed(2)}%`}</b></span>)}<span className="muted small"> · 직무마다 그 직무 지표(전체 직무 포함) 합계 100%</span></p>
+            ) : (
+              <p className="ki-sum">가중치 합계 <b className={k.weightSum !== null && Math.abs(k.weightSum - 100) < 0.001 ? 'good' : 'bad'}>{k.weightSum === null ? '미입력 있음' : `${+k.weightSum.toFixed(2)}%`}</b></p>
+            )}
           </div>
         </>
       )}
@@ -194,6 +205,7 @@ type Method = 'indicator' | 'manual'
 
 /** "+ 지표 추가"(방식 선택) / 지표 수정 / 직접 입력 점수 수정 */
 function KpiModal({ dialog, cycle, deptId, blank, k, onClose, onSaved }: { dialog: Dialog; cycle: Cycle; deptId: string; blank: KpiIndicator; k: DeptKpi; onClose: () => void; onSaved: (t: string) => void }) {
+  const s = useAppState()
   const initial = dialog.kind === 'indicator' ? dialog.ind : blank
   const [method, setMethod] = useState<Method>(dialog.kind === 'manual' ? 'manual' : 'indicator')
   const [f, setF] = useState({ ...initial, targetS: str(initial.target), actualS: str(initial.actual), weightS: str(initial.weight) })
@@ -212,7 +224,7 @@ function KpiModal({ dialog, cycle, deptId, blank, k, onClose, onSaved }: { dialo
     const switching = adding && k.mode === 'manual'
     if (switching && hasManual && !confirm(`현재 직접 입력한 팀 점수(${k.manualScore}점)가 적용 중입니다.\n지표를 추가하면 지표 계산 점수를 적용하고, 직접 입력 점수는 지우지 않고 보관합니다. 계속할까요?`)) return
     update((d) => {
-      const clean: KpiIndicator = { id: cur.id || `kpi-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`, cycleId: cur.cycleId, departmentId: cur.departmentId, name: cur.name.trim(), unit: cur.unit, direction: cur.direction, target: cur.target, actual: cur.actual, weight: cur.weight }
+      const clean: KpiIndicator = { id: cur.id || `kpi-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`, cycleId: cur.cycleId, departmentId: cur.departmentId, name: cur.name.trim(), unit: cur.unit, direction: cur.direction, target: cur.target, actual: cur.actual, weight: cur.weight, ...(cur.jobs?.length ? { jobs: [...cur.jobs] } : {}) }
       const i = d.kpiIndicators.findIndex((x) => x.id === clean.id)
       if (i >= 0) d.kpiIndicators[i] = clean
       else d.kpiIndicators.push(clean)
@@ -258,6 +270,13 @@ function KpiModal({ dialog, cycle, deptId, blank, k, onClose, onSaved }: { dialo
             </select>
           </label>
           <label className="field" style={{ gridColumn: '1 / -1' }}>지표 이름<input type="text" value={f.name} autoFocus={!adding} onChange={(e) => setF({ ...f, name: e.target.value })} /></label>
+          {/* D-150: 적용 직무 — 같은 팀 안에서도 직무마다 다른 지표. 전체 직무 = 그 팀 모두 */}
+          <label className="field">적용 직무
+            <select aria-label="적용 직무" value={f.jobs?.[0] ?? ''} onChange={(e) => setF({ ...f, jobs: e.target.value ? [e.target.value as JobType] : undefined })}>
+              <option value="">전체 직무</option>
+              {activeJobs(s).map((j) => <option key={j.id} value={j.id}>{j.name}</option>)}
+            </select>
+          </label>
           <fieldset className="field" style={{ gridColumn: '1 / -1' }}>
             <legend>평가 방향</legend>
             <div className="row">

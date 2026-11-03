@@ -2996,3 +2996,27 @@ describe('중복 = 같은 내용, 칼럼 값이 다르면 새 데이터 (D-142)'
     expect(off.rows.filter((x) => x.errors.length).map((x) => x.v.empNo)).toEqual(['0005', '0006', '0004']) // 위에서 이미 바꿨으니 0005·0006도 이제 같은 내용
   })
 })
+
+describe('KPI 지표 적용 직무 (D-150)', async () => {
+  const K = await import('./kpi')
+  it('같은 팀 안에서 직무별 지표 → 사람은 자기 직무 지표(전체 직무 포함)로 점수, 팀 화면은 직무별 점수', () => {
+    const s = createSeed(); const c = s.cycles.find((x) => x.status === '진행')!
+    const t = c.targets.find((x) => x.departmentId === 'tm-prod1' && x.jobType === 'production')!
+    const o = c.targets.find((x) => x.departmentId === 'tm-prod1' && x.jobType === 'office')
+    s.kpi = []
+    s.kpiIndicators = [
+      { id: 'a', cycleId: c.id, departmentId: 'tm-prod1', name: '공통', unit: 'percent', direction: 'higher', target: 100, actual: 100, weight: 50 },
+      { id: 'b', cycleId: c.id, departmentId: 'tm-prod1', name: '생산', unit: 'percent', direction: 'higher', target: 100, actual: 80, weight: 50, jobs: ['production'] },
+      { id: 'c', cycleId: c.id, departmentId: 'tm-prod1', name: '관리', unit: 'percent', direction: 'higher', target: 100, actual: 60, weight: 50, jobs: ['office'] },
+    ]
+    expect(K.deptKpi(s, c.id, 'tm-prod1', 'production').score).toBeCloseTo(90, 6)
+    expect(K.deptKpi(s, c.id, 'tm-prod1', 'office').score).toBeCloseTo(80, 6)
+    const team = K.deptKpi(s, c.id, 'tm-prod1', undefined, ['office', 'production'])
+    expect(team.score).toBeNull(); expect(team.byJob!.map((x) => [x.jobType, Math.round(x.k.score!)])).toEqual([['office', 80], ['production', 90]])
+    expect(personResult(s, c, t.employeeId)!.kpi).toBeCloseTo(90, 6)
+    if (o) expect(personResult(s, c, o.employeeId)!.kpi).toBeCloseTo(80, 6)
+    // 직무를 지정하지 않은 팀은 이전과 같음
+    s.kpiIndicators = s.kpiIndicators.map((x) => ({ ...x, jobs: undefined })).filter((x) => x.id !== 'c')
+    expect(K.deptKpi(s, c.id, 'tm-prod1', undefined, ['office', 'production']).score).toBeCloseTo(90, 6)
+  })
+})

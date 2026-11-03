@@ -270,6 +270,8 @@ export interface KpiIndicator {
   target: number | null // null = 미입력
   actual: number | null
   weight: number | null // 부서 KPI 안의 지표 가중치(%)
+  /** 적용 직무(D-150). 없으면 그 팀 전체 직무. 같은 팀이라도 직무마다 다른 지표·점수 */
+  jobs?: JobType[]
 }
 
 /** 회차별 부서 KPI 개인평가 반영 설정. 비율은 % (합계 100) */

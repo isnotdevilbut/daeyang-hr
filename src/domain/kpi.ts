@@ -6,7 +6,7 @@
 //   지표 환산점수 = 달성률을 0~100으로 제한
 // 팀 KPI 점수 = Σ(지표 환산점수 × 지표 가중치 ÷ 100) — 지표별 상한 적용 후 가중합, 가중치 합 100% 필수
 // 미입력·목표 0·음수·가중치 오류가 있으면 "설정 미완료" (누락 지표를 빼고 재정규화하지 않음)
-import type { AppState, Cycle, KpiBlend, KpiEntry, KpiIndicator, KpiUnit } from './types'
+import type { AppState, Cycle, JobType, KpiBlend, KpiEntry, KpiIndicator, KpiUnit } from './types'
 
 export const UNIT_TEXT: Record<KpiUnit, string> = { percent: '%', count: '건', point: '점', amount: '원', other: '' }
 export const UNIT_LABEL: Record<KpiUnit, string> = { percent: '%', count: '건', point: '점', amount: '금액(원)', other: '기타' }
@@ -55,7 +55,14 @@ export interface DeptKpi {
   indicators: { ind: KpiIndicator; r: IndicatorResult }[]
   weightSum: number | null
   manualScore: number | null // 직접 입력 점수 (보관값)
+  /** 직무별로 나뉜 팀(D-150): 직무마다 점수. 팀 화면(직무 미지정)에서만 채움 — 이때 score는 null */
+  byJob?: { jobType: JobType; k: DeptKpi }[]
 }
+
+/** 이 직무에 적용되는 지표인가(직무 미지정 = 전체) */
+export const indicatorFor = (ind: KpiIndicator, jobType?: JobType) => !jobType || !ind.jobs?.length || ind.jobs.includes(jobType)
+/** 팀 지표 중 직무를 지정한 지표가 있으면 그 팀은 직무별 점수 */
+export const splitByJob = (inds: KpiIndicator[]) => inds.some((x) => x.jobs?.length)
 
 export function kpiEntry(s: Pick<AppState, 'kpi'>, cycleId: string, deptId: string): KpiEntry | undefined {
   return s.kpi.find((k) => k.cycleId === cycleId && k.departmentId === deptId)
@@ -66,11 +73,21 @@ export function kpiMode(e: KpiEntry | undefined): KpiMode {
   return e?.mode ?? (e && e.score !== null ? 'manual' : 'indicators')
 }
 
-export function deptKpi(s: Pick<AppState, 'kpi' | 'kpiIndicators'>, cycleId: string, deptId: string): DeptKpi {
+/**
+ * 팀 KPI 점수. jobType을 주면 그 직무에 적용되는 지표(직무 미지정 + 그 직무)만으로 계산 — 개인 점수(D-150).
+ * jobType 없이(팀 화면) 직무를 지정한 지표가 있으면 jobTypes의 직무마다 계산해 byJob에 담는다
+ */
+export function deptKpi(s: Pick<AppState, 'kpi' | 'kpiIndicators'>, cycleId: string, deptId: string, jobType?: JobType, jobTypes: JobType[] = []): DeptKpi {
   const e = kpiEntry(s, cycleId, deptId)
   const mode = kpiMode(e)
   const manualScore = e?.score ?? null
-  const inds = s.kpiIndicators.filter((x) => x.cycleId === cycleId && x.departmentId === deptId)
+  const all = s.kpiIndicators.filter((x) => x.cycleId === cycleId && x.departmentId === deptId)
+  if (!jobType && mode !== 'manual' && splitByJob(all)) {
+    const indicators = all.map((ind) => ({ ind, r: indicatorResult(ind) }))
+    const byJob = jobTypes.map((j) => ({ jobType: j, k: deptKpi(s, cycleId, deptId, j) })).filter((x) => x.k.indicators.length > 0)
+    return { mode, manualScore, indicators, weightSum: null, score: null, status: 'ok', reason: '직무별 점수', byJob }
+  }
+  const inds = all.filter((x) => indicatorFor(x, jobType))
   const indicators = inds.map((ind) => ({ ind, r: indicatorResult(ind) }))
   const weights = inds.map((x) => x.weight)
   const weightSum = weights.some((w) => w === null) ? null : +weights.reduce<number>((a, w) => a + (w as number), 0).toFixed(4)
