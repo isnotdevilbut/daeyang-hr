@@ -55,8 +55,8 @@ function Body({ s, cycle }: { s: AppState; cycle: Cycle }) {
   const [onlyOpen, setOnlyOpen] = useState<boolean>(!!saved.onlyOpen)
   // 처음 들어오면(이 탭에 저장된 카드 선택 없음) '평가 참여자' 카드가 선택된 상태 — 카드를 눌러 명단을 바꿀 수 있다는 점이 보이게(D-096). 명단은 선택 없음과 같음
   const [pick, setPick] = useState<CardPick>(saved.pick === undefined ? { kind: 'all' } : validPick(saved.pick))
-  // 머리글 정렬(오름↔내림) — 상세에서 돌아와도 유지
-  const [sort, setSort] = useState<Sort>(saved.sort?.key ? saved.sort : null)
+  // 머리글 정렬(오름↔내림)은 팀·이름 열만(D-106) — 상세에서 돌아와도 유지. 이전에 저장된 다른 열 정렬은 읽지 않음
+  const [sort, setSort] = useState<Sort>(saved.sort?.key === 'team' || saved.sort?.key === 'name' ? saved.sort : null)
   const onSort = (k: string) => setSort((c) => nextSort(c, k))
   useEffect(() => { try { sessionStorage.setItem(FILTER_KEY, JSON.stringify({ cycleId: cycle.id, q, tier, onlyOpen, pick, sort })) } catch { /* 무시 */ } }, [cycle.id, q, tier, onlyOpen, pick, sort])
   // 상세에서 돌아오면 그때의 스크롤 위치로
@@ -78,13 +78,12 @@ function Body({ s, cycle }: { s: AppState; cycle: Cycle }) {
   const needle = q.trim()
   const counts = useMemo(() => progressCounts(rows), [rows])
   const scope = rows.filter((r) => progressFilter(r, pick, false)) // 카드가 정한 범위
-  const posRank = (id: string) => { const i = positionsOf(s).findIndex((p) => p.id === empPos(id)); return i < 0 ? TIERS.length + 99 : i }
   const filtered = sortRows(scope.filter(
     (r) =>
       (!needle || r.t.name.includes(needle) || r.t.teamName.includes(needle) || r.t.empNo.includes(needle)) &&
       (!tier || empPos(r.t.employeeId) === tier) &&
       progressFilter(r, pick, onlyOpen),
-  ), sort, (r, k) => (k === 'team' ? r.t.teamName : k === 'pos' ? posRank(r.t.employeeId) : k === 'name' ? r.t.name : cellRate(r.cells[Number(k) - 1])))
+  ), sort, (r, k) => (k === 'team' ? r.t.teamName : r.t.name))
   const stageOn = pick?.kind === 'stage' ? pick.order : null
   const wrapRef = useRef<HTMLDivElement>(null)
   const [glow, setGlow] = useState<{ left: number; width: number; height: number } | null>(null)
@@ -146,8 +145,8 @@ function Body({ s, cycle }: { s: AppState; cycle: Cycle }) {
           <table className="tbl progress-tbl">
             <thead>
               <tr>
-                <SortTh k="team" sort={sort} onSort={onSort} className="c-team">팀</SortTh><SortTh k="pos" sort={sort} onSort={onSort} className="c-tier">직급</SortTh><SortTh k="name" sort={sort} onSort={onSort} className="c-name">이름</SortTh>
-                {STAGE_COLS.map((h, i) => <SortTh key={i} k={String(i + 1)} sort={sort} onSort={onSort} className={`c-eval ${stageOn === i + 1 ? 'col-on' : ''}`} col={i + 1}>{h}</SortTh>)}
+                <SortTh k="team" sort={sort} onSort={onSort} className="c-team">팀</SortTh><th className="c-tier">직급</th><SortTh k="name" sort={sort} onSort={onSort} className="c-name">이름</SortTh>
+                {STAGE_COLS.map((h, i) => <th key={i} data-col={i + 1} className={`c-eval ${stageOn === i + 1 ? 'col-on' : ''}`}>{h}</th>)}
                 <th className="c-act"><span className="sr-only">상세</span></th>
               </tr>
             </thead>
@@ -186,13 +185,6 @@ function cardGlow(e: React.PointerEvent) {
   const r = b.getBoundingClientRect()
   b.style.setProperty('--cx', `${e.clientX - r.left}px`)
   b.style.setProperty('--cy', `${e.clientY - r.top}px`)
-}
-
-/** 단계 열 정렬값 = 완료 비율(0~1). 해당 없음·배정 없음은 빈 값(맨 아래) */
-function cellRate(c: ProgressCell | undefined): number | null {
-  if (!c || c.kind === 'na') return null
-  if (c.kind === 'write') return c.w.total ? c.w.done / c.w.total : null
-  return c.status === 'submitted' ? 1 : 0
 }
 
 /** 열 이름(D-076) — 내부 단계 번호 1·2·3은 그대로 */
