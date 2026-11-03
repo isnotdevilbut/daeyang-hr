@@ -9,7 +9,9 @@ import { ctxFor } from '../../domain/questions'
 import { isActiveAssignment, pathFor } from '../../domain/progress'
 import type { AppState, Assignment, Cycle, Question, TargetSnapshot } from '../../domain/types'
 import { visibleSections } from '../../components/QuestionView'
-import { Forbidden, NotBuilt } from '../../components/ui'
+import { Forbidden } from '../../components/ui'
+import { templateXlsx } from '../../domain/xlsx'
+import { cycleLabel } from '../../domain/cycle'
 import { answerText, KIND_TEXT } from './PersonResult'
 import logoKo from '../../assets/logo-ko.png'
 
@@ -108,6 +110,15 @@ function ReportBody({ s, cycle, t, from }: { s: AppState; cycle: Cycle; t: Targe
   const showNote = on('note') && !!noteText
   const empty = !info.length && !selfQ.length && !leadQ.length && !(execShown.length && execQ.length) && !on('scores.stage') && !scoreRows && !showNote
   const complete = !r.combined.incomplete && r.ceoGrade !== null
+  const fileBase = `${t.name}_${cycleLabel(cycle)}_개인리포트`.replace(/[\\/:*?"<>|]/g, '_')
+  const download = (kind: 'xlsx' | 'doc' | 'csv') => {
+    const a4 = document.querySelector<HTMLElement>('.report-shell .a4')
+    if (!a4) return
+    if (kind === 'doc') return saveFile(`${fileBase}.doc`, 'application/msword', reportHtml(a4))
+    const rows = reportRows(a4)
+    if (kind === 'xlsx') return saveFile(`${fileBase}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', templateXlsx('개인 리포트', REPORT_HEAD, rows))
+    saveFile(`${fileBase}.csv`, 'text/csv;charset=utf-8', '\ufeff' + [REPORT_HEAD, ...rows].map((r) => r.map(csvCell).join(',')).join('\r\n') + '\r\n')
+  }
 
   return (
     <div>
@@ -115,10 +126,11 @@ function ReportBody({ s, cycle, t, from }: { s: AppState; cycle: Cycle; t: Targe
         <div className="row">
           <Link to={`/admin/results/${t.employeeId}?from=${from}`}>← 개인 상세로 돌아가기</Link>
           <span className="spacer" />
-          <button className="btn" disabled={empty} title={empty ? '포함한 항목이 없습니다' : undefined} onClick={() => window.print()}>브라우저 인쇄 미리보기</button>
-          <button className="btn" disabled title="실서비스 단계에서 서버가 권한 확인 후 생성">엑셀 다운로드</button>
-          <button className="btn" disabled title="실서비스 단계에서 서버가 권한 확인 후 생성">PDF 다운로드</button>
-          <NotBuilt>파일 다운로드</NotBuilt>
+          {/* D-134: 파일 저장 — 화면에서 고른 포함 항목 그대로. 브라우저 안에서 만들어 내려받기(외부 전송 없음). PDF는 인쇄 창의 'PDF로 저장' */}
+          <button className="btn" disabled={empty} title={empty ? '포함한 항목이 없습니다' : '인쇄하거나 인쇄 창에서 PDF로 저장'} onClick={() => window.print()}>인쇄·PDF 저장</button>
+          <button className="btn" disabled={empty} onClick={() => download('xlsx')}>엑셀(.xlsx)</button>
+          <button className="btn" disabled={empty} onClick={() => download('doc')}>워드(.doc)</button>
+          <button className="btn" disabled={empty} onClick={() => download('csv')}>CSV</button>
         </div>
 
         <details className="panel report-opts" open>
@@ -259,4 +271,40 @@ function Answers({ title, as, qs, s, cycle, showWho, name }: { title: string; as
       })}
     </div>
   )
+}
+
+// ── 리포트 파일 저장 (D-134) ─────────────────────────
+// 화면에 그린 리포트 본문(.a4 — 포함 항목 선택 반영)을 그대로 읽어 표(구분·항목·내용·비고)·워드 문서로 만든다
+const clean = (x: string) => x.replace(/\s+/g, ' ').trim()
+/** 열: 구분(리포트 소제목) · 항목 · 내용 · 값 · 비고 — 점수 표(단계·평가자·점수·등급)도 잘리지 않게 다섯 칸 */
+const REPORT_HEAD = ['구분', '항목', '내용', '값', '비고']
+function reportRows(a4: HTMLElement): string[][] {
+  const out: string[][] = []
+  let section = '기본 정보'
+  a4.querySelectorAll('h3, table tr, .rp-note').forEach((el) => {
+    if (el.tagName === 'H3') { section = clean(el.childNodes[0]?.textContent ?? el.textContent ?? ''); return }
+    if (el.classList.contains('rp-note')) { out.push([section, '추가 기록', clean(el.textContent ?? ''), '', '']); return }
+    const cells = [...el.children].filter((c) => !c.classList.contains('rp-blank')).map((c) => clean(c.textContent ?? ''))
+    if (el.closest('thead') || !cells.some(Boolean)) return
+    if (el.closest('table')?.classList.contains('rp-info')) { for (let i = 0; i < cells.length; i += 2) out.push([section, cells[i], cells[i + 1] ?? '', '', '']); return }
+    out.push([section, ...cells, '', '', '', ''].slice(0, 5))
+  })
+  return out
+}
+function reportHtml(a4: HTMLElement): string {
+  const body = a4.cloneNode(true) as HTMLElement
+  body.querySelectorAll('img').forEach((img) => img.remove())
+  return `<html><head><meta charset="utf-8"><title>개인 인사평가 리포트</title><style>
+body{font-family:'Malgun Gothic','맑은 고딕',sans-serif;font-size:11pt;color:#1b1e4d}
+h1{font-size:18pt;margin:0 0 4pt} h3{font-size:12pt;margin:14pt 0 4pt}
+table{border-collapse:collapse;width:100%;margin:4pt 0} th,td{border:1px solid #c8cfdc;padding:4pt 6pt;text-align:left;vertical-align:top}
+th{background:#eef2f8} .watermark{color:#8a93a8;font-size:9pt} .muted,.rp-assume{color:#6b7385;font-size:9pt}
+</style></head><body>${body.innerHTML}</body></html>`
+}
+const csvCell = (v: string) => (/[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v)
+function saveFile(name: string, type: string, data: string | Uint8Array) {
+  const url = URL.createObjectURL(new Blob([data], { type }))
+  const a = document.createElement('a')
+  a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
