@@ -130,9 +130,10 @@ function EmployeeList() {
                   <td className="ec num-text">{e.empNo}</td>
                   <td className="c-act">
                     <div className="row-actions">
-                      <button className="btn small" onClick={() => setEdit(e)}>수정</button>
+                      {/* D-143: 픽토그램 + 작은 글자 — 수정 = 연필, 메모 = 노란 메모지(작성됨이면 채워짐) */}
+                      <button className="btn small icon-btn edit-btn" aria-label={`${e.name} 수정`} onClick={() => setEdit(e)}><PencilIcon /><span>수정</span></button>
                       {/* 관리자 메모 — 내용은 목록에 펼치지 않고 있으면 점으로만 */}
-                      <button className={`btn small memo-btn ${s.memos?.[e.id] ? 'has' : ''}`} aria-label={s.memos?.[e.id] ? `${e.name} 메모 (작성됨)` : `${e.name} 메모`} onClick={() => setMemoFor(e)}>메모{s.memos?.[e.id] && <span className="memo-dot" aria-hidden />}</button>
+                      <button className={`btn small icon-btn memo-btn ${s.memos?.[e.id] ? 'has' : ''}`} aria-label={s.memos?.[e.id] ? `${e.name} 메모 (작성됨)` : `${e.name} 메모`} onClick={() => setMemoFor(e)}><MemoIcon /><span>메모</span>{s.memos?.[e.id] && <span className="memo-dot" aria-hidden />}</button>
                     </div>
                   </td>
                 </tr>
@@ -854,3 +855,19 @@ function LeadPicker({ label, value, groups, onChange }: { label: string; value: 
     </div>
   )
 }
+
+/** 수정 픽토그램(연필) — 글자와 함께, 화면 낭독은 버튼 이름으로 */
+const PencilIcon = () => (
+  <svg className="btn-ic" viewBox="0 0 16 16" width="14" height="14" aria-hidden focusable="false">
+    <path d="M10.9 2.2a1.6 1.6 0 0 1 2.3 0l.6.6a1.6 1.6 0 0 1 0 2.3l-7.6 7.6-3.3.8.8-3.3 7.2-8z" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+    <path d="M9.6 3.6l2.8 2.8" stroke="currentColor" strokeWidth="1.5" />
+  </svg>
+)
+/** 메모 픽토그램(접힌 모서리 메모지) — 노란 면 */
+const MemoIcon = () => (
+  <svg className="btn-ic memo-ic" viewBox="0 0 16 16" width="14" height="14" aria-hidden focusable="false">
+    <path d="M3 2.5h10v7.5l-3.5 3.5H3z" fill="#ffe680" stroke="#c99a06" strokeWidth="1.3" strokeLinejoin="round" />
+    <path d="M9.5 13.5V10H13" fill="#f3cf55" stroke="#c99a06" strokeWidth="1.3" strokeLinejoin="round" />
+    <path d="M5.2 5.5h5.6M5.2 7.8h3.4" stroke="#a37c00" strokeWidth="1.1" strokeLinecap="round" />
+  </svg>
+)

@@ -1481,3 +1481,14 @@ details[open] > summary > .toggle-ic { transform: rotate(180deg); }
 .team-tbl .count-toggle[aria-expanded='true'] { background: none; border: 0; color: var(--brand-navy); }
 .team-tbl .count-toggle:focus-visible { outline: 2px solid #20b8ca; outline-offset: 2px; }
 .lead-grp-h { position: static; } /* D-140: 팀 이름 머리줄은 스크롤해도 고정하지 않음 */
+/* D-143: 직원 목록 수정·메모 = 픽토그램 + 작은 글자(버튼 크기는 그대로). 메모 = 노란 테두리·메모지 */
+.icon-btn { display: inline-flex; align-items: center; gap: 5px; font-size: 13.5px; padding-left: 10px; padding-right: 11px; }
+.icon-btn .btn-ic { flex: none; }
+.emp-tbl .edit-btn { color: var(--brand-blue, #09529e); }
+.emp-tbl .memo-btn { border-color: #e2b93b; color: #7a5a00; background: #fffbea; }
+.emp-tbl .memo-btn:hover { border-color: #c99a06; background: #fff4c7; }
+.emp-tbl .memo-btn.has { background: #fff1b8; border-color: #c99a06; }
+.emp-tbl .memo-btn .memo-dot { background: #e08a00; }
+.emp-tbl .c-act { width: 170px; }
+.emp-tbl .btn.small.icon-btn { font-size: 13.5px; min-height: 34px; padding: 0 10px 0 9px; gap: 4px; }
+.emp-tbl .row-actions { gap: 6px; }
