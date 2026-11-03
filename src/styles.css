@@ -1586,3 +1586,6 @@ body.drag-sorting, body.drag-sorting * { cursor: grabbing !important; user-selec
 }
 @media screen { .bulk-shell { display: none !important; } }
 .result-head-actions { gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; } /* D-170 */
+/* D-171: 결과·리포트 윗줄 — 전체 선택 / 선택 항목 다운로드 / 평가 회차 각자 상자(평가 회차 상자와 같은 모양·높이) */
+.head-box { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow-1); padding: 8px 10px; display: flex; align-items: center; }
+.result-head-actions { gap: 10px; align-items: stretch; }

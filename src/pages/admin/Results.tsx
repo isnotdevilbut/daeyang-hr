@@ -33,9 +33,9 @@ export default function Results() {
         <h1>결과 · 리포트</h1>
         {cycle && (
           <div className="row result-head-actions">
-            {/* D-170: 평가 회차 왼쪽에 전체 선택 · 선택 항목 다운로드(늘 보임, 고른 사람이 없으면 누를 수 없음). 인원 수는 적지 않음 */}
-            {canReport && (() => { const all = cycle.targets.map((t) => t.employeeId); const full = all.length > 0 && all.every((id) => ids.includes(id)); return <button className="btn" onClick={() => setIds(full ? [] : all)}>{full ? '전체 해제' : '전체 선택'}</button> })()}
-            {canReport && <button className="btn" disabled={!ids.length} title={ids.length ? undefined : '표에서 사람을 먼저 고르세요'} onClick={() => setBulk(true)}>선택 항목 다운로드</button>}
+            {/* D-170·D-171: 평가 회차 왼쪽에 전체 선택 · 선택 항목 다운로드 — 셋 다 각자 상자(평가 회차 상자와 같은 모양). 다운로드는 고른 사람이 없으면 누를 수 없음, 인원 수는 적지 않음 */}
+            {canReport && (() => { const all = cycle.targets.map((t) => t.employeeId); const full = all.length > 0 && all.every((id) => ids.includes(id)); return <div className="head-box"><button className="btn" onClick={() => setIds(full ? [] : all)}>{full ? '전체 해제' : '전체 선택'}</button></div> })()}
+            {canReport && <div className="head-box"><button className="btn" disabled={!ids.length} title={ids.length ? undefined : '표에서 사람을 먼저 고르세요'} onClick={() => setBulk(true)}>선택 항목 다운로드</button></div>}
           <div className="cycle-pick">
             <label>
               <span className="pick-label">평가 회차</span>
