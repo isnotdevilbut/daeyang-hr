@@ -78,6 +78,8 @@ export interface RosterRow {
   skip: boolean // 기존 사번과 겹쳐 건너뜀 (사용자가 "건너뛰기"를 고른 경우)
   existing?: string // 겹친 기존 직원 이름
   notes?: string[] // 막지 않는 안내(기본값으로 채운 직급·직무, 건너뛴 이유)
+  /** 이미 등록된 직원 + 칼럼 값이 다른 행(D-142) = 새 데이터 → 그 직원의 칼럼 값만 바꿈(팀·직급·이름·직무는 바꾸지 않음) */
+  update?: { employeeId: string; changes: { fieldId: string; field: string; before: string; after: string; value: string }[] }
   custom: Record<string, string> // 분류 기준 ID → 파일의 글자 그대로(화면 표시용)
   customIds: Record<string, string> // 분류 기준 ID → 저장할 값(텍스트 = 글자, 선택형 = 선택지 ID). 빈 칸은 넣지 않음
   teamId?: string
@@ -91,6 +93,7 @@ export interface RosterCheck {
   extra: CustomField[] // 분류 기준과 이름이 같아 함께 등록할 열(파일 순서)
   rows: RosterRow[]
   addable: number
+  updates: number // 칼럼 값을 바꿀 기존 직원 수(D-142)
   skipped: number
   errorRows: number
   existingDup: number // 기존 사번과 겹친 행 수 (처리 방식과 무관)
@@ -103,7 +106,7 @@ export type ExistingMode = 'error' | 'skip'
 /** cat: 직무·직급 목록 (D-080, 없으면 기본 관리직·생산직 / 임원·팀장·사원) */
 export function checkRoster(table: string[][], employees: Employee[], teams: Team[], mode: ExistingMode, cat: Pick<AppState, 'jobs' | 'positions' | 'customFields'> = {}): RosterCheck {
   const jobs = activeJobs(cat), positions = positionsOf(cat)
-  const empty: RosterCheck = { error: null, ignored: [], extra: [], rows: [], addable: 0, skipped: 0, errorRows: 0, existingDup: 0 }
+  const empty: RosterCheck = { error: null, ignored: [], extra: [], rows: [], addable: 0, updates: 0, skipped: 0, errorRows: 0, existingDup: 0 }
   const hi = table.findIndex((r) => r.some((c) => c.trim()))
   if (hi < 0) return { ...empty, error: '빈 파일입니다.' }
   const header = table[hi].map((h) => h.trim())
@@ -137,13 +140,18 @@ export function checkRoster(table: string[][], employees: Employee[], teams: Tea
     const custom = Object.fromEntries(extra.map((f) => [f.id, (r[cfIdx.get(f)!] ?? '').trim()]))
     return { line, v, errors: [], skip: false, custom, customIds: {} }
   })
+  // 같은 내용인지 비교할 행 글자(파일의 머리글이 있는 열만, 앞뒤 공백 무시)
+  const sig = (row: RosterRow) => JSON.stringify([ROSTER_FIELDS.map((f) => row.v[f.key]), extra.map((f) => row.custom[f.id] ?? '')])
+  const teamNm = (id: string) => teams.find((t) => t.id === id)?.name ?? ''
   for (const row of rows) {
     const err = (k: RosterKey, msg: string) => row.errors.push({ col: LABEL[k], msg })
-    for (const f of ROSTER_FIELDS) if (ROSTER_REQUIRED.includes(f.key) && !row.v[f.key]) err(f.key, '비어 있음')
-    // 직급·직무가 없으면 기본값(D-141) — 나중에 직원 목록에서 고침
     const note = (m: string) => (row.notes ??= []).push(m)
-    if (!row.v.position) { const d = positions.find((x) => x.evalClass === '사원') ?? positions[0]; if (d) { row.v.position = d.name; note(`직급 없음 → ${d.name}`) } }
-    if (!row.v.job && jobs[0]) { row.v.job = jobs[0].name; note(`직무 없음 → ${jobs[0].name}`) }
+    const given = { ...row.v } // 기본값으로 채우기 전 파일 값
+    const ex = row.v.empNo ? employees.find((e) => e.empNo === row.v.empNo) : undefined
+    for (const f of ROSTER_FIELDS) if (ROSTER_REQUIRED.includes(f.key) && !row.v[f.key] && !(ex && f.key !== 'empNo')) err(f.key, '비어 있음')
+    // 직급·직무가 없으면 기본값(D-141) — 새 직원만, 나중에 직원 목록에서 고침
+    if (!ex && !row.v.position) { const d = positions.find((x) => x.evalClass === '사원') ?? positions[0]; if (d) { row.v.position = d.name; note(`직급 없음 → ${d.name}`) } }
+    if (!ex && !row.v.job && jobs[0]) { row.v.job = jobs[0].name; note(`직무 없음 → ${jobs[0].name}`) }
     // 분류 기준 값은 선택 입력(빈 칸 = 값 없음). 선택형은 선택지 이름과 같아야 함
     for (const f of extra) {
       const text = row.custom[f.id]
@@ -154,16 +162,36 @@ export function checkRoster(table: string[][], employees: Employee[], teams: Tea
       else row.errors.push({ col: f.name, msg: f.options.length ? `${f.options.map((x) => x.label).join('·')} 중 하나` : '선택지가 없는 항목' })
     }
     if (row.v.empNo) {
+      // 중복 = 같은 내용(D-142): 파일 안에서 같은 사번이 같은 내용으로 또 나오면 중복(체크하면 뒤쪽 행 건너뜀), 다른 내용이면 어느 쪽인지 알 수 없어 오류
       const lines = byNo.get(row.v.empNo)!
-      const ex = employees.find((e) => e.empNo === row.v.empNo)
+      if (lines.length > 1 && lines[0] !== row.line) {
+        const first = rows.find((r) => r.line === lines[0])!
+        if (sig(first) !== sig(row)) { err('empNo', `같은 사번이 다른 내용으로 ${lines[0]}행에도 있음`); continue }
+        if (mode === 'skip') { row.skip = true; note(`${lines[0]}행과 같은 내용(파일 안 중복) — 건너뜀`) }
+        else err('empNo', `${lines[0]}행과 같은 내용(파일 안 중복)`)
+        continue
+      }
       if (ex) {
+        // 이미 등록된 직원: 칼럼 값이 다르면 새 데이터 → 칼럼 값만 바꿈. 칼럼 값이 같으면(또는 칼럼 열 없음) 중복
         row.existing = ex.name
-        if (mode === 'error') err('empNo', `이미 등록된 사번 (${ex.name})`)
-        else { row.skip = true; note(`이미 등록된 사번(${ex.name}) — 건너뜀`) }
-      } else if (lines.length > 1) {
-        // 파일 안 중복(D-141): '중복 제외'면 처음 나온 행만 등록하고 나머지는 건너뜀
-        if (mode === 'skip' && lines[0] !== row.line) { row.skip = true; note(`파일 안 중복(${lines[0]}행과 같은 사번) — 건너뜀`) }
-        else if (mode === 'error') err('empNo', `파일 안에서 중복 (${lines.filter((l) => l !== row.line).join(', ')}행)`)
+        row.skip = true // 새 직원으로 등록하지 않음
+        const label = (f: CustomField, v: string) => (f.type === 'select' ? f.options.find((o) => o.id === v)?.label ?? '' : v)
+        const changes = extra.filter((f) => row.customIds[f.id] !== undefined && (ex.custom?.[f.id] ?? '') !== row.customIds[f.id])
+          .map((f) => ({ fieldId: f.id, field: f.name, before: label(f, ex.custom?.[f.id] ?? ''), after: row.custom[f.id], value: row.customIds[f.id] }))
+        const diffs = [
+          given.name && given.name !== ex.name ? '이름' : '',
+          given.team && given.team !== teamNm(ex.teamId) ? '팀' : '',
+          given.position && given.position !== (positions.find((x) => x.id === ex.positionId)?.name ?? ex.position) ? '직급' : '',
+          given.job && given.job !== (jobs.find((x) => x.id === ex.jobType)?.name ?? '') ? '직무' : '',
+        ].filter(Boolean)
+        const diffNote = diffs.length ? `${diffs.join('·')}이(가) 등록된 정보와 다름 — 바꾸지 않음(직원 수정 창에서)` : ''
+        if (changes.length) {
+          row.update = { employeeId: ex.id, changes }
+          note(`이미 등록된 직원(${ex.name}) — 칼럼 값 ${changes.map((c) => `${c.field} ${c.before || '(빈 칸)'} → ${c.after}`).join(', ')}`)
+          if (diffNote) note(diffNote)
+        } else if (mode === 'skip') { note(`이미 등록된 직원(${ex.name})과 같은 내용 — 건너뜀`); if (diffNote) note(diffNote) }
+        else err('empNo', `이미 등록된 직원(${ex.name})과 같은 내용${diffs.length ? `(${diffs.join('·')}만 다름 — 바꾸지 않는 정보)` : ''}`)
+        continue // 기존 직원 행은 팀·직급·직무를 검사·반영하지 않음
       }
     }
     if (row.v.team) {
@@ -195,16 +223,32 @@ export function checkRoster(table: string[][], employees: Employee[], teams: Tea
   }
   // 건너뛰는 행이라도 다른 오류가 있으면 오류로 센다 (파일을 고쳐야 함)
   const errorRows = rows.filter((r) => r.errors.length > 0).length
-  const skipped = rows.filter((r) => r.skip && r.errors.length === 0).length
+  const skipped = rows.filter((r) => r.skip && !r.update && r.errors.length === 0).length
   return {
     error: null, ignored, extra, rows, errorRows, skipped,
     addable: rows.filter((r) => !r.skip && r.errors.length === 0).length,
+    updates: rows.filter((r) => r.update && r.errors.length === 0).length,
     existingDup: rows.filter((r) => r.existing).length,
   }
 }
 
 /** 차단 오류가 하나라도 있으면 아무것도 등록하지 않는다 (부분 등록 없음) */
-export const canRegister = (c: RosterCheck) => !c.error && c.errorRows === 0 && c.addable > 0
+export const canRegister = (c: RosterCheck) => !c.error && c.errorRows === 0 && (c.addable > 0 || c.updates > 0)
+
+/** 이미 등록된 직원의 칼럼 값만 바꿈(D-142) — 다른 정보·평가 배정 그대로. 바꾼 직원 수 */
+export function applyRosterUpdates(d: Pick<AppState, 'employees'>, c: RosterCheck) {
+  if (!canRegister(c)) return 0
+  let n = 0
+  for (const r of c.rows) {
+    if (!r.update) continue
+    const e = d.employees.find((x) => x.id === r.update!.employeeId)
+    if (!e) continue
+    e.custom = { ...(e.custom ?? {}) }
+    for (const ch of r.update.changes) e.custom[ch.fieldId] = ch.value
+    n++
+  }
+  return n
+}
 
 /** 등록할 새 직원. 그 밖의 값은 직원 추가 화면의 기본값과 같다 (재직 중·평가 대상). 임원은 임원 표시·평가 대상 제외, 팀장은 등록 후 팀 연결(rosterLeads) */
 export function rosterEmployees(c: RosterCheck, newId: (i: number) => string): Employee[] {

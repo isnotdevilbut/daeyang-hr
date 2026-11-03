@@ -6,7 +6,7 @@ import { activeTeams, applyTier, customFieldErrors, customFieldUsage, customValu
 import { syncOpenCycles } from '../../domain/cycleSync'
 import { joinOpenCycles } from '../../domain/cycle'
 import { activeJobs, classDefault, deleteJob, deletePosition, jobName, jobUsage, positionById, positionName, positionsOf, positionUsage, saveJob, savePosition } from '../../domain/catalog'
-import { applyRosterFill, canFill, canRegister, checkRoster, checkRosterFill, readRosterFile, ROSTER_FIELDS, rosterEmployees, rosterLeads, type ExistingMode, type RosterRow } from '../../domain/roster'
+import { applyRosterFill, applyRosterUpdates, canFill, canRegister, checkRoster, checkRosterFill, readRosterFile, ROSTER_FIELDS, rosterEmployees, rosterLeads, type ExistingMode, type RosterRow } from '../../domain/roster'
 import type { Sheet } from '../../domain/xlsx'
 import type { CustomField, Employee, EvalClass, JobDef, PositionDef } from '../../domain/types'
 import { Forbidden, Modal, Notice } from '../../components/ui'
@@ -718,10 +718,14 @@ function AddUpload() {
     if (!res) return
     const stamp = Date.now().toString(36)
     const add = rosterEmployees(res, (i) => `e-${stamp}-${i}`)
-    if (!add.length) return
-    update((d) => { d.employees.push(...add); rosterLeads(d, add); syncTiers(d); joinOpenCycles(d, add.map((e) => e.id)); syncOpenCycles(d) }) // 새 직원은 준비·진행 회차 참여자로 (D-112)
+    if (!add.length && !res.updates) return
+    let upd = 0
+    update((d) => {
+      upd = applyRosterUpdates(d, res) // 이미 등록된 직원의 새 칼럼 값(D-142)
+      if (add.length) { d.employees.push(...add); rosterLeads(d, add); syncTiers(d); joinOpenCycles(d, add.map((e) => e.id)); syncOpenCycles(d) } // 새 직원은 준비·진행 회차 참여자로 (D-112)
+    })
     const open = s.cycles.filter((c) => c.status === '준비' || c.status === '진행').length
-    setDone(`${add.length}명을 등록했습니다.${res.skipped ? ` (기존 사번 ${res.skipped}행 건너뜀)` : ''}${open ? ' 진행 중인 평가의 참여자로 추가했습니다(평가 관리 → 평가 설정에서 해제 가능).' : ''}`)
+    setDone([add.length ? `${add.length}명을 등록했습니다.` : '', upd ? `이미 등록된 ${upd}명의 칼럼 값을 바꿨습니다.` : '', res.skipped ? `(중복 ${res.skipped}행 건너뜀)` : '', add.length && open ? '새 직원은 진행 중인 평가의 참여자로 추가했습니다(평가 관리 → 평가 설정에서 해제 가능).' : ''].filter(Boolean).join(' '))
     reset()
   }
   const cellErr = (r: RosterRow, label: string) => r.errors.some((e) => e.col === label)
@@ -753,14 +757,15 @@ function AddUpload() {
         <>
           <div className="row upload-sum" aria-live="polite">
             <span>전체 <b>{res.rows.length}</b>행</span>
-            <span>등록 가능 <b>{res.addable}</b></span>
+            <span>새로 등록 <b>{res.addable}</b></span>
+            {res.updates > 0 && <span>칼럼 값 바뀜 <b>{res.updates}</b>명</span>}
             {res.skipped > 0 && <span>건너뜀 <b>{res.skipped}</b></span>}
             <span className={res.errorRows ? 'err' : ''}>오류 <b>{res.errorRows}</b>행</span>
             {res.extra.length > 0 && <span className="muted">함께 등록할 칼럼: {res.extra.map((f) => f.name).join(', ')}</span>}
             {res.ignored.length > 0 && <span className="muted">쓰지 않는 열(등록 안 함): {res.ignored.join(', ')}</span>}
           </div>
           {/* D-141: 중복 처리 체크 — 항상 보임. 켜면 이미 등록된 사번·파일 안에서 두 번 나온 사번(뒤쪽 행)은 빼고 나머지만 등록, 끄면 중복을 오류로 막음 */}
-          <label className="check dup-check"><input type="checkbox" checked={mode === 'skip'} onChange={(e) => setMode(e.target.checked ? 'skip' : 'error')} /> 중복 사번은 빼고 업로드 <span className="muted">(이미 등록된 직원·파일 안에서 두 번 나온 사번 — 끄면 중복이 있을 때 등록하지 않음)</span></label>
+          <label className="check dup-check"><input type="checkbox" checked={mode === 'skip'} onChange={(e) => setMode(e.target.checked ? 'skip' : 'error')} /> 중복 데이터는 빼고 업로드 <span className="muted">(이미 등록된 직원과 같은 내용·파일 안의 같은 행 — 끄면 중복이 있을 때 등록하지 않음. 이미 등록된 직원이라도 칼럼 값이 다르면 새 데이터로 그 값만 바꿈)</span></label>
           <div className="table-wrap upload-preview" tabIndex={0}>
             <table className="tbl">
               <thead><tr><th className="num">행</th>{ROSTER_FIELDS.map((f) => <th key={f.key}>{f.label}</th>)}{res.extra.map((f) => <th key={f.id}>{f.name}</th>)}<th>확인</th></tr></thead>
@@ -773,7 +778,7 @@ function AddUpload() {
                     <td>
                       {r.errors.length > 0
                         ? r.errors.map((e, i) => <div key={i} className="err-msg">{e.col}: {e.msg}</div>)
-                        : r.skip ? <span className="chip na">건너뜀</span> : <span className="chip submitted">✓</span>}
+                        : r.update ? <span className="chip info">칼럼 값 바뀜</span> : r.skip ? <span className="chip na">건너뜀</span> : <span className="chip submitted">✓</span>}
                       {r.errors.length === 0 && r.notes?.map((n, i) => <div key={i} className="muted small">{n}</div>)}
                     </td>
                   </tr>
@@ -782,7 +787,7 @@ function AddUpload() {
             </table>
           </div>
           <div className="row" style={{ marginTop: 12 }}>
-            <button className="btn primary" disabled={!canRegister(res)} onClick={apply}>{res.addable}명 등록</button>
+            <button className="btn primary" disabled={!canRegister(res)} onClick={apply}>{[res.addable ? `${res.addable}명 등록` : '', res.updates ? `${res.updates}명 칼럼 값 바꾸기` : ''].filter(Boolean).join(' · ') || '0명 등록'}</button>
             <button className="btn" onClick={reset}>취소</button>
             {res.errorRows > 0 && <span className="feedback fail">오류가 있어 등록할 수 없습니다.</span>}
           </div>

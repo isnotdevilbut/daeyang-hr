@@ -410,11 +410,12 @@ describe('조직 관리 (회사 구분·언어 제거)', () => {
     const s = createSeed()
     const r = checkRoster(csv('사번,이름,팀,직급,직무\n0101,가,설계팀,사원,관리직\n0101,나,설계팀,사원,관리직\n0012,다,설계팀,사원,관리직\n0103,,없는팀,사원,사무직'), s.employees, s.teams, 'error')
     const e = (line: number) => r.rows.find((x) => x.line === line)!.errors.map((x) => `${x.col}:${x.msg}`)
-    expect(e(2)[0]).toContain('사번:파일 안에서 중복 (3행)')
-    expect(e(3)[0]).toContain('사번:파일 안에서 중복 (2행)')
-    expect(e(4)).toEqual(['사번:이미 등록된 사번 (한승민)'])
+    // D-142: 같은 사번이 다른 내용으로 두 번 → 뒤쪽 행 오류, 이미 등록된 직원과 같은 내용 → 오류(중복 제외를 켜면 건너뜀)
+    expect(e(2)).toEqual([])
+    expect(e(3)[0]).toContain('사번:같은 사번이 다른 내용으로 2행에도 있음')
+    expect(e(4)[0]).toContain('사번:이미 등록된 직원(한승민)과 같은 내용')
     expect(e(5)).toEqual(['이름:비어 있음', '팀:없는 팀', '직무:관리직·생산직 중 하나'])
-    expect(r.errorRows).toBe(4)
+    expect(r.errorRows).toBe(3)
     expect(canRegister(r)).toBe(false)
     expect(rosterEmployees(r, () => 'x')).toEqual([])
   })
@@ -508,8 +509,8 @@ describe('엑셀(.xlsx) 읽기: 여러 시트·공유 문자열·숫자·수식'
     const r = checkRoster((await readXlsx(await build()))[1].rows, s.employees, s.teams, 'skip')
     expect(r.rows.map((x) => [x.line, x.v.empNo])).toEqual([[3, '101'], [4, '0012']])
     expect(r.rows[1].skip).toBe(true) // 기존 0012 → 건너뛰기
-    expect(r.rows[1].errors).toEqual([]) // D-141: 빈 직급은 오류 대신 기본값(사원) + 안내
-    expect(r.rows[1].notes).toContain('직급 없음 → 사원')
+    expect(r.rows[1].errors).toEqual([]) // 이미 등록된 직원(0012) — 칼럼 값이 없으니 같은 내용으로 건너뜀(D-142)
+    expect(r.rows[1].notes?.[0]).toContain('같은 내용 — 건너뜀')
     expect(canRegister(r)).toBe(r.rows.every((x) => !x.errors.length)) // 오류 행이 없으면 등록 가능(빈 직급은 기본값)
   })
 })
@@ -2956,7 +2957,7 @@ describe('업로드 필수 열 최소화·중복 제외·이름으로 칼럼 값
   })
   it("'중복 사번은 빼고 업로드': 이미 등록된 사번·파일 안 두 번째 행은 건너뛰고 나머지 등록, 끄면 막음", () => {
     const s = createSeed()
-    const t = parseCsv('이름,사번,팀\n가,0901,설계팀\n나,0901,설계팀\n다,0005,설계팀\n라,0902,생산팀')
+    const t = parseCsv('이름,사번,팀\n가,0901,설계팀\n가,0901,설계팀\n최유진,0005,경영기획팀\n라,0902,생산팀')
     const teams = s.teams.filter((x) => !x.archived)
     const off = R.checkRoster(t, s.employees, teams, 'error', s)
     expect(R.canRegister(off)).toBe(false)
@@ -2973,5 +2974,25 @@ describe('업로드 필수 열 최소화·중복 제외·이름으로 칼럼 값
     const d = R.checkRosterFill([['이름', '근무지'], ['최유진', '본사']], s.employees, s)
     expect(d.rows[0].errors[0].msg).toContain('사번 열을 넣어')
     expect(R.checkRosterFill([['근무지'], ['본사']], s.employees, s).error).toContain('사번 또는 이름')
+  })
+})
+
+describe('중복 = 같은 내용, 칼럼 값이 다르면 새 데이터 (D-142)', async () => {
+  const R = await import('./roster')
+  it('이미 등록된 직원 + 칼럼 값 다름 → 그 칼럼 값만 바꿈(팀·이름이 달라도 바꾸지 않음), 같은 내용은 중복', () => {
+    const s = createSeed(); s.customFields = [{ id: 'cf', name: '근무지', type: 'text', options: [] }]
+    const teams = s.teams.filter((x) => !x.archived)
+    const t = parseCsv('이름,사번,팀,근무지\n최유진,0005,경영기획팀,본사\n다른이름,0006,설계팀,공장\n이준호,0004,경영기획팀,\n가상새,0950,설계팀,본사')
+    const r = R.checkRoster(t, s.employees, teams, 'skip', s)
+    expect(R.canRegister(r)).toBe(true)
+    expect([r.addable, r.updates, r.skipped]).toEqual([1, 2, 1])
+    expect(r.rows[1].notes!.join()).toContain('바꾸지 않음')
+    const before = structuredClone(s.employees)
+    expect(R.applyRosterUpdates(s, r)).toBe(2)
+    const e6 = s.employees.find((e) => e.empNo === '0006')!
+    expect(e6.custom).toEqual({ cf: '공장' }); expect(e6.name).toBe(before.find((e) => e.empNo === '0006')!.name) // 이름은 그대로
+    // 끄면 같은 내용(0004)만 오류, 칼럼 값이 다른 행은 오류 아님
+    const off = R.checkRoster(t, s.employees, teams, 'error', s)
+    expect(off.rows.filter((x) => x.errors.length).map((x) => x.v.empNo)).toEqual(['0005', '0006', '0004']) // 위에서 이미 바꿨으니 0005·0006도 이제 같은 내용
   })
 })
