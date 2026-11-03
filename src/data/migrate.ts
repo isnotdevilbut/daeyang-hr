@@ -14,6 +14,7 @@ import { v15 } from '../domain/demoV15'
 import { scoringV16 } from '../domain/scoringV16'
 import { execPerTeam } from '../domain/execTeamsV17'
 import { upwardV18 } from '../domain/upward'
+import { joinAllStaff } from '../domain/joinAllV19'
 import { tierOf } from '../domain/org'
 
 export interface MigrationResult { state: AppState; notes: string[] }
@@ -201,7 +202,13 @@ export function migrate(raw: any): MigrationResult | null {
     s.schemaVersion = 18
   }
 
-  if (s.schemaVersion !== 18) return null
+  if (s.schemaVersion === 18) {
+    // v18 → v19 (D-116): 재직 사원·팀장 모두 준비·진행 회차 참여자로(이전 '평가 제외' 해제, 이전에 업로드한 직원 포함). 기존 배정·응답·마감/확정 회차 그대로
+    notes.push(...joinAllStaff(s))
+    s.schemaVersion = 19
+  }
+
+  if (s.schemaVersion !== 19) return null
   return { state: s as AppState, notes }
 }
 
