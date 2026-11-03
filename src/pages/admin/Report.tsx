@@ -122,11 +122,15 @@ function ReportBody({ s, cycle, t, from }: { s: AppState; cycle: Cycle; t: Targe
         </div>
 
         <details className="panel report-opts" open>
-          <summary><b>포함 항목</b> <span className="muted">{allKeys.filter(on).length}/{allKeys.length}</span></summary>
-          <div className="row report-opts-actions">
-            <button className="btn small" onClick={() => setOff(new Set())}>모두 선택</button>
-            <button className="btn small" onClick={() => setOff(new Set(allKeys))}>모두 해제</button>
-          </div>
+          {/* D-133: 모두 선택·모두 해제는 제목 줄 맨 오른쪽(아래 선택 칸과 간격) — 눌러도 접히지 않게 */}
+          <summary className="report-opts-head">
+            <b>포함 항목</b> <span className="muted">{allKeys.filter(on).length}/{allKeys.length}</span>
+            <span className="spacer" />
+            <span className="row report-opts-actions">
+              <button className="btn small" onClick={(e) => { e.preventDefault(); setOff(new Set()) }}>모두 선택</button>
+              <button className="btn small" onClick={(e) => { e.preventDefault(); setOff(new Set(allKeys)) }}>모두 해제</button>
+            </span>
+          </summary>
           <div className="report-opts-grid">
             {groups.map((g) => {
               const keys = itemsOf(g).map((i) => i.key)

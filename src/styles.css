@@ -1451,3 +1451,10 @@ details[open] > summary > .toggle-ic { transform: rotate(180deg); }
 .stage-group > summary:focus-visible, .author-item > summary:focus-visible { outline: 2px solid #20b8ca; outline-offset: -2px; }
 @media (prefers-reduced-motion: reduce) { .toggle-ic { transition: none; } }
 .toggle-ic { font-size: 18px; line-height: 1; width: 20px; text-align: center; color: var(--brand-navy); }
+/* D-133: 포함 항목 제목 줄 — 모두 선택·해제는 오른쪽 끝, 선택 칸과 넉넉한 간격 */
+.report-opts > summary.report-opts-head { display: flex; align-items: center; gap: 8px; list-style: none; padding: 6px 0; }
+.report-opts > summary.report-opts-head::-webkit-details-marker { display: none; }
+.report-opts .report-opts-head .report-opts-actions { margin: 0; gap: 8px; }
+.report-opts[open] > summary.report-opts-head { margin-bottom: 14px; }
+.report-opts-grid { gap: 14px; }
+.report-opts { padding: 12px 18px 16px; }
