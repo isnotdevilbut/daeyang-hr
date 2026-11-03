@@ -7,7 +7,6 @@ import { fmt, latestAdjustment, personResult, type PersonResult } from '../../do
 import type { AdjustKind, Cycle, TargetSnapshot } from '../../domain/types'
 import { Forbidden } from '../../components/ui'
 import { positionsOf, targetPosition } from '../../domain/catalog'
-import { sortRows, SortTh, useSort } from '../../components/sort'
 
 export function addAdjustment(cycleId: string, kind: AdjustKind, key: string, value: number | string | null, reason: string, by: string) {
   update((d) => {
@@ -44,18 +43,14 @@ function Body({ cycle }: { cycle: Cycle }) {
   const s = useAppState()
   const kpiOn = !!cycle.kpiBlend?.enabled // 이 회차의 실제 반영 설정
   const depts = [...new Map(cycle.targets.map((t) => [t.departmentId, t.departmentName])).entries()]
-  // 머리글 정렬은 모든 팀 표에 함께 적용(팀 묶음은 그대로). 직급은 직급 목록 순서, 점수 없음은 맨 아래
-  const [sort, onSort] = useSort()
+  // 고정 순서(D-111): 팀 가나다순 → 팀 안에서 직급 목록 순서(임원·팀장·사원) → 이름순. 머리글 정렬 없음
+  depts.sort((a, b) => a[1].localeCompare(b[1], 'ko'))
   const posRank = (t: TargetSnapshot) => { const i = positionsOf(s).findIndex((p) => p.name === targetPosition(s, cycle, t)); return i < 0 ? 99 : i }
-  const val = ({ t, r }: { t: TargetSnapshot; r: PersonResult }, k: string) =>
-    k === 'team' ? t.teamName : k === 'pos' ? posRank(t) : k === 'name' ? t.name : k === 'base' ? r.combined.base : k === 'kpi' ? r.kpi
-      : k === 'afterKpi' ? (r.combined.kpiApplied ? r.combined.afterKpi : null) : k === 'final' ? r.combined.final : r.ceoGrade
-  const th = (k: string, label: string, cls: string) => <SortTh k={k} sort={sort} onSort={onSort} className={cls}>{label}</SortTh>
   return (
     <>
       {depts.map(([deptId, deptName]) => {
         const targets = cycle.targets.filter((t) => t.departmentId === deptId)
-        const rows = sortRows(targets.map((t) => ({ t, r: personResult(s, cycle, t.employeeId)! })), sort, val)
+        const rows = targets.sort((a, b) => posRank(a) - posRank(b) || a.name.localeCompare(b.name, 'ko')).map((t) => ({ t, r: personResult(s, cycle, t.employeeId)! }))
         return (
           <section className="panel result-dept" key={deptId} aria-label={`${deptName} 결과`}>
             <DeptHead cycle={cycle} deptId={deptId} deptName={deptName} count={targets.length} />
@@ -63,10 +58,10 @@ function Body({ cycle }: { cycle: Cycle }) {
               <table className="tbl result-tbl">
                 <thead>
                   <tr>
-                    {th('team', '팀', 'c-team')}{th('pos', '직급', 'c-pos')}{th('name', '이름', 'c-name')}
-                    {th('base', '개인 평가 점수', 'num c-score')}
-                    {kpiOn && <>{th('kpi', '팀 KPI', 'num c-score')}{th('afterKpi', 'KPI 반영 후 점수', 'num c-score')}</>}
-                    {th('final', '최종 점수', 'num c-score')}{th('grade', '최종 등급', 'center c-grade')}
+                    <th className="c-team">팀</th><th className="c-pos">직급</th><th className="c-name">이름</th>
+                    <th className="num c-score">개인 평가 점수</th>
+                    {kpiOn && <><th className="num c-score">팀 KPI</th><th className="num c-score">KPI 반영 후 점수</th></>}
+                    <th className="num c-score">최종 점수</th><th className="center c-grade">최종 등급</th>
                     <th className="c-btn"><span className="sr-only">상세</span></th><th className="c-btn"><span className="sr-only">리포트</span></th>
                   </tr>
                 </thead>

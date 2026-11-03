@@ -8,7 +8,6 @@ import { canRegister, checkRoster, readRosterFile, ROSTER_FIELDS, ROSTER_HEADER,
 import type { Sheet } from '../../domain/xlsx'
 import type { CustomField, Employee, EvalClass, JobDef, PositionDef } from '../../domain/types'
 import { Forbidden, Modal, Notice } from '../../components/ui'
-import { sortRows, SortTh, useSort } from '../../components/sort'
 
 const blank = (teamId: string): Employee => ({
   id: '', empNo: '', name: '', teamId, position: '사원', positionId: 'pos-staff', jobType: 'office',
@@ -46,7 +45,6 @@ function EmployeeList() {
   const [fieldEdit, setFieldEdit] = useState<CustomField | null>(null) // 분류 기준 추가·편집 (D-078)
   const [memoFor, setMemoFor] = useState<Employee | null>(null)
   const [menu, setMenu] = useState<string | null>(null) // 열 머리글 메뉴가 열린 분류 기준 ID
-  const [sort, onSort] = useSort()
   const fields = s.customFields ?? []
   // 머리글 메뉴: 바깥을 누르거나 Esc로 닫기
   useEffect(() => {
@@ -59,7 +57,7 @@ function EmployeeList() {
   const teamName = (id: string) => s.teams.find((t) => t.id === id)?.name ?? ''
   const needle = q.trim()
   // 기본 목록 = 재직 중인 직원 전체 (평가 대상이 아닌 대표자·임원 포함)
-  const base = s.employees
+  const list = s.employees
     .filter((e) => e.active)
     .filter((e) => {
       if (needle && !(e.name.includes(needle) || e.empNo.includes(needle) || teamName(e.teamId).includes(needle))) return false
@@ -68,11 +66,6 @@ function EmployeeList() {
       return true
     })
     .sort((a, b) => teamName(a.teamId).localeCompare(teamName(b.teamId), 'ko') || TIERS.indexOf(tierOf(s, a)) - TIERS.indexOf(tierOf(s, b)) || positionName(s, a).localeCompare(positionName(s, b), 'ko') || a.name.localeCompare(b.name, 'ko'))
-  // 머리글 정렬 — 직급은 직급 목록 순서(임원·팀장·사원…), 분류 기준은 표시 글자
-  const posRank = (e: Employee) => { const i = positionsOf(s).findIndex((p) => p.id === positionById(s, e.positionId)?.id); return i < 0 ? 99 : i }
-  const list = sortRows(base, sort, (e, k) =>
-    k === 'team' ? teamName(e.teamId) : k === 'pos' ? posRank(e) : k === 'name' ? e.name : k === 'job' ? jobName(s, e.jobType) : k === 'empNo' ? e.empNo
-      : customValueText(fields.find((f) => f.id === k)!, e.custom?.[k]))
   const filtering = !!needle || !!team || !!roleF
   const dupNames = nameConflicts(s).employees
 
@@ -101,12 +94,11 @@ function EmployeeList() {
           <table className="tbl org-tbl emp-tbl" style={{ minWidth: `calc(${5 * 7}em + ${fields.length * 10}em + 150px)` }}>
             <thead>
               <tr>
-                <SortTh k="team" sort={sort} onSort={onSort} className="ec">팀</SortTh><SortTh k="pos" sort={sort} onSort={onSort} className="ec">직급</SortTh>
-                <SortTh k="name" sort={sort} onSort={onSort} className="ec">이름</SortTh><SortTh k="job" sort={sort} onSort={onSort} className="ec">직무</SortTh>
-                {/* 사용자 정의 분류 기준 열 — 이름을 누르면 정렬, ▾ 메뉴에서 편집·삭제 */}
+                <th className="ec">팀</th><th className="ec">직급</th><th className="ec">이름</th><th className="ec">직무</th>
+                {/* 사용자 정의 분류 기준 열 — 머리글 메뉴에서 편집·삭제 */}
                 {fields.map((f) => (
-                  <SortTh key={f.id} k={f.id} sort={sort} onSort={onSort} className="cf-th" extra={<>
-                    <button type="button" className="cf-head" aria-label={`${f.name} 항목 메뉴`} aria-haspopup="menu" aria-expanded={menu === f.id} onClick={() => setMenu(menu === f.id ? null : f.id)}><span aria-hidden>▾</span></button>
+                  <th key={f.id} className="cf-th">
+                    <button type="button" className="cf-head" aria-haspopup="menu" aria-expanded={menu === f.id} onClick={() => setMenu(menu === f.id ? null : f.id)}>{f.name} <span aria-hidden>▾</span></button>
                     {menu === f.id && (
                       <div className="cf-menu" role="menu">
                         <button type="button" role="menuitem" onClick={() => { setMenu(null); setFieldEdit(structuredClone(f)) }}>이름·선택지 편집</button>
@@ -118,9 +110,9 @@ function EmployeeList() {
                         }}>항목 삭제</button>
                       </div>
                     )}
-                  </>}>{f.name}</SortTh>
+                  </th>
                 ))}
-                <SortTh k="empNo" sort={sort} onSort={onSort} className="ec">사번</SortTh><th className="c-act"><span className="sr-only">수정·메모</span></th>
+                <th className="ec">사번</th><th className="c-act"><span className="sr-only">수정·메모</span></th>
               </tr>
             </thead>
             <tbody>

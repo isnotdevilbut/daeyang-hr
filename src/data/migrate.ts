@@ -12,6 +12,7 @@ import { ensureCatalog } from '../domain/catalog'
 import { syncCycle } from '../domain/cycleSync'
 import { v15 } from '../domain/demoV15'
 import { scoringV16 } from '../domain/scoringV16'
+import { execPerTeam } from '../domain/execTeamsV17'
 import { tierOf } from '../domain/org'
 
 export interface MigrationResult { state: AppState; notes: string[] }
@@ -187,7 +188,13 @@ export function migrate(raw: any): MigrationResult | null {
     s.schemaVersion = 16
   }
 
-  if (s.schemaVersion !== 16) return null
+  if (s.schemaVersion === 16) {
+    // v16 → v17 (D-110): 임원을 팀마다 한 명씩 — 임원의 소속 팀만 옮김(총 인원·배정·응답·담당 그대로). 임원 수 ≠ 팀 수면 그대로
+    notes.push(...execPerTeam(s))
+    s.schemaVersion = 17
+  }
+
+  if (s.schemaVersion !== 17) return null
   return { state: s as AppState, notes }
 }
 
