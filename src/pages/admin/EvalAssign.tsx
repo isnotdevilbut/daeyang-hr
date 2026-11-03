@@ -122,7 +122,7 @@ export default function EvalAssign({ cycle, part }: { cycle: Cycle; part: 'weigh
                 <tfoot>
                   <tr>
                     <td colSpan={3} />{/* D-162: 안내 문구 제거 */}
-                    <td className="num"><b className={e.length ? 'bad' : 'good'}>합계 {sum === null ? '—' : `${sum}%`}</b>{sum !== null && !e.length && Math.abs(sum - 100) > 0.001 && <div className="muted small">적용 단계 기준 100%로 환산</div>}</td>
+                    <td className="num"><b className={e.length ? 'bad' : 'good'}>합계 {sum === null ? '—' : `${sum}%`}</b>{/* D-165: '적용 단계 기준 100%로 환산' 안내 제거(계산 방식은 그대로) */}</td>
                   </tr>
                 </tfoot>
               </table>
