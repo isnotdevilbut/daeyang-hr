@@ -1399,3 +1399,7 @@ th.cf-th .cf-head { margin-left: 14px; padding: 2px 5px; }
 .modal-x:focus-visible { outline: 2px solid #20b8ca; outline-offset: 1px; }
 /* D-108: 여러 건 작성 업무 — 남은 건이 있으면 "3/8 완료" 전체를 빨간 글씨(굵게), 모두 제출이면 초록 */
 .writes-sum.open { color: #a3141c; font-weight: 700; }
+/* D-109: 진행 현황 카드 3개(전체 대상자·완료자·미완료자) — PC·휴대폰 모두 한 줄 3칸 */
+.stats5.stats3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 640px) { .stats5.stats3 { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; } .stats5.stats3 .stat { padding: 10px 10px; } }
+@media (max-width: 360px) { .stats5.stats3 { grid-template-columns: repeat(2, minmax(0, 1fr)); } .stats5.stats3 .stat:first-child { grid-column: 1 / -1; min-height: 72px; } } /* 아주 좁으면 전체 대상자 한 줄 + 완료자·미완료자 — 제목 꺾임 없이 */

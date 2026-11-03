@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAppState } from '../../data/store'
 import { useSelectedCycle } from '../../data/hooks'
@@ -47,7 +47,8 @@ function Body({ s, cycle }: { s: AppState; cycle: Cycle }) {
   const saved: Saved = (() => {
     try { const v = JSON.parse(sessionStorage.getItem(FILTER_KEY) ?? '{}'); return v.cycleId === cycle.id ? v : {} } catch { return {} }
   })()
-  const validPick = (p?: CardPick): CardPick => (p?.kind === 'stage' ? (p.order >= 1 && p.order <= max ? p : null) : p?.kind === 'complete' || p?.kind === 'all' ? p : null)
+  // 카드는 전체 대상자·완료자·미완료자 세 가지(D-109). 이전에 기억된 단계 카드 선택은 읽지 않음
+  const validPick = (p?: CardPick): CardPick => (p?.kind === 'complete' || p?.kind === 'open' || p?.kind === 'all' ? p : null)
   const [q, setQ] = useState<string>(saved.q ?? '')
   // 직급 필터 = 직급 ID (D-080). 이전에 저장된 값이 직급 ID가 아니면 읽지 않음(숨은 필터 방지)
   const [tier, setTier] = useState<string>(positionById(s, saved.tier) ? saved.tier! : '')
@@ -80,24 +81,9 @@ function Body({ s, cycle }: { s: AppState; cycle: Cycle }) {
       (!tier || empPos(r.t.employeeId) === tier) &&
       progressFilter(r, pick, onlyOpen),
   )
-  const stageOn = pick?.kind === 'stage' ? pick.order : null
-  const wrapRef = useRef<HTMLDivElement>(null)
-  const [glow, setGlow] = useState<{ left: number; width: number; height: number } | null>(null)
-  // 테두리 위치 = 선택 열 머리글의 위치·폭, 높이 = 표 전체. 표·창 크기·필터가 바뀌면 다시 잼
-  useLayoutEffect(() => {
-    const wrap = wrapRef.current
-    if (!wrap) return
-    const measure = () => {
-      const th = stageOn ? wrap.querySelector<HTMLElement>(`th[data-col="${stageOn}"]`) : null
-      const tbl = wrap.querySelector<HTMLElement>('table')
-      setGlow(th && tbl ? { left: th.offsetLeft + 1, width: th.offsetWidth - 2, height: tbl.offsetHeight } : null)
-    }
-    measure()
-    const ro = new ResizeObserver(measure); ro.observe(wrap); const tbl = wrap.querySelector('table'); if (tbl) ro.observe(tbl)
-    return () => ro.disconnect()
-  }, [stageOn, filtered.length])
-  // 단계 카드는 이미 "그 단계 미완료"만 보여 주므로 미완료만은 적용된 것으로 표시(충돌 없음)
-  const filtering = !!needle || !!tier || (onlyOpen && !stageOn)
+  const openOn = pick?.kind === 'open'
+  // 미완료자 카드는 이미 미완료만 보여 주므로 "미완료만"은 적용된 것으로 표시(충돌 없음)
+  const filtering = !!needle || !!tier || (onlyOpen && !openOn)
   const nameCount = new Map<string, number>()
   rows.forEach((r) => nameCount.set(r.t.name, (nameCount.get(r.t.name) ?? 0) + 1))
   const frac = (a: number, b: number) => (b === 0 ? <span className="n-na">배정 없음</span> : <><span className="nv">{a}</span><span className="of"> / {b}</span></>)
@@ -107,17 +93,16 @@ function Body({ s, cycle }: { s: AppState; cycle: Cycle }) {
   const same = (p: CardPick) => JSON.stringify(p) === JSON.stringify(pick)
   const choose = (p: CardPick) => { clearFilters(); setPick(same(p) ? null : p) }
   const changeOnlyOpen = (v: boolean) => { setOnlyOpen(v); if (v && pick?.kind === 'complete') setPick(null) } // 완료 카드와 모순 → 해제
-  const title = pick?.kind === 'stage' ? `${pick.order}단계 미완료` : pick?.kind === 'complete' ? '평가 업무 완료' : '평가 참여자'
-  const scopeLabel = pick?.kind === 'stage' ? `${pick.order}단계 미완료` : pick?.kind === 'complete' ? '완료' : '전체'
+  const title = pick?.kind === 'open' ? '미완료자' : pick?.kind === 'complete' ? '완료자' : '전체 대상자'
+  const scopeLabel = pick?.kind === 'open' ? '미완료자' : pick?.kind === 'complete' ? '완료자' : '전체'
 
   return (
     <>
-      <div className="stats5" role="group" aria-label="진행 요약 (선택 회차 전체 기준) — 눌러서 명단 보기" onPointerMove={cardGlow}>
-        <button type="button" className="stat" aria-pressed={pick?.kind === 'all'} onClick={() => choose({ kind: 'all' })}><span className="l">평가 참여자</span><span className="n"><span className="nv">{counts.participants}</span><span className="of">명</span></span></button>
-        <button type="button" className="stat" aria-pressed={pick?.kind === 'complete'} onClick={() => choose({ kind: 'complete' })}><span className="l">평가 업무 완료</span><span className="n">{frac(counts.complete, counts.participants)}<span className="of">명</span></span></button>
-        {counts.byStage.map((b) => (
-          <button type="button" className="stat" key={b.order} aria-pressed={stageOn === b.order} onClick={() => choose({ kind: 'stage', order: b.order })}><span className="l">{b.order}단계 완료</span><span className="n">{frac(b.done, b.writers)}<span className="of">명</span></span></button>
-        ))}
+      {/* D-109: 전체 대상자 / 완료자(받는 평가·작성 업무 모두 제출) / 미완료자(하나라도 미제출) — 누르면 명단 필터(선택 하나·재클릭 해제) */}
+      <div className="stats5 stats3" role="group" aria-label="진행 요약 (선택 회차 전체 기준) — 눌러서 명단 보기" onPointerMove={cardGlow}>
+        <button type="button" className="stat" aria-pressed={pick?.kind === 'all'} onClick={() => choose({ kind: 'all' })}><span className="l">전체 대상자</span><span className="n"><span className="nv">{counts.participants}</span><span className="of">명</span></span></button>
+        <button type="button" className="stat" aria-pressed={pick?.kind === 'complete'} onClick={() => choose({ kind: 'complete' })}><span className="l">완료자</span><span className="n">{frac(counts.complete, counts.participants)}<span className="of">명</span></span></button>
+        <button type="button" className="stat" aria-pressed={openOn} onClick={() => choose({ kind: 'open' })}><span className="l">미완료자</span><span className="n">{frac(counts.participants - counts.complete, counts.participants)}<span className="of">명</span></span></button>
       </div>
 
       <section className="panel" aria-label="직원별 진행 현황">
@@ -131,18 +116,16 @@ function Body({ s, cycle }: { s: AppState; cycle: Cycle }) {
             <option value="">전체 직급</option>
             {positionsOf(s).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
-          <label className={`check ${stageOn ? 'is-implied' : ''}`} title={stageOn ? '단계 카드를 고르면 그 단계 미완료만 보입니다' : undefined}><input type="checkbox" checked={onlyOpen || !!stageOn} disabled={!!stageOn} onChange={(e) => changeOnlyOpen(e.target.checked)} /> 미완료만</label>
+          <label className={`check ${openOn ? 'is-implied' : ''}`} title={openOn ? '미완료자 카드를 고르면 미완료자만 보입니다' : undefined}><input type="checkbox" checked={onlyOpen || openOn} disabled={openOn} onChange={(e) => changeOnlyOpen(e.target.checked)} /> 미완료만</label>
           <span className="spacer" />
           {filtering && <button className="btn small" onClick={clearFilters}>필터 초기화</button>}
         </div>
-        <div className="table-wrap" ref={wrapRef} tabIndex={0} aria-label="표가 넓으면 옆으로 밀어 보세요">
-          {/* 선택된 평가 열 강조(D-086): 제목~마지막 행을 감싸는 연속된 글라스 그라데이션 테두리 한 장 — 안쪽은 비움, 클릭·선택 방해 없음 */}
-          <div className={`col-frame ${glow ? 'on' : ''}`} aria-hidden style={glow ? { transform: `translateX(${glow.left}px)`, width: glow.width, height: glow.height } : undefined} />
+        <div className="table-wrap" tabIndex={0} aria-label="표가 넓으면 옆으로 밀어 보세요">
           <table className="tbl progress-tbl">
             <thead>
               <tr>
                 <th className="c-team">팀</th><th className="c-tier">직급</th><th className="c-name">이름</th>
-                {STAGE_COLS.map((h, i) => <th key={i} data-col={i + 1} className={`c-eval ${stageOn === i + 1 ? 'col-on' : ''}`}>{h}</th>)}
+                {STAGE_COLS.map((h, i) => <th key={i} className="c-eval">{h}</th>)}
                 <th className="c-act"><span className="sr-only">상세</span></th>
               </tr>
             </thead>
@@ -161,7 +144,7 @@ function Body({ s, cycle }: { s: AppState; cycle: Cycle }) {
                       {r.mismatch && <span className="chip draft tag">배정 확인</span>}
                     </span>
                   </td>
-                  {r.cells.map((cell, i) => <td key={i} className={`writes c-eval ${stageOn === i + 1 ? 'col-on' : ''}`}><span className="cell-in"><Cell c={cell} /></span></td>)}
+                  {r.cells.map((cell, i) => <td key={i} className="writes c-eval"><span className="cell-in"><Cell c={cell} /></span></td>)}
                   <td className="c-act">{can(s.session.role, 'viewResults') && <Link className="btn small" to={`/admin/results/${r.t.employeeId}?from=progress`} onClick={() => { try { sessionStorage.setItem(SCROLL_KEY, String(window.scrollY)) } catch { /* 무시 */ } }}>상세</Link>}</td>
                 </tr>
               ))}

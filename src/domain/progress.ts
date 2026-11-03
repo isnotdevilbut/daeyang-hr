@@ -247,6 +247,7 @@ export function progressCounts(rows: ProgressRow[]) {
 export function progressFilter(r: ProgressRow, pick: CardPick, onlyOpen: boolean): boolean {
   if (pick?.kind === 'stage') return pick.order === 1 ? r.recv[0].status !== 'na' && r.recv[0].status !== 'submitted' : r.tier === (pick.order === 2 ? '팀장' : '임원') && !!r.writes && r.writes.stages[pick.order - 1].open > 0
   if (pick?.kind === 'complete' && !r.complete) return false
+  if (pick?.kind === 'open' && r.complete) return false // 미완료자(D-109): 받는 평가·작성 업무 중 하나라도 미제출
   return !onlyOpen || !r.complete
 }
 
@@ -268,6 +269,7 @@ export function writerCounts(rows: WriterRow[]) {
 export function writerFilter(r: WriterRow, pick: CardPick, onlyOpen: boolean): boolean {
   if (pick?.kind === 'stage') return r.stages[pick.order - 1]?.open > 0
   if (pick?.kind === 'complete' && !r.complete) return false
+  if (pick?.kind === 'open' && r.complete) return false // 미완료자(D-109): 받는 평가·작성 업무 중 하나라도 미제출
   return !onlyOpen || !r.complete
 }
 
@@ -319,7 +321,7 @@ export function evaluatorTodo(cycle: Cycle, responses: Responses, employees: Emp
 
 // ── 진행 현황 카드 필터 (D-057 → D-068) ─────────────────
 /** 카드 선택: 평가 대상자 / 모든 단계 완료 / n단계(미완료) / 없음 */
-export type CardPick = { kind: 'stage'; order: number } | { kind: 'complete' } | { kind: 'all' } | null
+export type CardPick = { kind: 'stage'; order: number } | { kind: 'complete' } | { kind: 'open' } | { kind: 'all' } | null
 
 /** 그 단계가 적용되는 대상자인가 (카드 분모와 같은 기준: 해당 없음만 제외, 평가자 미지정은 포함) */
 export const inStage = (cells: StageCell[], order: number) => {
@@ -337,6 +339,7 @@ export function cardFilter(row: { cells: StageCell[]; complete: boolean }, pick:
   const { cells } = row
   if (pick?.kind === 'stage') return inStage(cells, pick.order) && cells.find((x) => x.order === pick.order)!.status !== 'submitted'
   if (pick?.kind === 'complete' && !row.complete) return false
+  if (pick?.kind === 'open' && row.complete) return false
   return !onlyOpen || !row.complete
 }
 

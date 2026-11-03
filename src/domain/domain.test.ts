@@ -1669,6 +1669,10 @@ describe('진행 현황: 받는 평가 + 작성 업무, 임원 4명·배정 정�
     expect(n.byStage[0].writers).toBe(rows.filter((r) => r.recv[0].status !== 'na').length)
     for (const o of [1, 2, 3]) expect(rows.filter((r) => progressFilter(r, { kind: 'stage', order: o }, false)).length).toBe(n.byStage[o - 1].writers - n.byStage[o - 1].done)
     expect(rows.filter((r) => progressFilter(r, null, true)).length).toBe(n.participants - n.complete)
+    // D-109 카드: 완료자 + 미완료자 = 전체 대상자, 미완료자 = 하나라도 미제출
+    expect(rows.filter((r) => progressFilter(r, { kind: 'complete' }, false)).length).toBe(n.complete)
+    expect(rows.filter((r) => progressFilter(r, { kind: 'open' }, false)).every((r) => !r.complete)).toBe(true)
+    expect(rows.filter((r) => progressFilter(r, { kind: 'open' }, false)).length).toBe(n.participants - n.complete)
     expect(new Set(rows.map((r) => r.t.employeeId)).size).toBe(rows.length)
   })
 })
