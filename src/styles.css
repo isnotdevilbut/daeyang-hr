@@ -1519,3 +1519,8 @@ details[open] > summary > .toggle-ic { transform: rotate(180deg); }
 .ki-sum { margin: 6px 0 0; padding-top: 12px; border-top: 1px solid var(--line-soft, #e7ebf2); text-align: right; font-size: 14.5px; color: var(--text-sub); }
 .kpi-inds.kpi-kept { opacity: 0.6; }
 @media (max-width: 640px) { .kpi-inds { padding: 0 14px 14px; } .ki-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } .ki-tile b { font-size: 18px; } .ki-head { flex-wrap: wrap; } }
+/* D-147: 업로드 안내 '알아 둘 점' = 한 줄에 하나씩 점 목록 */
+.upload-guide > li:has(.ug-points) { align-items: flex-start; }
+.ug-points { margin: 0; padding-left: 18px; display: grid; gap: 3px; list-style: disc; flex: 1 1 22em; }
+.ug-points li { display: list-item; }
+.ug-points b.em { min-width: 0; color: var(--brand-navy); }
