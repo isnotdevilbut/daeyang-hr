@@ -228,7 +228,7 @@ function RecvList({ cycle, targetId }: { cycle: Cycle; targetId: string }) {
       : as.map((a) => ({ key: a.id, stage: st, who: name(a.evaluatorId), status: assignmentCell(cycle, s.responses, a) }))
   })
   // 팀장이 팀원들에게 받는 팀원→팀장평가(D-114, 1단계 분류) — 자기평가 다음에
-  const UP: Stage = { order: 1, label: '팀원→팀장평가', direction: 'up', rule: 'upward' }
+  const UP: Stage = { order: 1, label: cycle.upwardStage?.label || '팀원→팀장평가', direction: 'up', rule: 'upward' } // 이름은 평가자·가중치 설정에서(D-162)
   const ups = upwardAssignments(cycle, s.employees).filter((a) => a.targetId === targetId)
     .map((a) => ({ key: a.id, stage: UP, who: name(a.evaluatorId), status: assignmentCell(cycle, s.responses, a) }))
   rows.splice(rows.filter((r) => r.stage.order === 1).length, 0, ...ups)

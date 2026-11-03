@@ -10,6 +10,7 @@ import { type Cycle, type EvaluatorRule } from '../../domain/types'
 import { targetPosition } from '../../domain/catalog'
 
 type PathKey = 'member' | 'lead'
+const UP_DEFAULT = { label: '팀원→팀장평가', weight: 0 as number | null }
 const PATH_TITLE: Record<PathKey, string> = { member: '사원이 받는 평가', lead: '팀장이 받는 평가' }
 /** 유형별로 둘 수 있는 단계 — 팀장에게는 2단계(팀장평가)가 없다 */
 const PATH_RULES: Record<PathKey, EvaluatorRule[]> = { member: ['self', 'teamLead', 'executive'], lead: ['self', 'executive'] }
@@ -18,7 +19,7 @@ export default function EvalAssign({ cycle }: { cycle: Cycle }) {
   const s = useAppState()
   const live = s.cycles.find((c) => c.id === cycle.id)!
   const hasResp = cycleHasResponses(s, live)
-  const initial = useMemo(() => ({ path: structuredClone(live.path), weights: structuredClone(live.stageWeights ?? { member: {}, lead: {} }) }), [live.path, live.stageWeights])
+  const initial = useMemo(() => ({ path: structuredClone(live.path), weights: structuredClone(live.stageWeights ?? { member: {}, lead: {} }), up: structuredClone(live.upwardStage ?? UP_DEFAULT) }), [live.path, live.stageWeights, live.upwardStage])
   const [draft, setDraft] = useState(initial)
   // 임원 담당 변경(D-086): 대상자 ID → 임원 ID. 저장 전에는 이 화면에만, 저장·되돌리기는 위 공통 버튼으로
   const [execDraft, setExecDraft] = useState<Record<string, string>>({})
@@ -26,12 +27,13 @@ export default function EvalAssign({ cycle }: { cycle: Cycle }) {
   type Msg = { ok: boolean; text: string } | null
   const [msgs, setMsgs] = useState<Record<'member' | 'lead' | 'exec', Msg>>({ member: null, lead: null, exec: null })
   const setMsgFor = (k: 'member' | 'lead' | 'exec', m: Msg) => setMsgs((x) => ({ ...x, [k]: m }))
-  const secDirty = (k: PathKey) => JSON.stringify(draft.path[k]) !== JSON.stringify(initial.path[k]) || JSON.stringify(draft.weights[k] ?? {}) !== JSON.stringify(initial.weights[k] ?? {})
+  const secDirty = (k: PathKey) => JSON.stringify(draft.path[k]) !== JSON.stringify(initial.path[k]) || JSON.stringify(draft.weights[k] ?? {}) !== JSON.stringify(initial.weights[k] ?? {}) || (k === 'lead' && JSON.stringify(draft.up) !== JSON.stringify(initial.up))
   const execDirty = Object.keys(execDraft).length > 0
   useDirty(secDirty('member') || secDirty('lead') || execDirty) // 저장하지 않은 변경이 있으면 회차·화면 이동 시 확인(기존 보호)
   const rulesChanged = (k: PathKey) => draft.path[k].map((x) => x.rule).join() !== initial.path[k].map((x) => x.rule).join()
 
-  const errs = (k: PathKey) => weightErrors(draft.path[k], draft.weights[k])
+  const upErr = () => (draft.up.weight === null || Number.isNaN(draft.up.weight) ? '1단계(팀원→팀장평가) 비율을 입력하세요.' : draft.up.weight < 0 || draft.up.weight > 100 ? '1단계(팀원→팀장평가) 비율은 0~100 사이여야 합니다.' : '')
+  const errs = (k: PathKey) => [...weightErrors(draft.path[k], draft.weights[k]), ...(k === 'lead' && upErr() ? [upErr()] : [])]
   const setLabel = (k: PathKey, r: EvaluatorRule, v: string) => {
     const next = structuredClone(draft)
     next.path[k].find((x) => x.rule === r)!.label = v
@@ -53,6 +55,7 @@ export default function EvalAssign({ cycle }: { cycle: Cycle }) {
       const c = d.cycles.find((x) => x.id === cycle.id)!
       c.path = { ...c.path, [k]: draft.path[k] }
       c.stageWeights = { ...(c.stageWeights ?? { member: {}, lead: {} }), [k]: draft.weights[k] }
+      if (k === 'lead') c.upwardStage = structuredClone(draft.up)
       if (rebuild) { c.assignments = buildAssignments(d, c); distributeExecs(d, c); applyVersions(d, c) }
     })
     setMsgFor(k, { ok: true, text: rebuild ? '저장하고 배정을 다시 만들었습니다.' : '저장했습니다.' })
@@ -84,13 +87,16 @@ export default function EvalAssign({ cycle }: { cycle: Cycle }) {
                 <thead><tr><th>단계</th><th>평가자</th><th>이름</th><th className="num">반영 비율(%)</th></tr></thead>
                 <tbody>
                   {PATH_RULES[k].flatMap((r) => (k === 'lead' && r === 'self' ? [r, 'upward' as const] : [r])).map((r) => {
-                    // 팀장이 받는 팀원→팀장평가(D-114): 1단계로 분류, 경로 단계·반영 비율이 아님(점수 미반영) — 안내 행만
+                    // 팀장이 받는 팀원→팀장평가(D-114): 1단계로 분류. D-162 — 다른 단계처럼 이름·반영 비율 입력(기본 0). 비율은 저장만, 합계·점수에는 아직 넣지 않음(반영 방식 보류)
                     if (r === 'upward') return (
-                      <tr key={r} className="stage-info">
+                      <tr key={r}>
                         <td><b>1단계</b></td>
                         <td><span className="path-who">소속 팀원 (팀원→팀장평가)</span></td>
-                        <td><span className="muted">팀원→팀장평가</span></td>
-                        <td className="num"><span className="muted small">점수 미반영</span></td>
+                        <td><input type="text" aria-label={`${PATH_TITLE[k]} 1단계 팀원→팀장평가 이름`} disabled={hasResp} value={draft.up.label} onChange={(ev) => { setDraft({ ...draft, up: { ...draft.up, label: ev.target.value } }); setMsgFor(k, null) }} /></td>
+                        <td className="num">
+                          <input type="number" inputMode="decimal" className="weight no-spin" min={0} max={100} step={0.1} onWheel={(ev) => ev.currentTarget.blur()} aria-label={`${PATH_TITLE[k]} 1단계 팀원→팀장평가 반영 비율`}
+                            value={draft.up.weight ?? ''} placeholder="입력" onChange={(ev) => { setDraft({ ...draft, up: { ...draft.up, weight: ev.target.value === '' ? null : Number(ev.target.value) } }); setMsgFor(k, null) }} />
+                        </td>
                       </tr>
                     )
                     const st = path.find((x) => x.rule === r)
@@ -113,7 +119,7 @@ export default function EvalAssign({ cycle }: { cycle: Cycle }) {
                 </tbody>
                 <tfoot>
                   <tr>
-                    <td colSpan={3} className="muted small">단계 번호는 고정 · 2단계는 사원만 해당</td>
+                    <td colSpan={3} />{/* D-162: 안내 문구 제거 */}
                     <td className="num"><b className={e.length ? 'bad' : 'good'}>합계 {sum === null ? '—' : `${sum}%`}</b>{sum !== null && !e.length && Math.abs(sum - 100) > 0.001 && <div className="muted small">적용 단계 기준 100%로 환산</div>}</td>
                   </tr>
                 </tfoot>
