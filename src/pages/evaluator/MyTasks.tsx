@@ -2,7 +2,8 @@ import { Link } from 'react-router-dom'
 import { useAppState } from '../../data/store'
 import { can } from '../../domain/permissions'
 import { cycleLabel } from '../../domain/cycle'
-import { assignmentCell, cycleClosed, isActiveAssignment, statusOf } from '../../domain/progress'
+import { assignmentCell, cycleClosed, isActiveAssignment, isUpward, statusOf, type CellStatus } from '../../domain/progress'
+import type { Assignment, Cycle, Lang, TargetSnapshot } from '../../domain/types'
 import { t as tr, useLang } from '../../i18n'
 import { Empty, Forbidden, StatusChip } from '../../components/ui'
 import ExecTasks from './ExecTasks'
@@ -16,11 +17,15 @@ export default function MyTasks() {
   // 본인에게 배정된 자기평가 (임원 자기평가 여부는 미정 — 배정된 것만 보여 준다)
   const mine = s.cycles.flatMap((c) => c.assignments.filter((a) => a.evaluatorId === me && a.direction === 'self' && isActiveAssignment(a)).map((a) => ({ c, a })))
   // 내가 평가할 사람
-  const rows = s.cycles.flatMap((c) =>
+  const rowsOf = (pick: (a: Assignment) => boolean) => s.cycles.flatMap((c) =>
     c.assignments
-      .filter((a) => a.evaluatorId === me && a.direction === 'down' && isActiveAssignment(a))
-      .map((a) => ({ c, a, t: c.targets.find((x) => x.employeeId === a.targetId)!, cell: assignmentCell(c, s.responses, a) })),
+      .filter((a) => a.evaluatorId === me && pick(a))
+      .map((a) => ({ c, a, t: c.targets.find((x) => x.employeeId === a.targetId)!, cell: assignmentCell(c, s.responses, a) }))
+      .filter((r) => !!r.t),
   )
+  const rows = rowsOf((a) => a.direction === 'down' && isActiveAssignment(a))
+  // 팀원→팀장평가(D-114): 사원이 소속 팀 팀장을 평가 — 자기평가 아래 따로
+  const ups = rowsOf(isUpward)
 
   return (
     <div className="page">
@@ -47,34 +52,45 @@ export default function MyTasks() {
         </section>
       )}
 
-      {(rows.length > 0 || mine.length === 0) && <section className="panel">
-        <div className="panel-head"><h2>{mine.length > 0 ? tr('list.team', lang) : tr('list.assigned', lang)} <span className="muted">{tr('count.items', lang, { n: rows.length })}</span></h2></div>
-        {rows.length === 0 ? <Empty>{tr('list.none', lang)}</Empty> : (
-          <div className="table-wrap">
-            {/* D-090: 팀·이름·상태·버튼만(회차·직급·평가 유형 열 제거 — 데이터는 그대로). 휴대폰에서는 한 사람 = 한 묶음(이름·팀 / 상태·버튼) */}
-            <table className="tbl org-tbl task-tbl">
-              <thead><tr><th>{tr('list.teamCol', lang)}</th><th>{tr('list.target', lang)}</th><th>{tr('list.status', lang)}</th><th><span className="sr-only">{tr('list.write', lang)}</span></th></tr></thead>
-              <tbody>
-                {rows.map(({ c, a, t, cell }) => {
-                  const closed = cycleClosed(c)
-                  return (
-                  <tr key={a.id}>
-                    <td className="tk-team">{t.teamName}</td>
-                    <td className="tk-name"><b>{t.name}</b></td>
-                    <td className="tk-st">
-                      {closed && cell !== 'submitted' ? <span className="chip locked">{tr('status.closed', lang)}</span> : <StatusChip status={cell} lang={lang} />}
-                      {closed && cell === 'submitted' && <span className="chip na tag">{tr('status.closed', lang)}</span>}
-                      {!closed && cell === 'locked' && <span className="muted tk-wait">{tr('list.afterPrev', lang)}</span>}
-                    </td>
-                    <td className="tk-act">{cell !== 'locked' && (!closed || cell === 'submitted') && <Link className={`btn small ${cell === 'submitted' ? '' : 'primary'}`} to={`/eval/${a.id}`}>{cell === 'submitted' ? tr('btn.viewSubmitted', lang) : tr('btn.evaluate', lang)}</Link>}</td>
-                  </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+      {ups.length > 0 && <section className="panel">
+        <div className="panel-head"><h2>{tr('list.upward', lang)} <span className="muted">{tr('count.items', lang, { n: ups.length })}</span></h2></div>
+        <TaskTable rows={ups} lang={lang} />
       </section>}
+
+      {(rows.length > 0 || (mine.length === 0 && ups.length === 0)) && <section className="panel">
+        <div className="panel-head"><h2>{mine.length > 0 || ups.length > 0 ? tr('list.team', lang) : tr('list.assigned', lang)} <span className="muted">{tr('count.items', lang, { n: rows.length })}</span></h2></div>
+        {rows.length === 0 ? <Empty>{tr('list.none', lang)}</Empty> : <TaskTable rows={rows} lang={lang} />}
+      </section>}
+    </div>
+  )
+}
+
+type TaskRow = { c: Cycle; a: Assignment; t: TargetSnapshot; cell: CellStatus }
+/** 작성할 평가 목록(팀원 평가·팀원→팀장평가 공통) */
+function TaskTable({ rows, lang }: { rows: TaskRow[]; lang: Lang }) {
+  return (
+    <div className="table-wrap">
+      {/* D-090: 팀·이름·상태·버튼만(회차·직급·평가 유형 열 제거 — 데이터는 그대로). 휴대폰에서는 한 사람 = 한 묶음(이름·팀 / 상태·버튼) */}
+      <table className="tbl org-tbl task-tbl">
+        <thead><tr><th>{tr('list.teamCol', lang)}</th><th>{tr('list.target', lang)}</th><th>{tr('list.status', lang)}</th><th><span className="sr-only">{tr('list.write', lang)}</span></th></tr></thead>
+        <tbody>
+          {rows.map(({ c, a, t, cell }) => {
+            const closed = cycleClosed(c)
+            return (
+            <tr key={a.id}>
+              <td className="tk-team">{t.teamName}</td>
+              <td className="tk-name"><b>{t.name}</b></td>
+              <td className="tk-st">
+                {closed && cell !== 'submitted' ? <span className="chip locked">{tr('status.closed', lang)}</span> : <StatusChip status={cell} lang={lang} />}
+                {closed && cell === 'submitted' && <span className="chip na tag">{tr('status.closed', lang)}</span>}
+                {!closed && cell === 'locked' && <span className="muted tk-wait">{tr('list.afterPrev', lang)}</span>}
+              </td>
+              <td className="tk-act">{cell !== 'locked' && (!closed || cell === 'submitted') && <Link className={`btn small ${cell === 'submitted' ? '' : 'primary'}`} to={`/eval/${a.id}`}>{cell === 'submitted' ? tr('btn.viewSubmitted', lang) : tr('btn.evaluate', lang)}</Link>}</td>
+            </tr>
+            )
+          })}
+        </tbody>
+      </table>
     </div>
   )
 }

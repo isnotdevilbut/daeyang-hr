@@ -1402,3 +1402,4 @@ label.field, fieldset.field legend { font-size: 16px; }
   .stats5.stats3 .stat { min-height: 0; padding: 10px 10px 8px; }
 }
 @media (max-width: 360px) { .stats5.stats3 { grid-template-columns: repeat(2, minmax(0, 1fr)); } .stats5.stats3 .stat:first-child { min-height: 0; } }
+@media (max-width: 640px) { .progress-tbl { min-width: 860px; } } /* D-114: 팀원→팀장평가 열 추가 */

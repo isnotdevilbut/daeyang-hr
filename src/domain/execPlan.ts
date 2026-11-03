@@ -36,7 +36,7 @@ export function distributeExecs(s: Pick<AppState, 'employees' | 'responses'>, c:
     if (!e || !e.active || e.evalExcluded || t.isExecutive) continue
     const st = pathFor(c, t).find((x) => x.rule === 'executive')
     if (!st) continue
-    targets.push({ t, order: st.order, tpl: c.assignments.find((a) => a.targetId === t.employeeId)?.templateId ?? templateFor(c, t.jobType) })
+    targets.push({ t, order: st.order, tpl: c.assignments.find((a) => a.targetId === t.employeeId && a.direction !== 'up')?.templateId ?? templateFor(c, t.jobType) })
   }
   const live3 = (x: T) => c.assignments.filter((a) => a.targetId === x.t.employeeId && a.stageOrder === x.order && a.direction === 'down' && !a.excluded && execIds.has(a.evaluatorId))
   const owner = new Map<string, string>() // 대상자 → 담당 임원(고정)

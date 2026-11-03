@@ -13,6 +13,7 @@ import { syncCycle } from '../domain/cycleSync'
 import { v15 } from '../domain/demoV15'
 import { scoringV16 } from '../domain/scoringV16'
 import { execPerTeam } from '../domain/execTeamsV17'
+import { upwardV18 } from '../domain/upward'
 import { tierOf } from '../domain/org'
 
 export interface MigrationResult { state: AppState; notes: string[] }
@@ -194,7 +195,13 @@ export function migrate(raw: any): MigrationResult | null {
     s.schemaVersion = 17
   }
 
-  if (s.schemaVersion !== 17) return null
+  if (s.schemaVersion === 17) {
+    // v17 → v18 (D-114): 팀원→팀장평가 — 준비·진행 회차에 평가표 버전·배정(사원 → 소속 팀 팀장)·시연 응답(절반 제출). 기존 배정·응답·점수 그대로
+    notes.push(...upwardV18(s))
+    s.schemaVersion = 18
+  }
+
+  if (s.schemaVersion !== 18) return null
   return { state: s as AppState, notes }
 }
 

@@ -5,8 +5,8 @@ import type { AppState, Assignment, Cycle, Direction, EvaluatorRule, JobType, Op
 /** 응답 상황. teamId·positionId = 평가받는 대상자의 팀·직급 (D-082) */
 export interface QCtx { direction: Direction; rule?: EvaluatorRule; jobType?: JobType; isLead?: boolean; teamId?: string; positionId?: string }
 
-export const RULE_TEXT: Record<EvaluatorRule, string> = { self: '자기평가', teamLead: '팀장평가', executive: '임원평가' }
-export const RULES: EvaluatorRule[] = ['self', 'teamLead', 'executive']
+export const RULE_TEXT: Record<EvaluatorRule, string> = { self: '자기평가', upward: '팀원→팀장평가', teamLead: '팀장평가', executive: '임원평가' }
+export const RULES: EvaluatorRule[] = ['self', 'upward', 'teamLead', 'executive']
 
 /** 이 문항을 이 응답 상황에서 보여주는가 */
 export function applies(q: Question, ctx: QCtx): boolean {
@@ -25,6 +25,7 @@ export function rulesOf(q: Question): EvaluatorRule[] {
   if (q.rules?.length) return q.rules
   const r: EvaluatorRule[] = []
   if (q.directions.includes('self')) r.push('self')
+  if (q.directions.includes('up')) r.push('upward')
   if (q.directions.includes('down')) r.push('teamLead', 'executive')
   return r
 }
@@ -32,6 +33,7 @@ export function rulesOf(q: Question): EvaluatorRule[] {
 export function directionsFromRules(rules: EvaluatorRule[]): Direction[] {
   const d: Direction[] = []
   if (rules.includes('self')) d.push('self')
+  if (rules.includes('upward')) d.push('up')
   if (rules.includes('teamLead') || rules.includes('executive')) d.push('down')
   return d
 }
@@ -41,7 +43,7 @@ export function ctxFor(cycle: Cycle, a: Assignment): QCtx {
   const t = cycle.targets.find((x) => x.employeeId === a.targetId)
   const path = t?.isTeamLead ? cycle.path.lead : cycle.path.member
   const stage = path.find((s) => s.order === a.stageOrder)
-  return { direction: a.direction, rule: a.direction === 'self' ? 'self' : stage?.rule, jobType: t?.jobType, isLead: t?.isTeamLead, teamId: t?.departmentId || undefined, positionId: t?.positionId }
+  return { direction: a.direction, rule: a.direction === 'self' ? 'self' : a.direction === 'up' ? 'upward' : stage?.rule, jobType: t?.jobType, isLead: t?.isTeamLead, teamId: t?.departmentId || undefined, positionId: t?.positionId }
 }
 
 // ── 문항 만들기 ─────────────────────────────────────
@@ -156,7 +158,7 @@ const TYPE_ALIAS: Record<string, QuestionType> = {
   '단일선택': 'single', '단일선택 객관식': 'single', 객관식: 'single',
   'O/X': 'ox', OX: 'ox', '예/아니오': 'ox', '5점 척도': 'scale5', '5점척도': 'scale5',
 }
-const RULE_ALIAS: Record<string, EvaluatorRule> = { 자기: 'self', 자기평가: 'self', 팀장: 'teamLead', 팀장평가: 'teamLead', 임원: 'executive', 임원평가: 'executive' }
+const RULE_ALIAS: Record<string, EvaluatorRule> = { 자기: 'self', 자기평가: 'self', 팀장: 'teamLead', 팀장평가: 'teamLead', 임원: 'executive', 임원평가: 'executive', '팀원→팀장': 'upward', '팀원→팀장평가': 'upward', 상향: 'upward', 상향평가: 'upward' }
 
 /** 따옴표("…, …")를 지원하는 간단한 CSV 분해 */
 export function splitCsvLine(line: string): string[] {

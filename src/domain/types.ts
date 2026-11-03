@@ -136,8 +136,9 @@ export interface Template {
 }
 
 // ── 회차·배정·응답 ─────────────────────────────────
-export type EvaluatorRule = 'self' | 'teamLead' | 'executive'
-export const RULE_LABEL: Record<EvaluatorRule, string> = { self: '본인', teamLead: '소속 팀장', executive: '담당 임원' }
+/** upward = 팀원 → 팀장평가(D-114): 사원이 소속 팀 팀장을 평가. 경로(path) 단계가 아니라 별도 배정(direction 'up', 1단계 분류) — 점수·순차 잠금에 넣지 않음 */
+export type EvaluatorRule = 'self' | 'teamLead' | 'executive' | 'upward'
+export const RULE_LABEL: Record<EvaluatorRule, string> = { self: '본인', teamLead: '소속 팀장', executive: '담당 임원', upward: '소속 팀원' }
 
 /** 진행 단계 (순서). 방향과 평가자 규칙을 가진다. */
 export interface Stage { order: number; label: string; direction: Direction; rule: EvaluatorRule }

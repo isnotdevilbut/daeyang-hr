@@ -28,8 +28,10 @@ export const CELL_HELP: Record<CellStatus, string> = {
 
 type Responses = Record<string, Response>
 
-/** 집계·작성에 쓰는 배정: 상향평가(과거)와 제외 표시된 배정(임원 자기평가 등)은 뺀다 */
+/** 집계·작성에 쓰는 배정(단계 경로·점수·순차 잠금): 팀원→팀장평가(direction 'up', D-114 — isUpward로 따로 다룸)와 제외 표시된 배정(임원 자기평가 등)은 뺀다 */
 export const isActiveAssignment = (a: Assignment) => a.direction !== 'up' && !a.excluded
+/** 팀원→팀장평가 배정(D-114): 사원(평가자) → 소속 팀 팀장(대상자), 1단계 분류. 점수·순차 잠금·경로 단계에는 넣지 않음 */
+export const isUpward = (a: Assignment) => a.direction === 'up' && !a.excluded
 
 export function statusOf(responses: Responses, assignmentId: string): 'notStarted' | 'draft' | 'submitted' {
   const r = responses[assignmentId]
@@ -39,7 +41,7 @@ export function statusOf(responses: Responses, assignmentId: string): 'notStarte
 // ── 고정 단계 번호 (D-068) ─────────────────────────────
 // 단계 번호는 평가 유형을 뜻한다: 1 = 본인 자기평가, 2 = 팀장이 사원 평가, 3 = 임원이 팀장·사원 평가.
 // 사람마다 압축해서 다시 매기지 않는다(팀장의 임원평가도 3단계).
-export const STAGE_OF_RULE: Record<EvaluatorRule, number> = { self: 1, teamLead: 2, executive: 3 }
+export const STAGE_OF_RULE: Record<EvaluatorRule, number> = { self: 1, upward: 1, teamLead: 2, executive: 3 }
 export const EXEC_PATH: Stage[] = [{ order: 1, label: '자기평가', direction: 'self', rule: 'self' }]
 
 type PathTarget = Pick<TargetSnapshot, 'isTeamLead' | 'isExecutive'>
@@ -192,15 +194,24 @@ export interface ProgressRow {
   t: TargetSnapshot
   tier: '임원' | '팀장' | '사원'
   cells: ProgressCell[] // [자기평가, 팀장평가, 임원평가]
+  /** 팀원→팀장평가(D-114, 1단계 분류): 사원 = 본인이 작성할 건(write), 팀장 = 팀원들에게 받는 건수(write 모양으로 완료/전체), 그 외 — */
+  up: ProgressCell
   recv: StageCell[] // 본인이 받는 단계(대상자가 아니면 모두 해당 없음)
   writes: WriterRow | null // 본인이 작성할 업무(없으면 null)
   complete: boolean // 받는 평가(적용 단계, 평가자 미지정은 미완료) + 작성 업무 모두 제출
   mismatch: boolean
 }
 
+/** 집계에 쓰는 팀원→팀장평가: 평가자(사원)·대상자(팀장) 모두 재직 중이고 회차 집계 대상 */
+export function upwardAssignments(cycle: Cycle, employees: Employee[]): Assignment[] {
+  const ids = new Set(activeTargets(cycle, employees).map((t) => t.employeeId))
+  return cycle.assignments.filter((a) => isUpward(a) && ids.has(a.targetId) && ids.has(a.evaluatorId))
+}
+
 export function progressRows(s: Pick<AppState, 'employees' | 'teams' | 'responses'>, cycle: Cycle): ProgressRow[] {
   const targets = activeTargets(cycle, s.employees)
   const writers = new Map(writerRows(s, cycle).map((r) => [r.t.employeeId, r]))
+  const ups = upwardAssignments(cycle, s.employees)
   const ids = [...new Set([...targets.map((t) => t.employeeId), ...writers.keys()])]
   const rows: ProgressRow[] = []
   for (const id of ids) {
@@ -214,12 +225,16 @@ export function progressRows(s: Pick<AppState, 'employees' | 'teams' | 'response
     const r = (i: number): ProgressCell => (recv[i].status === 'na' ? { kind: 'na' } : { kind: 'recv', status: recv[i].status })
     const wc = (i: number): ProgressCell => (w && w.stages[i].total > 0 ? { kind: 'write', w: w.stages[i] } : { kind: 'na' })
     const cells: ProgressCell[] = tier === '임원' ? [r(0), { kind: 'na' }, wc(2)] : tier === '팀장' ? [r(0), wc(1), r(2)] : [r(0), r(1), r(2)]
-    const recvOk = recv.every((c) => c.status === 'na' || c.status === 'submitted')
+    // 팀원→팀장평가: 사원은 작성할 건, 팀장은 받는 건 — 완료자 판단에 함께 넣음(모든 평가 제출)
+    const upMine = ups.filter((a) => (tier === '팀장' ? a.targetId === id : a.evaluatorId === id))
+    const upSum = summarize(cycle, s.responses, upMine)
+    const up: ProgressCell = upMine.length && tier !== '임원' ? { kind: 'write', w: upSum } : { kind: 'na' }
+    const recvOk = recv.every((c) => c.status === 'na' || c.status === 'submitted') && upSum.open === 0
     const writeOk = !w || w.total.open === 0
-    const has = recv.some((c) => c.status !== 'na') || !!w
+    const has = recv.some((c) => c.status !== 'na') || !!w || upMine.length > 0
     // 직급과 맞지 않는 작성 업무가 남아 있음(표에는 넣지 않음) — 2단계 작성인데 팀장 아님, 3단계 작성인데 임원 아님
     const mismatch = !!w && ((w.stages[1].total > 0 && tier !== '팀장') || (w.stages[2].total > 0 && tier !== '임원'))
-    rows.push({ t: snap, tier, cells, recv, writes: w, complete: has && recvOk && writeOk, mismatch })
+    rows.push({ t: snap, tier, cells, up, recv, writes: w, complete: has && recvOk && writeOk, mismatch })
   }
   return rows
 }

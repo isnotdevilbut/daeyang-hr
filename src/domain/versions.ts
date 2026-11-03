@@ -9,7 +9,8 @@ import { cloneQuestion, ctxFor, RULES, RULE_TEXT, applies } from './questions'
 import { pathFor } from './progress'
 import { templateFor } from './catalog'
 
-export const ALL_SCOPE = (): VersionScope => ({ mode: 'all', rules: [...RULES], teams: 'all', positions: 'all' })
+/** 공통 기본 범위 = 자기·팀장·임원평가. 팀원→팀장평가(D-114)는 전용 평가표 버전이 따로 맡는다 */
+export const ALL_SCOPE = (): VersionScope => ({ mode: 'all', rules: RULES.filter((r) => r !== 'upward'), teams: 'all', positions: 'all' })
 /** 목록에 보이는 버전(숨김 제외, 초안 포함) */
 export const activeVersions = (c: Pick<Cycle, 'versions'>) => (c.versions ?? []).filter((v) => !v.archived)
 /** 실제 평가표 선택에 쓰는 버전: 숨김·초안·적용 평가가 비어 있는 버전 제외 (D-085 — 조건이 비었다고 전체에 적용하지 않음) */
@@ -42,7 +43,7 @@ export function resolveVersion(c: Pick<Cycle, 'versions' | 'versionPicks' | 'tem
 /** 배정의 상황 (평가 유형은 경로 규칙, 팀·직급은 대상자 스냅샷) */
 export function assignmentCtx(c: Cycle, a: Assignment): VersionCtx & { jobType?: string } {
   const t = c.targets.find((x) => x.employeeId === a.targetId)
-  const rule: EvaluatorRule = a.direction === 'self' ? 'self' : (t ? pathFor(c, t).find((st) => st.order === a.stageOrder)?.rule : undefined) ?? 'teamLead'
+  const rule: EvaluatorRule = a.direction === 'self' ? 'self' : a.direction === 'up' ? 'upward' : (t ? pathFor(c, t).find((st) => st.order === a.stageOrder)?.rule : undefined) ?? 'teamLead'
   return { rule, teamId: t?.departmentId || undefined, positionId: t?.positionId, employeeId: a.targetId, jobType: t?.jobType }
 }
 

@@ -424,3 +424,31 @@ export function makeLeadSelfTemplate(id: string): Template {
     ],
   }
 }
+
+// ── 팀원 → 팀장평가 (D-114) ─────────────────────────
+export const UPWARD_NAME = '팀원→팀장 평가표'
+const AGREE: [string, number | null][] = [['매우 그렇다', 5], ['그렇다', 4], ['보통이다', 3], ['그렇지 않다', 2], ['전혀 그렇지 않다', 1]]
+const AGREE_RU = ['Полностью согласен', 'Согласен', 'Затрудняюсь ответить', 'Не согласен', 'Совершенно не согласен']
+const UPWARD_ITEMS: [key: string, area: string, areaRu: string, title: string, titleRu: string][] = [
+  ['lead', '리더십', 'Лидерство', '팀의 목표와 방향을 명확하게 제시한다', 'Чётко ставит цели и направление работы группы'],
+  ['talk', '소통', 'Коммуникация', '팀원의 의견을 경청하고 필요한 정보를 공유한다', 'Выслушивает мнение сотрудников и делится нужной информацией'],
+  ['help', '업무 지원', 'Поддержка в работе', '업무에 필요한 지원과 피드백을 제때 제공한다', 'Своевременно оказывает поддержку и даёт обратную связь'],
+  ['fair', '공정성', 'Справедливость', '업무 배분과 평가를 공정하게 한다', 'Справедливо распределяет задачи и оценивает работу'],
+]
+/** 팀원이 소속 팀 팀장을 평가하는 평가표 초기값(목업 — 문항·영역은 문항 관리에서 수정). 러시아어 번역 초안 포함, 점수 반영 없음 */
+export function makeUpwardTemplate(id: string): Template {
+  const up = { directions: ['up'] as Direction[], rules: ['upward' as const] }
+  const ru = (x: Question, title: string, opts?: string[]): Question => ({
+    ...x,
+    i18n: { ru: { title, options: Object.fromEntries((opts ?? []).map((o, i) => [x.options[i].id, o])), basis: { title: x.title, help: x.help, options: Object.fromEntries((opts ?? []).map((_, i) => [x.options[i].id, x.options[i].label])) } } },
+  })
+  const secRu = (x: Section, title: string): Section => ({ ...x, i18n: { ru: { title, basis: x.title } } })
+  return {
+    id, name: UPWARD_NAME, origin: 'draft', jobType: 'common', targetRole: 'lead', locked: false, version: 1,
+    sourceNote: '팀원 → 팀장평가 초기값(D-114, 목업). 문항은 수정 가능, 점수에는 반영하지 않음',
+    sections: [
+      ...UPWARD_ITEMS.map(([k, area, areaRu, title, titleRu]) => secRu(sec(`${id}-${k}`, area, null, [ru(q(`${id}-${k}-q`, 'scale5', title, { ...up, purpose: 'score', optionItems: AGREE }), titleRu, AGREE_RU)]), areaRu)),
+      secRu(sec(`${id}-free`, '의견', null, [ru(q(`${id}-free-q`, 'long', '팀장에게 바라는 점이나 하고 싶은 말을 자유롭게 적어주세요', { ...up, required: false }), 'Свободно напишите, чего вы ждёте от руководителя или что хотели бы ему сказать')]), 'Комментарий'),
+    ],
+  }
+}

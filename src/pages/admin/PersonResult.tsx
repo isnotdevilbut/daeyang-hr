@@ -5,9 +5,9 @@ import { useSelectedCycle } from '../../data/hooks'
 import { can, canFinalAdjust } from '../../domain/permissions'
 import { cycleLabel } from '../../domain/cycle'
 import { fmt, fmtSigned, personResult, weightsFor } from '../../domain/scoring'
-import { activeWriteAssignments, appliedStages, assignmentCell, isActiveAssignment, stageAssignments, statusOf, type CellStatus } from '../../domain/progress'
+import { activeWriteAssignments, appliedStages, assignmentCell, isActiveAssignment, stageAssignments, statusOf, upwardAssignments, type CellStatus } from '../../domain/progress'
 import { displayAnswer } from '../../domain/seed'
-import { type AdjustKind, type Assignment, type Cycle, type Lang, type Response, type Template } from '../../domain/types'
+import { type AdjustKind, type Assignment, type Cycle, type Lang, type Response, type Stage, type Template } from '../../domain/types'
 import { optLabel, qTitle, t as tr } from '../../i18n'
 import { Forbidden } from '../../components/ui'
 import { addAdjustment } from './Results'
@@ -107,8 +107,8 @@ export default function PersonResultPage() {
       {/* 이 직원이 다른 사람에게 평가받는 내용 — 위의 작성할 업무(미완료 평가)와 따로 (D-071) */}
       <h2 className="section-title">평가 현황</h2>
       <RecvList cycle={cycle} targetId={t.employeeId} />
-      {/* 자기평가를 켠 임원: 본인 자기평가(위 평가 현황)와 담당 대상자 평가를 따로 (D-089) */}
-      {(() => { const e = s.employees.find((x) => x.id === t.employeeId); return e && (e.isExecutive || e.isCeo) ? <WriteList cycle={cycle} evaluatorId={t.employeeId} /> : null })()}
+      {/* 자기평가를 켠 임원: 본인 자기평가(위 평가 현황)와 담당 대상자 평가를 따로 (D-089). 사원: 작성할 팀원→팀장평가(D-114) */}
+      {(() => { const e = s.employees.find((x) => x.id === t.employeeId); return e && (e.isExecutive || e.isCeo || upwardAssignments(cycle, s.employees).some((a) => a.evaluatorId === e.id)) ? <WriteList cycle={cycle} evaluatorId={t.employeeId} /> : null })()}
       {/* 제목은 상자 밖, 내용은 상자 안 — 평가 현황과 같은 구조 (D-087) */}
       <div className="detail-grid">
         <div className="detail-col">
@@ -149,7 +149,7 @@ export default function PersonResultPage() {
       <h2 className="section-title">단계별 응답</h2>
       {staged.map((a) => {
         const st = statusOf(s.responses, a.id)
-        const stage = r.stages.find((x) => x.order === a.stageOrder)
+        const stage = a.direction === 'up' ? undefined : r.stages.find((x) => x.order === a.stageOrder) // 팀원→팀장평가는 점수 단계가 아님(D-114)
         const rule = ctxFor(cycle, a).rule
         return (
           <section className="panel stage-card" key={a.id}>
@@ -208,6 +208,11 @@ function RecvList({ cycle, targetId }: { cycle: Cycle; targetId: string }) {
       ? [{ key: `${st.order}-none`, stage: st, who: '—', status: 'unassigned' as CellStatus }]
       : as.map((a) => ({ key: a.id, stage: st, who: name(a.evaluatorId), status: assignmentCell(cycle, s.responses, a) }))
   })
+  // 팀장이 팀원들에게 받는 팀원→팀장평가(D-114, 1단계 분류) — 자기평가 다음에
+  const UP: Stage = { order: 1, label: '팀원→팀장평가', direction: 'up', rule: 'upward' }
+  const ups = upwardAssignments(cycle, s.employees).filter((a) => a.targetId === targetId)
+    .map((a) => ({ key: a.id, stage: UP, who: name(a.evaluatorId), status: assignmentCell(cycle, s.responses, a) }))
+  rows.splice(rows.filter((r) => r.stage.order === 1).length, 0, ...ups)
   return (
     <section className="panel recv-panel" aria-label="받는 평가">
       <div className="table-wrap">
@@ -237,6 +242,7 @@ function WriteList({ cycle, evaluatorId }: { cycle: Cycle; evaluatorId: string }
   const s = useAppState()
   const [view, setView] = useState<'all' | 'open' | 'done'>('all')
   const rows = activeWriteAssignments(cycle, s.employees)
+    .concat(upwardAssignments(cycle, s.employees)) // 사원의 팀원→팀장평가(D-114)
     .filter((a) => a.evaluatorId === evaluatorId && a.direction !== 'self')
     .map((a) => ({ a, t: cycle.targets.find((x) => x.employeeId === a.targetId)!, st: assignmentCell(cycle, s.responses, a) }))
     .filter((r) => !!r.t)

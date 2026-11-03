@@ -43,6 +43,12 @@ export default function EvalQuestions({ cycle }: { cycle: Cycle }) {
       x.version += 1
     })
   const answered = (qid: string) => answeredCount(s, live, qid)
+  // 새 문항의 적용 평가: 팀원→팀장평가만 쓰는 평가표(D-114)면 팀원→팀장평가로 시작(그 외는 기본 자기평가)
+  const newFor = (ty: QuestionType): Question => {
+    const v = live.versions?.find((x) => x.templateId === setId)
+    const q = newQuestion(ty)
+    return v && v.scope.rules.length === 1 && v.scope.rules[0] === 'upward' ? { ...q, rules: ['upward'], directions: ['up'] } : q
+  }
   const closedCycle = live.status === '확정' // 확정 회차의 배점은 바꾸지 않음(과거 결과 보존)
   const total = t.sections.reduce((a, x) => a + x.questions.filter((q) => q.active).length, 0)
   let no = 0
@@ -150,7 +156,7 @@ export default function EvalQuestions({ cycle }: { cycle: Cycle }) {
         <Modal title="문항 유형 선택" onClose={() => setPicking(null)}>
           <div className="type-pick">
             {BASIC_TYPES.map((ty) => (
-              <button key={ty} className="btn" onClick={() => { setEditing({ sectionId: picking.sectionId, q: newQuestion(ty), isNew: true, index: picking.index }); setPicking(null) }}>{TYPE_TEXT[ty]}</button>
+              <button key={ty} className="btn" onClick={() => { setEditing({ sectionId: picking.sectionId, q: newFor(ty), isNew: true, index: picking.index }); setPicking(null) }}>{TYPE_TEXT[ty]}</button>
             ))}
           </div>
         </Modal>
@@ -368,7 +374,7 @@ function Preview({ t: current, cycle, onClose }: { t: Template; cycle: Cycle; on
   const t = versioned && !draftPreview ? (res?.templateId ? cycle.templates[res.templateId] : undefined) : current
   const vName = (id: string) => cycle.versions?.find((v) => v.templateId === id)?.name ?? id
   const isLead = versioned ? posLead : lead
-  const sections = t ? visibleSections(t, { direction: rule === 'self' ? 'self' : 'down', rule, jobType: job, isLead, teamId: versioned ? team : undefined, positionId: versioned ? pos : undefined }) : []
+  const sections = t ? visibleSections(t, { direction: rule === 'self' ? 'self' : rule === 'upward' ? 'up' : 'down', rule, jobType: job, isLead, teamId: versioned ? team : undefined, positionId: versioned ? pos : undefined }) : []
   return createPortal( // 문서 맨 위에 그려 헤더까지 덮음 (D-070)
     <div className="modal-bg" onClick={onClose}>
       <div className="modal preview-modal" role="dialog" aria-modal="true" aria-label="문항 미리보기" onClick={(e) => e.stopPropagation()}>

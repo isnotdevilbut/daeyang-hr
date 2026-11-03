@@ -1,6 +1,7 @@
 // 가상 데이터. 실제 직원·조직·평가 결과가 아니다. 이름은 "성 + 역할" 형태의 가상 이름.
 import { scoringV16 } from './scoringV16'
 import { execPerTeam } from './execTeamsV17'
+import { upwardV18 } from './upward'
 import { rosterAndPaths } from './rosterV12'
 import { ensureCatalog } from './catalog'
 import { syncCycle } from './cycleSync'
@@ -17,7 +18,7 @@ import { createCycle, DEFAULT_TEMPLATE_BY_JOB, eligibleTargets } from './cycle'
 import { isUnlocked } from './progress'
 
 // v2: 상향평가 제외 / v3: 단계 반영 비율 회차별 / v4: KPI 지표·개인평가 반영. 이전 저장본은 data/migrate.ts에서 변환
-export const SCHEMA_VERSION = 17
+export const SCHEMA_VERSION = 18
 
 function rng(seed: number) {
   return () => {
@@ -137,7 +138,7 @@ export function createSeed(opts: { legacy?: boolean } = {}): AppState {
     presetId: 'A',
     templateByJob: DEFAULT_TEMPLATE_BY_JOB,
     targetIds: eligibleTargets(state).map((e) => e.id),
-  }, true) // 원래 시연 데이터 그대로(임원평가 한 명) → 끝에서 저장 데이터 변환과 같은 syncCycle로 임원 전원 연결 (D-081)
+  }, true, false) // 원래 시연 데이터 그대로(임원평가 한 명, 팀원→팀장평가는 끝에서 upwardV18) → 끝에서 저장 데이터 변환과 같은 syncCycle로 임원 전원 연결 (D-081)
   cycle.status = '진행'
   // 개발용 가정(회사 승인값 아님): 단계별 동일 비중. docs/scoring.md
   cycle.stageWeights = { member: { 1: 33.3, 2: 33.3, 3: 33.4 }, lead: { 1: 50, 3: 50 }, exec: { 1: 100 } } // 단계 번호 = 평가 유형(D-068)
@@ -206,5 +207,6 @@ export function createSeed(opts: { legacy?: boolean } = {}): AppState {
   v15(state, () => true) // 평가표 버전·임원 담당 나누기·시연 완료 구성(팀장 2·임원 1) (D-082) — 저장 데이터 변환과 같은 함수
   scoringV16(state) // 평가표 배점·팀장 자기평가표·반영 비율 20/40/40 (D-103) — 저장 데이터 변환과 같은 함수
   execPerTeam(state) // 임원 팀마다 한 명 (D-110) — 저장 데이터 변환과 같은 함수
+  upwardV18(state) // 팀원→팀장평가 배정·시연 응답 (D-114) — 저장 데이터 변환과 같은 함수
   return state
 }

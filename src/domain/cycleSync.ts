@@ -13,6 +13,7 @@ import { cycleExecs, distributeExecs } from './execPlan'
 import { pathFor } from './progress'
 import { templateFor } from './catalog'
 import { applyVersions } from './versions'
+import { syncUpward } from './upward'
 
 export type IsDemo = (a: Assignment) => boolean
 /** 현재 조직에 맞춰 배정을 고치는 회차: 준비·진행. 마감·확정 회차는 바꾸지 않음 */
@@ -48,7 +49,7 @@ export function syncCycle(s: AppState, c: Cycle, isDemo: IsDemo = () => false, r
     const e = emp(t.employeeId)
     if (!e || !live(e, t) || t.isExecutive) continue
     const path = pathFor(c, t)
-    const tpl = c.assignments.find((a) => a.targetId === t.employeeId)?.templateId ?? templateFor(c, t.jobType)
+    const tpl = c.assignments.find((a) => a.targetId === t.employeeId && a.direction !== 'up')?.templateId ?? templateFor(c, t.jobType)
     const stageOf = (o: number) => c.assignments.filter((a) => a.targetId === t.employeeId && a.stageOrder === o && a.direction === 'down' && !a.excluded)
     const drop = (a: Assignment, why: string) => { c.assignments = c.assignments.filter((x) => x !== a); notes.push(`${pre}${t.name} ${why}`) }
 
@@ -88,6 +89,7 @@ export function syncCycle(s: AppState, c: Cycle, isDemo: IsDemo = () => false, r
     }
   }
   notes.push(...distributeExecs(s, c, isDemo, rebalance))
+  notes.push(...syncUpward(s, c)) // 팀원→팀장평가(D-114): 참여 사원 → 소속 팀 현재 팀장
   applyVersions(s, c) // 새로 만들거나 담당이 바뀐 미작성 배정에 알맞은 평가표 버전 연결 (D-082)
   return notes
 }

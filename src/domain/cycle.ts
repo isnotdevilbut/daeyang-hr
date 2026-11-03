@@ -2,6 +2,7 @@
 import type { AppState, Assignment, Cycle, Employee, PathPolicy, Stage, TargetSnapshot, Template } from './types'
 import { DRAFT_ID } from './templates'
 import { templateFor } from './catalog'
+import { ensureUpwardTemplate, syncUpward } from './upward'
 import { applyVersions, ensureVersions } from './versions'
 import { cycleExecs, distributeExecs } from './execPlan'
 
@@ -125,6 +126,7 @@ export function createCycle(
   s: AppState,
   input: { name: string; period: string; dueDate: string; presetId: string; templateByJob: Cycle['templateByJob']; targetIds: string[] },
   oneExec = false,
+  upward = true, // 팀원→팀장평가(D-114). 새 시드는 기존 시연 응답을 그대로 만든 뒤 끝에서 저장 데이터 변환과 같은 함수로 추가
 ): Cycle {
   const id = `c-${Date.now().toString(36)}`
   const snap = (tid: string): [string, Template] => {
@@ -150,6 +152,7 @@ export function createCycle(
   cycle.assignments = buildAssignments(s, cycle, oneExec)
   if (!oneExec) distributeExecs(s, cycle)
   ensureVersions(cycle) // 평가표 버전: 지금 문항을 "공통 평가표"로 (D-082)
+  if (upward) { ensureUpwardTemplate(cycle); syncUpward(s, cycle) } // 팀원→팀장평가 평가표·배정 (D-114)
   return cycle
 }
 
@@ -186,6 +189,7 @@ export function cloneCycle(s: AppState, src: Cycle, name: string): Cycle {
   }
   c.assignments = buildAssignments(s, c)
   distributeExecs(s, c)
+  syncUpward(s, c) // 원본에 팀원→팀장 평가표가 있으면 함께 (D-114)
   applyVersions(s, c)
   return c
 }

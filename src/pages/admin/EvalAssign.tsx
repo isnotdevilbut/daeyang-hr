@@ -83,7 +83,16 @@ export default function EvalAssign({ cycle }: { cycle: Cycle }) {
               <table className="tbl path-tbl">
                 <thead><tr><th>단계</th><th>평가자</th><th>이름</th><th className="num">반영 비율(%)</th></tr></thead>
                 <tbody>
-                  {PATH_RULES[k].map((r) => {
+                  {PATH_RULES[k].flatMap((r) => (k === 'lead' && r === 'self' ? [r, 'upward' as const] : [r])).map((r) => {
+                    // 팀장이 받는 팀원→팀장평가(D-114): 1단계로 분류, 경로 단계·반영 비율이 아님(점수 미반영) — 안내 행만
+                    if (r === 'upward') return (
+                      <tr key={r} className="stage-info">
+                        <td><b>1단계</b></td>
+                        <td><span className="path-who">소속 팀원 (팀원→팀장평가)</span></td>
+                        <td><span className="muted">팀원→팀장평가</span></td>
+                        <td className="num"><span className="muted small">점수 미반영</span></td>
+                      </tr>
+                    )
                     const st = path.find((x) => x.rule === r)
                     const order = STAGE_OF_RULE[r]
                     return (
