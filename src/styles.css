@@ -1480,3 +1480,4 @@ details[open] > summary > .toggle-ic { transform: rotate(180deg); }
 .team-tbl .count-toggle:hover { color: var(--brand-navy); background: rgba(9, 82, 158, 0.06); border: 0; }
 .team-tbl .count-toggle[aria-expanded='true'] { background: none; border: 0; color: var(--brand-navy); }
 .team-tbl .count-toggle:focus-visible { outline: 2px solid #20b8ca; outline-offset: 2px; }
+.lead-grp-h { position: static; } /* D-140: 팀 이름 머리줄은 스크롤해도 고정하지 않음 */

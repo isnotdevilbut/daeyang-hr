@@ -328,7 +328,7 @@ function OrgEditor() {
   const leadGroups = (teamId: string | null) => {
     const pool = active.filter((e) => !e.isExecutive && !e.isCeo) // 임원은 팀장 후보가 아님 (직급 = 임원·팀장·사원 중 하나)
     const ids = [...new Set(pool.map((e) => e.teamId))].sort((a, b) => Number(b === teamId) - Number(a === teamId) || teamName(a).localeCompare(teamName(b), 'ko'))
-    return ids.map((gid) => ({ id: gid, label: `${teamName(gid) || '팀 없음'}${gid === teamId ? ' (이 팀)' : ''}`, items: pool.filter((e) => e.teamId === gid).sort((a, b) => a.name.localeCompare(b.name, 'ko')).map((m) => ({ id: m.id, label: `(${m.position} · ${teamName(m.teamId)}) ${m.name}` })) }))
+    return ids.map((gid) => ({ id: gid, label: `${teamName(gid) || '팀 없음'}${gid === teamId ? ' (해당 팀)' : ''}`, items: pool.filter((e) => e.teamId === gid).sort((a, b) => a.name.localeCompare(b.name, 'ko')).map((m) => ({ id: m.id, label: `(${m.position} · ${teamName(m.teamId)}) ${m.name}` })) }))
   }
   const saveDraft = () => {
     if (!draft) return
