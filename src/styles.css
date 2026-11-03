@@ -1535,3 +1535,12 @@ details[open] > summary > .toggle-ic { transform: rotate(180deg); }
 .kh-byjob .n { font-size: 26px; }
 .ki-head .chip.tag { font-size: 12.5px; }
 .ki-sum-j { margin-left: 10px; }
+/* D-151: 직급별 최종 반영 비율 — 반영 요소를 같은 시작선에서 왼쪽부터, 칸 폭을 맞춰 줄 사이 정렬 */
+.final-plan-tbl td:nth-child(2) { text-align: left; }
+.fp-items { display: grid; grid-template-columns: repeat(3, minmax(13em, max-content)); justify-content: start; align-items: center; gap: 8px 22px; }
+.fp-item { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+@media (max-width: 900px) { .fp-items { grid-template-columns: 1fr; } }
+.fp-items { grid-template-columns: 17em 17em max-content; } /* 칸 폭 고정 → 두 번째·세 번째 요소도 줄 사이 같은 시작선 */
+@media (max-width: 1100px) { .fp-items { grid-template-columns: 1fr; } }
+.final-plan-tbl td:first-child, .final-plan-tbl th:first-child { white-space: nowrap; width: 5em; }
+.final-plan-tbl td:last-child, .final-plan-tbl th:last-child { width: 15em; }

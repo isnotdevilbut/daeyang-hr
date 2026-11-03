@@ -16,6 +16,7 @@ import { execPerTeam } from '../domain/execTeamsV17'
 import { upwardFormV22, upwardV18 } from '../domain/upward'
 import { joinAllStaff } from '../domain/joinAllV19'
 import { leadUpwardOpen, moreDemo } from '../domain/demoV20'
+import { demoKpiV23 } from '../domain/demoV23'
 import { tierOf } from '../domain/org'
 
 export interface MigrationResult { state: AppState; notes: string[] }
@@ -227,7 +228,13 @@ export function migrate(raw: any): MigrationResult | null {
     s.schemaVersion = 22
   }
 
-  if (s.schemaVersion !== 22) return null
+  if (s.schemaVersion === 22) {
+    // v22 → v23 (D-151): 경영기획팀 가상 KPI 지표(목표·실적 입력) — 지표·직접 입력 점수가 없을 때만
+    notes.push(...demoKpiV23(s))
+    s.schemaVersion = 23
+  }
+
+  if (s.schemaVersion !== 23) return null
   return { state: s as AppState, notes }
 }
 

@@ -4,6 +4,7 @@ import { execPerTeam } from './execTeamsV17'
 import { upwardV18 } from './upward'
 import { joinAllStaff } from './joinAllV19'
 import { leadUpwardOpen, moreDemo } from './demoV20'
+import { demoKpiV23 } from './demoV23'
 import { rosterAndPaths } from './rosterV12'
 import { ensureCatalog } from './catalog'
 import { syncCycle } from './cycleSync'
@@ -20,7 +21,7 @@ import { createCycle, DEFAULT_TEMPLATE_BY_JOB, eligibleTargets } from './cycle'
 import { isUnlocked } from './progress'
 
 // v2: 상향평가 제외 / v3: 단계 반영 비율 회차별 / v4: KPI 지표·개인평가 반영. 이전 저장본은 data/migrate.ts에서 변환
-export const SCHEMA_VERSION = 22
+export const SCHEMA_VERSION = 23
 
 function rng(seed: number) {
   return () => {
@@ -215,5 +216,7 @@ export function createSeed(opts: { legacy?: boolean; until?: number } = {}): App
   if ((opts.until ?? SCHEMA_VERSION) < 20) { state.schemaVersion = opts.until!; return state }
   moreDemo(state) // 시연 완료 비중 높임 (D-117) — 저장 데이터 변환과 같은 함수
   leadUpwardOpen(state) // 장현우 팀원→팀장평가 5/6 (D-121) — 저장 데이터 변환과 같은 함수
+  if ((opts.until ?? SCHEMA_VERSION) < 23) { state.schemaVersion = opts.until!; return state }
+  demoKpiV23(state) // 경영기획팀 가상 KPI 지표 (D-151) — 저장 데이터 변환과 같은 함수
   return state
 }
