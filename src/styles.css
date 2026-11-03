@@ -1415,3 +1415,6 @@ label.field, fieldset.field legend { font-size: 16px; }
 @media (forced-colors: active) { .st-ico { border: 1px solid CanvasText; } }
 /* D-117: 여러 건 칸 — 남은 건이 있으면 빨강 대신 굵은 검정(모두 제출이면 초록 그대로) */
 .writes-sum.open { color: #14161f; font-weight: 800; }
+/* D-118: 문항 일괄 업로드 창 — 명단 업로드와 같은 미리보기 표가 들어가도록 넓게 */
+.modal.wide { width: min(920px, 100%); }
+.q-upload .upload-preview { max-height: 46vh; overflow: auto; }

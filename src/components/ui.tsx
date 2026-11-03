@@ -34,10 +34,10 @@ export function StatusChip({ status, lang }: { status: CellStatus; lang?: Lang }
 }
 
 /** 모달은 문서 맨 위(body)에 그린다 — 작업 화면(.app-shell)이 따로 쌓임 층을 가져도 헤더까지 덮도록 (D-070) */
-export function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+export function Modal({ title, onClose, children, wide }: { title: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
   return createPortal(
     <div className="modal-bg" onClick={onClose}>
-      <div className="modal" role="dialog" aria-modal="true" aria-label={title} onClick={(e) => e.stopPropagation()}>
+      <div className={`modal ${wide ? 'wide' : ''}`} role="dialog" aria-modal="true" aria-label={title} onClick={(e) => e.stopPropagation()}>
         <div className="row">
           <h2 style={{ margin: 0 }}>{title}</h2>
           <span className="spacer" />

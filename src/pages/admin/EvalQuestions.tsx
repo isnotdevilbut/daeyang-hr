@@ -4,7 +4,7 @@ import { update, useAppState } from '../../data/store'
 import { useDirty } from '../../data/dirty'
 import {
   answeredCount, appendImported, BASIC_TYPES, cycleHasResponses, defaultOptions, directionsFromRules, isChoice,
-  newQuestion, newSection, parseQuestionCsv, Q_COLUMNS, questionSetIds, RULE_TEXT, RULES, rulesOf, TYPE_TEXT, validateQuestion,
+  newQuestion, newSection, parseQuestionTable, canImportQuestions, Q_COLUMNS, Q_REQUIRED, questionSetIds, RULE_TEXT, RULES, rulesOf, TYPE_TEXT, validateQuestion,
   type QUploadResult,
 } from '../../domain/questions'
 import { type AnswerValue, type Cycle, type EvaluatorRule, type JobType, type Lang, type Question, type QuestionTr, type QuestionType, type Section, type Template } from '../../domain/types'
@@ -13,6 +13,8 @@ import { ResponsePager } from '../../components/ResponsePager'
 import { MobileHead } from '../employee/mobile'
 import { needsReview, sectionNeedsReview, t as tr } from '../../i18n'
 import { Modal } from '../../components/ui'
+import { readRosterFile } from '../../domain/roster'
+import type { Sheet } from '../../domain/xlsx'
 import { jobName, positionName, positionsOf } from '../../domain/catalog'
 import { activeTeams } from '../../domain/org'
 import { GRADE_LETTERS, gradeScaleOf, pointsErrors, usesPoints } from '../../domain/points'
@@ -93,13 +95,13 @@ export default function EvalQuestions({ cycle }: { cycle: Cycle }) {
         <span className="tool-count">사용 중인 문항 <b>{total}</b>개</span>
         <span className="spacer" />
         <button className="btn" onClick={() => setPreview(true)}>미리보기</button>
-        <button className="btn" onClick={() => setImporting(true)}>CSV 가져오기</button>
+        <button className="btn" onClick={() => setImporting(true)}>엑셀·CSV 가져오기</button>
         <button className="btn" onClick={() => mut((x) => { x.sections.push(newSection('새 영역')) })}>+ 영역 추가</button>
         <button className="btn primary" disabled={t.sections.length === 0} onClick={() => setPicking({ sectionId: t.sections[t.sections.length - 1].id })}>+ 문항 추가</button>
       </div>
       {msg && <p className="feedback ok" role="status">✓ {msg}</p>}
       <PointsBar t={t} disabled={closedCycle} onChange={(fn) => mut(fn)} />
-      {t.sections.length === 0 && <div className="panel pad empty-start"><p>문항이 없습니다. 영역을 추가한 뒤 문항을 넣거나 CSV로 가져오세요.</p></div>}
+      {t.sections.length === 0 && <div className="panel pad empty-start"><p>문항이 없습니다. 영역을 추가한 뒤 문항을 넣거나 엑셀·CSV로 가져오세요.</p></div>}
 
       {t.sections.map((sec, si) => (
         <section className="panel q-section" key={sec.id}>
@@ -461,60 +463,111 @@ function PreviewFlow({ rule, sections, frameRef }: { rule: EvaluatorRule; sectio
   )
 }
 
-const Q_SAMPLE = `${Q_COLUMNS.join(',')}
-업무성과,올해 가장 중요한 성과는 무엇입니까?,긴 서술형,Y,,,자기,
-업무성과,목표 달성 정도,5점 척도,Y,,,자기|팀장|임원,
-근무태도,안전수칙을 지켰습니까?,O/X,Y,예|아니오,,자기,
-업무능력,업무 숙련도,단일선택,Y,상|중|하,3|2|1,팀장|임원,
-건의사항,회사에 바라는 점,긴 서술형,N,,,자기,`
+type QLoaded = { file: string; sheets: Sheet[]; sheet: number }
 
+/**
+ * 문항 일괄 업로드(D-118) — 조직 관리 명단 업로드와 같은 흐름: 파일 선택(.xlsx/.csv, 여러 시트면 시트 선택) → 표 미리보기·행별 검증 →
+ * 오류가 하나라도 있으면 아무것도 넣지 않음(부분 등록 없음) → 추가(같은 이름의 영역 뒤, 없으면 새 영역) 또는 교체(응답 없는 평가만)
+ */
 function Import({ cycle, t, onClose, onDone, mut }: { cycle: Cycle; t: Template; onClose: () => void; onDone: (n: number) => void; mut: (fn: (t: Template) => void) => void }) {
   const s = useAppState()
-  const [text, setText] = useState(Q_SAMPLE)
+  const [loaded, setLoaded] = useState<QLoaded | null>(null)
+  const [readErr, setReadErr] = useState('')
   const [mode, setMode] = useState<'append' | 'replace'>('append')
-  const [res, setRes] = useState<QUploadResult | null>(null)
+  const [inputKey, setInputKey] = useState(0)
   const hasResp = cycleHasResponses(s, cycle)
+  // 적용평가 칸이 비었을 때: 팀원→팀장평가만 쓰는 평가표면 팀원→팀장평가, 그 외 자기평가(문항 추가와 같은 기본값)
+  const v = cycle.versions?.find((x) => x.templateId === t.id)
+  const defRules: EvaluatorRule[] = v && v.scope.rules.length === 1 && v.scope.rules[0] === 'upward' ? ['upward'] : ['self']
+  const table = loaded?.sheets[loaded.sheet]?.rows ?? null
+  // 이 평가표 버전의 적용 평가와 겹치지 않는 문항은 어디에도 보이지 않으므로 행 오류로(예: 공통 평가표에 팀원→팀장평가 문항)
+  const res: QUploadResult | null = table ? (() => {
+    const r = parseQuestionTable(table, defRules)
+    const scope = v?.scope.rules
+    if (scope?.length) for (const row of r.rows) {
+      const q = row.question
+      if (q && !rulesOf(q).some((x) => scope.includes(x))) { row.errors.push(`적용평가: 이 평가표는 ${scope.map((x) => RULE_TEXT[x]).join('·')}용 — 맞는 평가표에 올리세요`); row.question = null }
+    }
+    return r
+  })() : null
   const ok = res?.rows.filter((r) => r.question) ?? []
   const bad = res?.rows.filter((r) => !r.question) ?? []
+  const pick = async (f: File | undefined) => {
+    setReadErr(''); setLoaded(null)
+    if (!f) return
+    const r = await readRosterFile(f.name, new Uint8Array(await f.arrayBuffer())) // 명단 업로드와 같은 파일 읽기(XLSX 직접 해석·CSV 글자 판별)
+    if (!r.ok) return setReadErr(r.error)
+    setLoaded({ file: f.name, sheets: r.sheets, sheet: 0 })
+  }
   const apply = () => {
+    if (!res || !canImportQuestions(res)) return
+    if (mode === 'replace' && !confirm(`기존 문항을 모두 지우고 ${ok.length}개로 교체할까요?`)) return
     mut((x) => {
       if (mode === 'replace') x.sections = []
       appendImported(x, ok)
     })
     onDone(ok.length)
   }
+  const reset = () => { setLoaded(null); setReadErr(''); setInputKey((k) => k + 1) }
   return (
-    <Modal title="문항 CSV 가져오기" onClose={onClose}>
-      <p className="muted">열: {Q_COLUMNS.join(', ')} (필수: 영역·질문·유형) · 여러 값은 | 로 구분 · XLSX는 지원하지 않습니다</p>
-      <textarea className="mono" aria-label="문항 CSV" value={text} onChange={(e) => { setText(e.target.value); setRes(null) }} />
-      <fieldset className="sub-settings">
-        <legend>가져오기 방식</legend>
-        <label className="check"><input type="radio" name="qmode" checked={mode === 'append'} onChange={() => setMode('append')} /> 추가 (기존 문항 뒤에, 같은 이름의 영역에 넣음)</label>
-        <label className="check"><input type="radio" name="qmode" disabled={hasResp} checked={mode === 'replace'} onChange={() => setMode('replace')} /> 교체 (기존 문항 모두 삭제)</label>
-        {hasResp && <span className="muted">응답이 있는 평가라 교체할 수 없습니다.</span>}
-      </fieldset>
-      <div className="row" style={{ marginTop: 10 }}><button className="btn primary" onClick={() => setRes(parseQuestionCsv(text))}>검증하기</button></div>
-      {res?.headerError && <p className="feedback fail" role="alert">✕ {res.headerError}</p>}
-      {res && !res.headerError && (
-        <>
-          <p><b>정상 {ok.length}행 · 오류 {bad.length}행</b>{bad.length > 0 && ' — 오류 행은 가져오지 않습니다.'}{res.ignored.length > 0 && <span className="muted"> · 무시한 열: {res.ignored.join(', ')}</span>}</p>
-          <div className="table-wrap">
-            <table className="tbl">
-              <thead><tr><th>행</th><th>영역</th><th>질문</th><th>결과</th></tr></thead>
-              <tbody>
-                {res.rows.map((r) => (
-                  <tr key={r.line}><td>{r.line}</td><td>{r.section}</td><td>{r.question?.title ?? ''}</td>
-                    <td>{r.errors.length ? r.errors.map((e) => <div key={e} className="chip danger" style={{ margin: 2 }}>✕ {e}</div>) : <span className="chip submitted">✓ {TYPE_TEXT[r.question!.type]}</span>}</td></tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="row" style={{ marginTop: 10 }}>
-            <span className="spacer" />
-            <button className="btn primary" disabled={!ok.length || (mode === 'replace' && hasResp)} onClick={() => { if (mode === 'append' || confirm(`기존 문항을 모두 지우고 ${ok.length}개로 교체할까요?`)) apply() }}>{mode === 'replace' ? '교체' : '추가'} ({ok.length}개)</button>
-          </div>
-        </>
-      )}
+    <Modal title="문항 일괄 업로드" onClose={onClose} wide>
+      <div className="upload q-upload">
+        <p className="muted upload-cols">필수 열: {Q_REQUIRED.join(' · ')} · 선택 열: {Q_COLUMNS.filter((c) => !(Q_REQUIRED as readonly string[]).includes(c)).join(' · ')} · 여러 값은 | 로 구분</p>
+        <div className="row upload-pick">
+          <label className="btn primary file-btn">
+            파일 선택
+            <input key={inputKey} type="file" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" onChange={(e) => pick(e.target.files?.[0])} />
+          </label>
+          <span className="muted">{loaded ? loaded.file : '엑셀(.xlsx) 또는 CSV(.csv)'}</span>
+          {loaded && loaded.sheets.length > 1 && (
+            <label className="row sheet-pick">시트
+              <select value={loaded.sheet} onChange={(e) => setLoaded({ ...loaded, sheet: Number(e.target.value) })}>
+                {loaded.sheets.map((sh, i) => <option key={i} value={i}>{sh.name}</option>)}
+              </select>
+            </label>
+          )}
+        </div>
+        {readErr && <p className="feedback fail" role="alert">✕ {readErr}</p>}
+        {res?.headerError && <p className="feedback fail" role="alert">✕ {res.headerError}</p>}
+        {res && !res.headerError && (
+          <>
+            <div className="row upload-sum" aria-live="polite">
+              <span>전체 <b>{res.rows.length}</b>행</span>
+              <span>등록 가능 <b>{ok.length}</b></span>
+              <span className={bad.length ? 'err' : ''}>오류 <b>{bad.length}</b>행</span>
+              {res.ignored.length > 0 && <span className="muted">쓰지 않는 열(등록 안 함): {res.ignored.join(', ')}</span>}
+            </div>
+            <fieldset className="sub-settings">
+              <legend>가져오기 방식</legend>
+              <label className="check"><input type="radio" name="qmode" checked={mode === 'append'} onChange={() => setMode('append')} /> 추가 (기존 문항 뒤에, 같은 이름의 영역에 넣음)</label>
+              <label className="check"><input type="radio" name="qmode" disabled={hasResp} checked={mode === 'replace'} onChange={() => setMode('replace')} /> 교체 (기존 문항 모두 삭제)</label>
+              {hasResp && <span className="muted">응답이 있는 평가라 교체할 수 없습니다.</span>}
+            </fieldset>
+            <div className="table-wrap upload-preview" tabIndex={0}>
+              <table className="tbl">
+                <thead><tr><th className="num">행</th><th>영역</th><th>질문</th><th>유형</th><th>적용평가</th><th>확인</th></tr></thead>
+                <tbody>
+                  {res.rows.length === 0 ? <tr><td colSpan={6} className="empty-row">머리글 아래에 문항 행이 없습니다.</td></tr> : res.rows.map((r) => (
+                    <tr key={r.line} className={r.errors.length ? 'row-err' : ''}>
+                      <td className="num">{r.line}</td>
+                      <td>{r.section || <span className="muted">(빈 칸)</span>}</td>
+                      <td>{r.question?.title ?? <span className="muted">—</span>}</td>
+                      <td>{r.question ? TYPE_TEXT[r.question.type] : '—'}</td>
+                      <td>{r.question ? rulesOf(r.question).map((x) => RULE_TEXT[x]).join('·') : '—'}</td>
+                      <td>{r.errors.length ? r.errors.map((e, i) => <div key={i} className="err-msg">{e}</div>) : <span className="chip submitted">✓</span>}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="row" style={{ marginTop: 12 }}>
+              <button className="btn primary" disabled={!canImportQuestions(res) || (mode === 'replace' && hasResp)} onClick={apply}>{ok.length}개 {mode === 'replace' ? '교체' : '추가'}</button>
+              <button className="btn" onClick={reset}>다른 파일</button>
+              {bad.length > 0 && <span className="feedback fail">오류가 있어 등록할 수 없습니다.</span>}
+            </div>
+          </>
+        )}
+      </div>
     </Modal>
   )
 }

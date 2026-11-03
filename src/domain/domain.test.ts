@@ -2706,3 +2706,53 @@ describe('시연 완료 비중 (D-117)', async () => {
     expect(again).toEqual(m.state)
   })
 })
+
+describe('문항 일괄 업로드 = 명단 업로드와 같은 흐름 (D-118)', async () => {
+  const Q = await import('./questions')
+  const X = await import('./xlsx')
+  const R = await import('./roster')
+  const HEAD = ['영역', '질문', '유형', '필수', '선택지', '선택지점수', '적용평가', '배점', '도움말']
+  const ROWS = [
+    ['업무성과', '올해 가장 중요한 성과', '긴 서술형', 'Y', '', '', '자기', '', '구체적으로'],
+    ['업무성과', '목표 달성 정도', '5점 척도', 'Y', '', '', '자기|팀장|임원', '2', ''],
+    ['근무태도', '안전수칙 준수', 'O/X', 'N', '예|아니오', '', '팀장', '', ''],
+    ['업무능력', '업무 숙련도', '단일선택', 'Y', '상|중|하', '3|2|1', '팀장|임원', '', ''],
+    ['리더십', '팀 목표를 명확히 제시', '5점 척도', 'Y', '', '', '팀원→팀장', '', ''],
+    ['종합', '종합 등급', '등급', 'Y', '', '', '임원', '', ''],
+  ]
+  it('엑셀(.xlsx) 파일 → 모든 행이 문항으로(유형·필수·선택지·점수·적용평가·배점·도움말)', async () => {
+    const r = await R.readRosterFile('문항.xlsx', X.templateXlsx('문항', HEAD, ROWS))
+    expect(r.ok).toBe(true)
+    const res = Q.parseQuestionTable((r as any).sheets[0].rows)
+    expect(Q.canImportQuestions(res)).toBe(true)
+    const qs = res.rows.map((x) => x.question!)
+    expect(qs.map((q) => q.type)).toEqual(['long', 'scale5', 'ox', 'single', 'scale5', 'grade'])
+    expect(qs[0]).toMatchObject({ title: '올해 가장 중요한 성과', required: true, help: '구체적으로', rules: ['self'] })
+    expect(qs[1]).toMatchObject({ points: 2, rules: ['self', 'teamLead', 'executive'], purpose: 'score' })
+    expect(qs[2]).toMatchObject({ required: false }); expect(qs[2].options.map((o) => o.label)).toEqual(['예', '아니오'])
+    expect(qs[3].options.map((o) => [o.label, o.value])).toEqual([['상', 3], ['중', 2], ['하', 1]])
+    expect(qs[4]).toMatchObject({ rules: ['upward'], directions: ['up'] })
+    expect(qs[5]).toMatchObject({ type: 'grade', purpose: 'score' })
+    const t: any = { sections: [] }
+    Q.appendImported(t, res.rows)
+    expect(t.sections.map((x: any) => [x.title, x.questions.length])).toEqual([['업무성과', 2], ['근무태도', 1], ['업무능력', 1], ['리더십', 1], ['종합', 1]])
+  })
+  it('CSV도 같은 결과, 열 순서 무관, 위쪽 빈 행·쓰지 않는 열 허용', async () => {
+    const order = [2, 0, 1, 6, 3, 4, 5, 7, 8]
+    const csv = '﻿\r\n' + [[...order.map((i) => HEAD[i]), '비고'], ...ROWS.map((r) => [...order.map((i) => r[i]), '메모'])].map((r) => r.map((v) => (/[,"]/.test(v) ? `"${v}"` : v)).join(',')).join('\r\n')
+    const r = await R.readRosterFile('문항.csv', new TextEncoder().encode(csv))
+    const res = Q.parseQuestionTable((r as any).sheets[0].rows)
+    expect(res.ignored).toEqual(['비고'])
+    expect(Q.canImportQuestions(res)).toBe(true)
+    expect(res.rows.map((x) => x.question!.title)).toEqual(ROWS.map((x) => x[1]))
+  })
+  it('한 행이라도 오류면 아무것도 넣지 않음 · 필수 열 없음·중복 열은 파일 오류 · 팀원→팀장 평가표는 빈 적용평가 = 팀원→팀장평가', () => {
+    const bad = Q.parseQuestionTable([HEAD, ROWS[0], ['업무성과', '', '모름', 'Y', '', '', '자기', 'x', '']])
+    expect(Q.canImportQuestions(bad)).toBe(false)
+    expect(bad.rows[1].errors.join()).toMatch(/질문: 비어 있음.*유형.*배점/)
+    expect(Q.parseQuestionTable([['영역', '질문'], ['a', 'b']]).headerError).toContain('유형')
+    expect(Q.parseQuestionTable([['영역', '질문', '유형', '유형'], ['a', 'b', '서술형', '서술형']]).headerError).toContain('두 번')
+    const up = Q.parseQuestionTable([['영역', '질문', '유형'], ['소통', '의견을 경청한다', '5점 척도']], ['upward'])
+    expect(up.rows[0].question).toMatchObject({ rules: ['upward'], directions: ['up'] })
+  })
+})

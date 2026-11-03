@@ -149,14 +149,17 @@ export function weightSum(stages: { order: number }[], w: Record<number, number 
   return +stages.reduce((a, st) => a + (w[st.order] as number), 0).toFixed(2)
 }
 
-// ── 문항 CSV 가져오기 ─────────────────────────────────
-export const Q_COLUMNS = ['영역', '질문', '유형', '필수', '선택지', '선택지점수', '적용평가', '도움말'] as const
+// ── 문항 일괄 업로드 (엑셀 .xlsx / CSV, D-118 — 조직 관리 명단 업로드와 같은 흐름) ─────────────
+// 파일 → 표(첫 번째로 비어 있지 않은 행 = 머리글, 열 이름으로 찾아 순서 무관) → 행마다 검증 → 오류가 하나라도 있으면 아무것도 넣지 않음
+export const Q_COLUMNS = ['영역', '질문', '유형', '필수', '선택지', '선택지점수', '적용평가', '배점', '도움말'] as const
 export const Q_REQUIRED = ['영역', '질문', '유형'] as const
+export const Q_MAX_ROWS = 500
 
 const TYPE_ALIAS: Record<string, QuestionType> = {
-  '짧은 주관식': 'short', 주관식: 'short', '긴 서술형': 'long', 서술형: 'long',
+  '짧은 주관식': 'short', 주관식: 'short', 단답형: 'short', '긴 서술형': 'long', 서술형: 'long',
   '단일선택': 'single', '단일선택 객관식': 'single', 객관식: 'single',
-  'O/X': 'ox', OX: 'ox', '예/아니오': 'ox', '5점 척도': 'scale5', '5점척도': 'scale5',
+  'O/X': 'ox', OX: 'ox', '예/아니오': 'ox', '예/아니오(O/X)': 'ox', '5점 척도': 'scale5', '5점척도': 'scale5', 척도: 'scale5',
+  등급: 'grade', '등급 선택': 'grade',
 }
 const RULE_ALIAS: Record<string, EvaluatorRule> = { 자기: 'self', 자기평가: 'self', 팀장: 'teamLead', 팀장평가: 'teamLead', 임원: 'executive', 임원평가: 'executive', '팀원→팀장': 'upward', '팀원→팀장평가': 'upward', 상향: 'upward', 상향평가: 'upward' }
 
@@ -180,15 +183,26 @@ export function splitCsvLine(line: string): string[] {
 export interface QRow { line: number; section: string; question: Question | null; errors: string[] }
 export interface QUploadResult { headerError: string | null; ignored: string[]; rows: QRow[] }
 
-export function parseQuestionCsv(text: string): QUploadResult {
-  const lines = text.replace(/^﻿/, '').split(/\r?\n/).filter((l) => l.trim())
-  const header = splitCsvLine(lines[0] ?? '')
+/** CSV 글자(붙여넣기·이전 호환) → 표 → 검증 */
+export function parseQuestionCsv(text: string, defaultRules?: EvaluatorRule[]): QUploadResult {
+  return parseQuestionTable(text.replace(/^﻿/, '').split(/\r?\n/).map(splitCsvLine), defaultRules)
+}
+
+const hnorm = (h: string) => h.replace(/^﻿/, '').replace(/[\s*]/g, '')
+/** 표(엑셀 시트·CSV) → 문항 행. defaultRules = 적용평가 칸이 비었을 때(없으면 자기평가) — 팀원→팀장 평가표면 팀원→팀장평가 */
+export function parseQuestionTable(table: string[][], defaultRules: EvaluatorRule[] = ['self']): QUploadResult {
+  const hi = table.findIndex((r) => r.some((c) => (c ?? '').trim()))
+  if (hi < 0) return { headerError: '빈 파일입니다.', ignored: [], rows: [] }
+  const header = table[hi].map((h) => hnorm(h ?? ''))
+  const dup = (Q_COLUMNS as readonly string[]).find((k) => header.filter((h) => h === k).length > 1)
+  if (dup) return { headerError: `'${dup}' 열이 두 번 이상 있습니다.`, ignored: [], rows: [] }
   const miss = Q_REQUIRED.filter((c) => !header.includes(c))
   if (miss.length) return { headerError: `필수 열이 없습니다: ${miss.join(', ')}`, ignored: [], rows: [] }
-  const ignored = header.filter((h) => h && !(Q_COLUMNS as readonly string[]).includes(h))
-  const col = (cells: string[], k: string) => (header.includes(k) ? cells[header.indexOf(k)] ?? '' : '')
-  const rows = lines.slice(1).map((l, i): QRow => {
-    const c = splitCsvLine(l)
+  const ignored = table[hi].map((h) => (h ?? '').trim()).filter((h, i) => h && !(Q_COLUMNS as readonly string[]).includes(header[i]))
+  const body = table.slice(hi + 1).map((c, i) => ({ c, line: hi + i + 2 })).filter(({ c }) => c.some((x) => (x ?? '').trim()))
+  if (body.length > Q_MAX_ROWS) return { headerError: `한 번에 ${Q_MAX_ROWS}행까지 올릴 수 있습니다.`, ignored, rows: [] }
+  const col = (cells: string[], k: string) => (header.includes(k) ? (cells[header.indexOf(k)] ?? '').trim() : '')
+  const rows = body.map(({ c, line }): QRow => {
     const errors: string[] = []
     const section = col(c, '영역')
     const title = col(c, '질문')
@@ -200,9 +214,12 @@ export function parseQuestionCsv(text: string): QUploadResult {
     const required = reqRaw === '' ? true : ['Y', 'y', '예', '필수', 'O'].includes(reqRaw) ? true : ['N', 'n', '아니오', '선택', 'X'].includes(reqRaw) ? false : null
     if (required === null) errors.push(`필수: '${reqRaw}'는 Y/N이 아님`)
     const ruleRaw = col(c, '적용평가')
-    const rules = ruleRaw ? ruleRaw.split('|').map((x) => RULE_ALIAS[x.trim()]) : (['self'] as EvaluatorRule[])
-    if (rules.some((r) => !r)) errors.push(`적용평가: '${ruleRaw}' — 자기|팀장|임원 중에서 쓰세요`)
-    if (errors.length || !type) return { line: i + 2, section, question: null, errors }
+    const rules = ruleRaw ? ruleRaw.split('|').map((x) => RULE_ALIAS[x.trim().replace(/\s/g, '')]) : [...defaultRules]
+    if (rules.some((r) => !r)) errors.push(`적용평가: '${ruleRaw}' — 자기|팀원→팀장|팀장|임원 중에서 쓰세요`)
+    const ptsRaw = col(c, '배점')
+    const pts = ptsRaw === '' ? null : Number(ptsRaw)
+    if (pts !== null && !(Number.isFinite(pts) && pts >= 0)) errors.push(`배점: '${ptsRaw}'은(는) 0 이상 숫자가 아님`)
+    if (errors.length || !type) return { line, section, question: null, errors }
     const q = newQuestion(type)
     q.title = title
     q.help = col(c, '도움말')
@@ -215,7 +232,13 @@ export function parseQuestionCsv(text: string): QUploadResult {
       const labels = optRaw.split('|').map((x) => x.trim()).filter(Boolean)
       if (labels.length < 2) errors.push('선택지: 단일선택은 | 로 구분한 선택지 2개 이상 필요')
       q.options = labels.map((label, k) => ({ id: `${q.id}-o${k}`, label, value: null }))
+    } else if (optRaw && isChoice(type)) {
+      // 5점 척도·O/X·등급도 선택지 글자를 바꿔 올릴 수 있음(개수는 기본과 같게)
+      const labels = optRaw.split('|').map((x) => x.trim()).filter(Boolean)
+      if (labels.length !== q.options.length) errors.push(`선택지: ${TYPE_TEXT[type]}는 선택지 ${q.options.length}개(| 로 구분)`)
+      else q.options = q.options.map((o, k) => ({ ...o, label: labels[k] }))
     }
+    if (pts !== null) q.points = pts
     if (scoreRaw) {
       if (!isChoice(type)) errors.push('선택지점수: 주관식·서술형은 점수에 반영할 수 없음')
       else {
@@ -223,13 +246,18 @@ export function parseQuestionCsv(text: string): QUploadResult {
         if (vals.length !== q.options.length || vals.some((v) => Number.isNaN(v))) errors.push(`선택지점수: 선택지 ${q.options.length}개와 개수가 맞지 않거나 숫자가 아님`)
         else { q.options.forEach((o, k) => (o.value = vals[k])); q.purpose = 'score' }
       }
+    } else if (type === 'grade') {
+      q.purpose = 'score' // 등급은 평가표의 등급 환산(A=5…)으로 점수(D-103)
     } else if (type !== 'scale5') {
       q.purpose = 'info'
     }
-    return { line: i + 2, section, question: errors.length ? null : q, errors }
+    return { line, section, question: errors.length ? null : q, errors }
   })
   return { headerError: null, ignored, rows }
 }
+
+/** 명단 업로드와 같은 규칙: 오류 행이 하나라도 있으면 아무것도 넣지 않음(부분 등록 없음) */
+export const canImportQuestions = (r: QUploadResult) => !r.headerError && r.rows.length > 0 && r.rows.every((x) => !!x.question)
 
 /** 가져온 문항을 문항 세트에 추가(같은 이름의 영역 뒤, 없으면 새 영역). 교체는 호출 측에서 응답 없음 확인 후 sections를 비우고 호출 */
 export function appendImported(t: Template, rows: QRow[]) {
