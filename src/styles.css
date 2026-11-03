@@ -1435,3 +1435,19 @@ label.field, fieldset.field legend { font-size: 16px; }
 }
 /* D-128: 개인 리포트 본문은 화면에서 숨기고 인쇄에서만 */
 @media screen { .print-only { display: none !important; } }
+/* D-132: 단계별 응답 토글 — 평가 유형별 접기·펼치기, 작성자가 여럿이면 작성자마다 */
+.stage-group { margin-bottom: 12px; overflow: hidden; }
+.stage-group > summary { list-style: none; cursor: pointer; border-bottom: 0; }
+.stage-group > summary::-webkit-details-marker, .author-item > summary::-webkit-details-marker { display: none; }
+.stage-group[open] > summary { border-bottom: 1px solid var(--line); }
+.stage-group > summary:hover { background: rgba(9, 82, 158, 0.06); }
+.toggle-ic { display: inline-block; font-size: 14px; color: var(--text-sub); transition: transform 0.2s ease; }
+details[open] > summary > .toggle-ic { transform: rotate(180deg); }
+.stage-authors { padding: 8px 14px 12px; display: grid; gap: 8px; }
+.author-item { border: 1px solid var(--line); border-radius: 12px; background: #fff; }
+.author-item > summary { list-style: none; display: flex; align-items: center; gap: 10px; padding: 10px 14px; cursor: pointer; border-radius: 12px; }
+.author-item > summary:hover { background: rgba(9, 82, 158, 0.05); }
+.author-item[open] > summary { border-bottom: 1px solid var(--line-soft); border-radius: 12px 12px 0 0; }
+.stage-group > summary:focus-visible, .author-item > summary:focus-visible { outline: 2px solid #20b8ca; outline-offset: -2px; }
+@media (prefers-reduced-motion: reduce) { .toggle-ic { transition: none; } }
+.toggle-ic { font-size: 18px; line-height: 1; width: 20px; text-align: center; color: var(--brand-navy); }

@@ -151,27 +151,41 @@ export default function PersonResultPage() {
       </div>
 
       <h2 className="section-title">단계별 응답</h2>
-      {staged.map((a) => {
-        const st = statusOf(s.responses, a.id)
-        const stage = a.direction === 'up' ? undefined : r.stages.find((x) => x.order === a.stageOrder) // 팀원→팀장평가는 점수 단계가 아님(D-114)
-        const rule = ctxFor(cycle, a).rule
+      {/* D-132: 평가 유형별 토글(1단계 자기평가 · 1단계 팀원→팀장평가 · 2단계 팀장평가 · 3단계 임원평가). 작성자가 여럿이면 작성자마다 토글 — 처음엔 접힘 */}
+      {(['self', 'upward', 'teamLead', 'executive'] as const).map((rule) => {
+        const list = staged.filter((a) => ctxFor(cycle, a).rule === rule)
+        if (!list.length) return null
+        const order = list[0].stageOrder
+        const stage = rule === 'upward' ? undefined : r.stages.find((x) => x.order === order) // 팀원→팀장평가는 점수 단계가 아님(D-114)
+        const sub = list.filter((a) => statusOf(s.responses, a.id) === 'submitted').length
+        const chip = (a: Assignment) => { const st = statusOf(s.responses, a.id); return <span className={`chip ${st === 'submitted' ? 'stage done' : 'stage todo'}`}>{st === 'submitted' ? '✓ 제출' : st === 'draft' ? '작성 중' : '미제출'}</span> }
+        const body = (a: Assignment) => statusOf(s.responses, a.id) === 'submitted'
+          ? <><AnswerList t={cycle.templates[a.templateId]} r={s.responses[a.id]} a={a} cycle={cycle} /><ManualScores cycle={cycle} aid={a.id} /></>
+          : <p className="muted stage-empty">아직 제출되지 않았습니다.</p>
         return (
-          <section className="panel stage-card" key={a.id}>
-            <div className="stage-head">
-              <h3>{a.stageOrder}단계 · {rule ? RULE_TEXT[rule] : stage?.label}</h3>
-              <span className="muted">작성자 <b>{name(a.evaluatorId)}</b></span>
+          <details className="panel stage-card stage-group" key={rule}>
+            <summary className="stage-head">
+              <h3>{order}단계 · {RULE_TEXT[rule]}</h3>
+              {list.length === 1 ? <span className="muted">작성자 <b>{name(list[0].evaluatorId)}</b></span> : <span className="muted">작성자 {list.length}명 · 제출 <b>{sub}</b></span>}
               <span className="spacer" />
-              {st === 'submitted' && stage && (stage.score !== null || stage.grade) && (
+              {stage && sub > 0 && (stage.score !== null || stage.grade) && (
                 <span className="stage-score">{stage.score !== null && <>점수 <b>{fmt(stage.score)}</b></>}{stage.grade && <> · 등급 <b>{stage.grade.slice(0, 1)}</b></>}</span>
               )}
-              {st === 'submitted' && stage?.ungraded && <span className="chip draft">미채점</span>}
-              <span className={`chip ${st === 'submitted' ? 'stage done' : 'stage todo'}`}>{st === 'submitted' ? '✓ 제출' : st === 'draft' ? '작성 중' : '미제출'}</span>
-            </div>
-            {st === 'submitted'
-              ? <AnswerList t={cycle.templates[a.templateId]} r={s.responses[a.id]} a={a} cycle={cycle} />
-              : <p className="muted stage-empty">아직 제출되지 않았습니다.</p>}
-            {st === 'submitted' && <ManualScores cycle={cycle} aid={a.id} />}
-          </section>
+              {stage?.ungraded && <span className="chip draft">미채점</span>}
+              {list.length === 1 && chip(list[0])}
+              <span className="toggle-ic" aria-hidden>▾</span>
+            </summary>
+            {list.length === 1 ? body(list[0]) : (
+              <div className="stage-authors">
+                {list.map((a) => (
+                  <details key={a.id} className="author-item">
+                    <summary><b>{name(a.evaluatorId)}</b><span className="spacer" />{chip(a)}<span className="toggle-ic" aria-hidden>▾</span></summary>
+                    {body(a)}
+                  </details>
+                ))}
+              </div>
+            )}
+          </details>
         )
       })}
 
