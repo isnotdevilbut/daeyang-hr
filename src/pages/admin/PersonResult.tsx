@@ -105,11 +105,13 @@ export default function PersonResultPage() {
 
 
       {/* 이 직원이 다른 사람에게 평가받는 내용 — 위의 작성할 업무(미완료 평가)와 따로 (D-071) */}
-      <h2 className="section-title">평가 현황</h2>
-      <RecvList cycle={cycle} targetId={t.employeeId} />
-      {/* D-127: 같은 '평가 현황' 아래 — 받는 평가(위) + 이 사람이 해야 할 평가(아래, 사원·팀장·임원 모두: 팀장평가·임원평가·팀원→팀장평가). 해야 할 평가가 없으면 표시 안 함 */}
-      <WriteList cycle={cycle} evaluatorId={t.employeeId} title={false} />
-      {/* D-129: 진행 현황에서 연 상세는 평가 현황까지만 — 점수 요약·보정·단계별 응답·변경 내역·리포트는 결과·리포트에서 연 상세에만 */}
+      {/* D-129·D-130: 진행 현황에서 연 상세 = 평가 현황만, 결과·리포트에서 연 상세 = 점수 요약·최종 점수 보정·단계별 응답·변경 내역(평가 현황 없음) */}
+      {from === 'progress' && <>
+        <h2 className="section-title">평가 현황</h2>
+        <RecvList cycle={cycle} targetId={t.employeeId} />
+        {/* D-127: 같은 '평가 현황' 아래 — 받는 평가(위) + 이 사람이 해야 할 평가(아래, 사원·팀장·임원 모두). 해야 할 평가가 없으면 표시 안 함 */}
+        <WriteList cycle={cycle} evaluatorId={t.employeeId} title={false} />
+      </>}
       {from === 'results' && <>
       {/* 제목은 상자 밖, 내용은 상자 안 — 평가 현황과 같은 구조 (D-087) */}
       <div className="detail-grid">
