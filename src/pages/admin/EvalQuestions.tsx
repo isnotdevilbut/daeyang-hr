@@ -21,6 +21,53 @@ import { pointsErrors, usesPoints } from '../../domain/points'
 import { activeVersions, liveVersions, addVersion, applyVersion, applyVersions, blankTemplate, cloneTemplate, deleteVersion, pickKey, resolveVersion, saveVersionDraft, scopeTargets, versionUsed, type VersionProblem } from '../../domain/versions'
 import type { TemplateVersion, VersionScope } from '../../domain/types'
 
+/**
+ * 끌어서 순서 바꾸기(D-158). 손잡이를 누른 채 위아래로 움직이면 놓일 자리에 선이 보이고, 놓으면 그 자리로 옮긴다.
+ * 같은 묶음(data-drag-group)끼리만 — 마우스·터치 모두(pointer 이벤트). 화면 위·아래 끝에서는 저절로 스크롤
+ */
+function useDragSort(onDrop: (group: string, from: number, to: number) => void) {
+  const [drag, setDrag] = useState<{ group: string; from: number; slot: number } | null>(null)
+  const start = (group: string, from: number) => (e: React.PointerEvent) => {
+    if (e.button !== 0) return
+    e.preventDefault()
+    let slot = from
+    setDrag({ group, from, slot })
+    document.body.classList.add('drag-sorting')
+    const onMove = (ev: PointerEvent) => {
+      const els = [...document.querySelectorAll<HTMLElement>(`[data-drag-group="${CSS.escape(group)}"]`)]
+      const k = els.findIndex((el) => { const r = el.getBoundingClientRect(); return ev.clientY < r.top + r.height / 2 })
+      slot = k < 0 ? els.length : k
+      setDrag({ group, from, slot })
+      if (ev.clientY < 70) window.scrollBy(0, -18)
+      else if (ev.clientY > window.innerHeight - 70) window.scrollBy(0, 18)
+    }
+    const end = (ev: PointerEvent) => {
+      window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', end); window.removeEventListener('pointercancel', end)
+      document.body.classList.remove('drag-sorting')
+      setDrag(null)
+      const to = slot > from ? slot - 1 : slot
+      if (ev.type === 'pointerup' && to !== from) onDrop(group, from, to)
+    }
+    window.addEventListener('pointermove', onMove); window.addEventListener('pointerup', end); window.addEventListener('pointercancel', end)
+  }
+  /** 끄는 중인 항목·놓일 자리 표시(앞에 선 / 마지막이면 뒤에 선). 제자리면 선 없음 */
+  const cls = (group: string, i: number, n: number) => {
+    if (!drag || drag.group !== group) return ''
+    const same = drag.slot === drag.from || drag.slot === drag.from + 1
+    return [i === drag.from ? 'dragging' : '', !same && drag.slot === i ? 'drop-before' : '', !same && drag.slot === n && i === n - 1 ? 'drop-after' : ''].filter(Boolean).join(' ')
+  }
+  return { start, cls }
+}
+
+function DragHandle({ label, onStart, onKey }: { label: string; onStart: (e: React.PointerEvent) => void; onKey: (d: number) => void }) {
+  return (
+    <button type="button" className="drag-handle" aria-label={label} title="끌어서 순서 바꾸기" onPointerDown={onStart}
+      onKeyDown={(e) => { if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); onKey(e.key === 'ArrowUp' ? -1 : 1) } }}>
+      <svg width="10" height="16" viewBox="0 0 10 16" aria-hidden="true">{[3, 8, 13].flatMap((y) => [2, 8].map((x) => <circle key={`${x}-${y}`} cx={x} cy={y} r="1.5" />))}</svg>
+    </button>
+  )
+}
+
 type Editing = { sectionId: string; q: Question; isNew: boolean; index?: number }
 
 export default function EvalQuestions({ cycle }: { cycle: Cycle }) {
@@ -34,6 +81,7 @@ export default function EvalQuestions({ cycle }: { cycle: Cycle }) {
   const [preview, setPreview] = useState(false)
   const [importing, setImporting] = useState(false)
   const [msg, setMsg] = useState('')
+  const drop = useDragSort((g, from, to) => reorder(g, from, to))
   const live = s.cycles.find((c) => c.id === cycle.id)!
   const t = live.templates[setId]
   if (!t) return <div className="panel pad">이 평가에 연결된 문항이 없습니다.</div>
@@ -82,6 +130,11 @@ export default function EvalQuestions({ cycle }: { cycle: Cycle }) {
     })
   }
   const move = <T,>(arr: T[], i: number, d: number) => { const j = i + d; if (j >= 0 && j < arr.length) [arr[i], arr[j]] = [arr[j], arr[i]] }
+  // D-158: 영역·문항 순서는 손잡이(⠿)를 끌어서 바꿈 — 문항은 같은 영역 안에서만
+  const reorder = (group: string, from: number, to: number) => mut((x) => {
+    const arr: unknown[] = group === 'sec' ? x.sections : x.sections.find((y) => `q:${y.id}` === group)?.questions ?? []
+    const [it] = arr.splice(from, 1); arr.splice(to, 0, it)
+  })
 
   return (
     <>
@@ -102,8 +155,9 @@ export default function EvalQuestions({ cycle }: { cycle: Cycle }) {
       {t.sections.length === 0 && <div className="panel pad empty-start"><p>문항이 없습니다. 아래 '+ 영역 추가'로 영역을 만든 뒤 그 안에서 문항을 추가하거나 엑셀·CSV로 가져오세요.</p></div>}
 
       {t.sections.map((sec, si) => (
-        <section className="panel q-section" key={sec.id} data-sec={sec.id}>
+        <section className={`panel q-section ${drop.cls('sec', si, t.sections.length)}`} key={sec.id} data-sec={sec.id} data-drag-group="sec">
           <div className="q-sec-head">
+            <DragHandle label={`${sec.title} 영역 순서 바꾸기 — 끌어서 옮기기(키보드 ↑↓)`} onStart={drop.start('sec', si)} onKey={(d) => mut((x) => move(x.sections, si, d))} />
             <input type="text" className="sec-title" aria-label="영역 이름" value={sec.title} onChange={(e) => mut((x) => { x.sections[si].title = e.target.value })} />
             <span className="muted">{sec.questions.filter((q) => q.active).length}문항</span>
             {/* 영역 배점(D-103) — 비우면 점수에 넣지 않는 영역 */}
@@ -111,8 +165,6 @@ export default function EvalQuestions({ cycle }: { cycle: Cycle }) {
               onWheel={(e) => e.currentTarget.blur()} onChange={(e) => mut((x) => { x.sections[si].points = e.target.value === '' ? null : Number(e.target.value) })} />점</label>
             <SectionRu sec={sec} onChange={(fn) => mut((x) => fn(x.sections[si]))} />
             <span className="spacer" />
-            {si > 0 && <button className="btn small" aria-label={`${sec.title} 영역 위로`} onClick={() => mut((x) => move(x.sections, si, -1))}>↑</button>}
-            {si < t.sections.length - 1 && <button className="btn small" aria-label={`${sec.title} 영역 아래로`} onClick={() => mut((x) => move(x.sections, si, 1))}>↓</button>}
             <button className="btn small danger" onClick={() => removeSection(si)}>영역 삭제</button>
           </div>
           {(typeof sec.points === 'number' || sec.desc) && (
@@ -124,7 +176,8 @@ export default function EvalQuestions({ cycle }: { cycle: Cycle }) {
                 const rules = rulesOf(q)
                 const scope = [rules.map((r) => RULE_TEXT[r]).join('·'), q.jobs?.length === 1 ? `${jobName(s, q.jobs[0])}만` : '', q.targetRoles?.length === 1 ? (q.targetRoles[0] === 'lead' ? '팀장 대상' : '사원 대상') : '', q.teams?.length ? `팀 ${q.teams.length}곳만` : '', q.positions?.length ? `직급 ${q.positions.length}개만` : ''].filter(Boolean).join(' · ')
                 return (
-                  <li key={q.id} className={`q-row ${q.active ? '' : 'off'}`}>
+                  <li key={q.id} className={`q-row ${q.active ? '' : 'off'} ${drop.cls(`q:${sec.id}`, qi, sec.questions.length)}`} data-drag-group={`q:${sec.id}`}>
+                    <DragHandle label={`${q.title || '문항'} 순서 바꾸기 — 끌어서 옮기기(키보드 ↑↓)`} onStart={drop.start(`q:${sec.id}`, qi)} onKey={(d) => mut((x) => move(x.sections[si].questions, qi, d))} />
                     <span className="q-no">{q.active ? ++no : '–'}</span>
                     <div className="q-main">
                       <div className="q-title">{q.title || '(제목 없음)'}{!q.active && <span className="chip na tag">사용 중지</span>}</div>
@@ -136,8 +189,6 @@ export default function EvalQuestions({ cycle }: { cycle: Cycle }) {
                       </div>
                     </div>
                     <div className="q-actions">
-                      {qi > 0 && <button className="btn small" aria-label="위로" onClick={() => mut((x) => move(x.sections[si].questions, qi, -1))}>↑</button>}
-                      {qi < sec.questions.length - 1 && <button className="btn small" aria-label="아래로" onClick={() => mut((x) => move(x.sections[si].questions, qi, 1))}>↓</button>}
                       <button className="btn small q-edit" onClick={() => setEditing({ sectionId: sec.id, q: structuredClone(q), isNew: false })}>수정</button>
                       {q.active
                         ? <button className="btn small danger" onClick={() => removeQ(sec.id, q)}>삭제</button>

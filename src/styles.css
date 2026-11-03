@@ -1555,3 +1555,15 @@ details[open] > summary > .toggle-ic { transform: rotate(180deg); }
 .target-team .tt-cols span:last-child:not(:first-child) { width: 40px; display: flex; justify-content: center; white-space: nowrap; font-size: 14px; }
 .target-team .tt-cols { padding-right: 8px; }
 .target-team .p-switch { margin-right: 8px; } /* 가운데 맞춘 열 이름이 상자 오른쪽 선을 넘지 않게 */
+/* D-158: 영역·문항 끌어서 순서 바꾸기 — 노션처럼 점 6개 손잡이 */
+.drag-handle { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 30px; padding: 0; border: 0; border-radius: 5px; background: transparent; color: #a3abb8; cursor: grab; touch-action: none; }
+.drag-handle svg { fill: currentColor; }
+.drag-handle:hover, .drag-handle:focus-visible { background: rgba(9, 82, 158, 0.08); color: var(--brand-navy); }
+body.drag-sorting, body.drag-sorting * { cursor: grabbing !important; user-select: none; }
+.eval-page .q-row { position: relative; }
+.eval-page .q-row .drag-handle { margin-left: -6px; margin-right: -4px; }
+.q-row.dragging, .q-section.dragging { opacity: 0.45; }
+.q-row.drop-before { box-shadow: inset 0 3px 0 var(--brand-blue); }
+.q-row.drop-after { box-shadow: inset 0 -3px 0 var(--brand-blue); }
+.q-section.drop-before { box-shadow: 0 -4px 0 var(--brand-blue); }
+.q-section.drop-after { box-shadow: 0 4px 0 var(--brand-blue); }
