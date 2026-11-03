@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { update, useAppState } from '../../data/store'
 import { useDirty } from '../../data/dirty'
 import {
-  answeredCount, appendImported, BASIC_TYPES, cycleHasResponses, defaultOptions, directionsFromRules, isChoice,
+  answeredCount, appendImported, BASIC_TYPES, ctxFor, cycleHasResponses, defaultOptions, directionsFromRules, isChoice,
   newQuestion, newSection, parseQuestionTable, canImportQuestions, Q_COLUMNS, Q_REQUIRED, questionSetIds, RULE_TEXT, RULES, rulesOf, TYPE_TEXT, validateQuestion,
   type QUploadResult,
 } from '../../domain/questions'
@@ -745,15 +745,17 @@ function ScopeEditor({ cycle, v, onDup, onRemove, msg, setMsg }: { cycle: Cycle;
         </fieldset>
         {scope.mode === 'custom' && <>
           <PeoplePicker scope={scope} setScope={setScope} />
-          <fieldset className="scope-set"><legend>적용 직급</legend>
+          <fieldset className="scope-set"><legend>적용 직급 <span className="muted small">(평가받는 사람)</span></legend>
             <label className="check"><input type="checkbox" checked={scope.positions === 'all'} onChange={(e) => setScope({ ...scope, positions: e.target.checked ? 'all' : [] })} /> 전체 직급</label>
             {positions.map((p) => <label key={p.id} className="check"><input type="checkbox" disabled={scope.positions === 'all'} checked={scope.positions === 'all' || scope.positions.includes(p.id)} onChange={(e) => setScope({ ...scope, positions: toggle(scope.positions === 'all' ? [] : scope.positions, p.id, e.target.checked) })} /> {p.name}</label>)}
           </fieldset>
         </>}
       </div>
+      {/* D-122: 팀·직급·사람 조건은 평가받는 사람 기준 — 팀원→팀장평가는 평가받는 사람이 팀장(평가하는 팀원이 아님) */}
+      {scope.mode === 'custom' && scope.rules.includes('upward') && <p className="muted small scope-hint">팀·직급·사람은 <b>평가받는 사람</b> 기준이에요. 팀원→팀장평가는 평가받는 사람이 <b>팀장</b>이라, 직급을 고를 때 '팀장'을 넣어야 해요.</p>}
       {scope.mode === 'custom' && (
         <p className="scope-summary" role="status">
-          <b>적용 대상 {scopeTargets(cycle, scope).length}명</b>
+          <b>적용 대상(평가받는 사람) {scopeTargets(cycle, scope).length}명</b>
           <span className="muted"> · 이번 회차 참여자 중 {scope.employees ? `직접 선택 ${scope.employees.length}명` : scope.teams === 'all' ? '전체 팀' : `팀 ${scope.teams.length}개`}{scope.positions === 'all' ? '' : ` · 직급 ${scope.positions.length}개`} 조건을 모두 충족 · 적용 평가 {scope.rules.map((r) => RULE_TEXT[r]).join('·') || '없음'}</span>
         </p>
       )}
@@ -859,9 +861,13 @@ function Problems({ cycle }: { cycle: Cycle }) {
   const label = { conflict: '평가표 겹침(버전 선택 필요)', none: '적용할 평가표 없음', empty: '표시할 문항 0개' }
   const by = (k: VersionProblem['kind']) => probs.filter((p) => p.kind === k)
   const names = (ps: VersionProblem[]) => [...new Set(ps.map((p) => cycle.targets.find((t) => t.employeeId === p.a.targetId)?.name ?? '?'))]
+  // D-122: 어떤 평가(자기·팀원→팀장·팀장·임원)에서 생겼는지와 평가받는 사람을 함께 — 고칠 평가표를 바로 알 수 있게
+  const part = (ps: VersionProblem[]) => RULES.map((r) => ({ r, list: ps.filter((p) => ctxFor(cycle, p.a).rule === r) })).filter((x) => x.list.length)
+    .map(({ r, list }) => `${RULE_TEXT[r]} ${list.length}건 — 평가받는 사람 ${names(list).slice(0, 3).join(', ')}${names(list).length > 3 ? ' 등' : ''}`).join(' / ')
   return (
-    <p className="feedback fail version-problems" role="alert">
-      ⚠ 평가표 확인 필요 — {(['conflict', 'none', 'empty'] as const).filter((k) => by(k).length).map((k) => `${label[k]} ${by(k).length}건(${names(by(k)).slice(0, 3).join(', ')}${names(by(k)).length > 3 ? ' 등' : ''})`).join(' · ')}
-    </p>
+    <div className="feedback fail version-problems" role="alert">
+      <div>⚠ 평가표 확인 필요 — {(['conflict', 'none', 'empty'] as const).filter((k) => by(k).length).map((k) => `${label[k]}: ${part(by(k))}`).join(' · ')}</div>
+      {by('none').length > 0 && <div className="muted small">해당 평가에 쓸 평가표의 적용 범위를 확인하세요 — 팀·직급·사람 조건은 평가받는 사람 기준입니다(예: 팀원→팀장평가는 팀장). '모두에게 동일 적용'으로 두거나 조건에 그 사람을 넣고 적용하면 사라집니다.</div>}
+    </div>
   )
 }
