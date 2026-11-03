@@ -109,6 +109,7 @@ function Body({ s, cycle }: { s: AppState; cycle: Cycle }) {
         <div className="list-head" aria-live="polite">
           <h2>{title} · <b>{scope.length}</b>명</h2>
           {filtering && <span className="muted">표시 <b>{filtered.length}</b>명 / {scopeLabel} {scope.length}명</span>}
+          <span className="st-legend" aria-hidden><span><StatusIcon done /> 완료</span><span><StatusIcon done={false} /> 미완료</span><span><span className="na-dash">—</span> 해당 없음</span></span>
         </div>
         <div className="filters">
           <input type="search" placeholder="이름·팀·사번 검색" value={q} onChange={(e) => setQ(e.target.value)} aria-label="이름·팀·사번 검색" />
@@ -177,8 +178,14 @@ function Cell({ c }: { c: ProgressCell }) {
   return <RecvBadge status={c.status} />
 }
 function RecvBadge({ status }: { status: CellStatus }) {
-  if (status === 'unassigned') return <span className="chip stage todo" title="평가자 미지정 — 임원 평가 배정에서 담당을 정하세요">미지정</span> // 미완료로 셈 (D-087)
-  return status === 'submitted' ? <span className="chip stage done">✓ 완료</span> : <span className="chip stage todo">미완료</span>
+  if (status === 'unassigned') return <StatusIcon done={false} title="미완료 — 평가자 미지정(임원 평가 배정에서 담당을 정하세요)" /> // 미완료로 셈 (D-087)
+  return <StatusIcon done={status === 'submitted'} />
+}
+
+/** 완료 = 초록 원 안 ✓, 미완료 = 빨간 원 안 ✕ (D-115 — 글자 대신 아이콘, 이름은 화면 낭독·툴팁으로) */
+function StatusIcon({ done, title }: { done: boolean; title?: string }) {
+  const label = title ?? (done ? '완료' : '미완료')
+  return <span className={`st-ico ${done ? 'ok' : 'no'}`} role="img" aria-label={label} title={label}>{done ? '✓' : '✕'}</span>
 }
 
 /**
@@ -187,7 +194,7 @@ function RecvBadge({ status }: { status: CellStatus }) {
  */
 function Writes({ w }: { w: WriteSummary }) {
   if (w.total === 0) return <span className="na-dash" aria-label="배정 없음">—</span>
-  if (w.total === 1) return w.open ? <span className="chip stage todo">미완료</span> : <span className="chip stage done">✓ 완료</span>
+  if (w.total === 1) return <StatusIcon done={!w.open} />
   return (
     <span className={`writes-sum ${w.open ? 'open' : 'done'}`} aria-label={w.open ? `${w.total}건 중 ${w.done}건 완료, ${w.open}건 미완료` : undefined}>
       <span className="w-done">{w.done}/{w.total} 완료</span>

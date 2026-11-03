@@ -1403,3 +1403,13 @@ label.field, fieldset.field legend { font-size: 16px; }
 }
 @media (max-width: 360px) { .stats5.stats3 { grid-template-columns: repeat(2, minmax(0, 1fr)); } .stats5.stats3 .stat:first-child { min-height: 0; } }
 @media (max-width: 640px) { .progress-tbl { min-width: 860px; } } /* D-114: 팀원→팀장평가 열 추가 */
+/* D-115: 진행 현황 카드 3개 가운데 정렬(PC) · 완료/미완료 = 아이콘(초록 ✓ / 빨강 ✕) */
+.stats5.stats3 { justify-content: center; }
+.st-ico { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; font-size: 14px; font-weight: 900; line-height: 1; color: #fff; vertical-align: middle; flex: none; }
+.st-ico.ok { background: #1f9a55; box-shadow: 0 1px 3px rgba(31, 154, 85, 0.35); }
+.st-ico.no { background: #d8343b; box-shadow: 0 1px 3px rgba(216, 52, 59, 0.35); }
+.st-legend { margin-left: auto; display: inline-flex; gap: 14px; align-items: center; font-size: 14px; color: var(--text-sub); }
+.st-legend > span { display: inline-flex; align-items: center; gap: 6px; }
+.st-legend .st-ico { width: 20px; height: 20px; font-size: 11px; }
+@media (max-width: 640px) { .st-legend { margin-left: 0; width: 100%; gap: 12px; font-size: 13.5px; } }
+@media (forced-colors: active) { .st-ico { border: 1px solid CanvasText; } }
