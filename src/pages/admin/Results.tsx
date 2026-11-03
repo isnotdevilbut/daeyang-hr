@@ -7,7 +7,7 @@ import { cycleLabel } from '../../domain/cycle'
 import { fmt, latestAdjustment, personResult, type PersonResult } from '../../domain/scoring'
 import type { AdjustKind, Cycle, TargetSnapshot } from '../../domain/types'
 import { Forbidden } from '../../components/ui'
-import { positionsOf, targetPosition } from '../../domain/catalog'
+import { byTierThenName, targetPosition } from '../../domain/catalog'
 import { BulkDownload } from './ReportBulk'
 
 export function addAdjustment(cycleId: string, kind: AdjustKind, key: string, value: number | string | null, reason: string, by: string) {
@@ -33,13 +33,15 @@ export default function Results() {
         <h1>결과 · 리포트</h1>
         {cycle && (
           <div className="cycle-pick">
+            {/* D-169: 회차 왼쪽 전체 선택(모두 골라져 있으면 전체 해제) */}
+            {canReport && (() => { const all = cycle.targets.map((t) => t.employeeId); const full = all.length > 0 && all.every((id) => ids.includes(id)); return <button className="btn small" onClick={() => setIds(full ? [] : all)}>{full ? '전체 해제' : '전체 선택'}</button> })()}
             <label>
               <span className="pick-label">평가 회차</span>
               <select value={cycle.id} onChange={(e) => selectCycle(e.target.value)}>
                 {cycles.map((c) => <option key={c.id} value={c.id}>{cycleLabel(c)}</option>)}
               </select>
             </label>
-            {canReport && ids.length > 0 && <button className="btn primary small" onClick={() => setBulk(true)}>선택 항목 다운로드 ({ids.length}명)</button>}
+            {canReport && ids.length > 0 && <button className="btn primary small" onClick={() => setBulk(true)}>선택 항목 다운로드</button>}
           </div>
         )}
       </div>
@@ -55,12 +57,12 @@ function Body({ cycle, ids, setIds, pickable }: { cycle: Cycle; ids: string[]; s
   const depts = [...new Map(cycle.targets.map((t) => [t.departmentId, t.departmentName])).entries()]
   // 고정 순서(D-111): 팀 가나다순 → 팀 안에서 직급 목록 순서(임원·팀장·사원) → 이름순. 머리글 정렬 없음
   depts.sort((a, b) => a[1].localeCompare(b[1], 'ko'))
-  const posRank = (t: TargetSnapshot) => { const i = positionsOf(s).findIndex((p) => p.name === targetPosition(s, cycle, t)); return i < 0 ? 99 : i }
+  const order = byTierThenName(s, cycle) // 팀 안: 직급(임원 → 팀장 → 사원) → 이름 가나다순 (D-169)
   return (
     <>
       {depts.map(([deptId, deptName]) => {
         const targets = cycle.targets.filter((t) => t.departmentId === deptId)
-        const rows = targets.sort((a, b) => posRank(a) - posRank(b) || a.name.localeCompare(b.name, 'ko')).map((t) => ({ t, r: personResult(s, cycle, t.employeeId)! }))
+        const rows = targets.sort(order).map((t) => ({ t, r: personResult(s, cycle, t.employeeId)! }))
         const teamIds = rows.map((x) => x.t.employeeId)
         const n = teamIds.filter((id) => ids.includes(id)).length
         return (

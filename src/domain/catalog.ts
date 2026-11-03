@@ -109,6 +109,22 @@ export function targetPosition(s: S & Pick<AppState, 'employees'>, cycle: Pick<C
   return e ? positionName(s, e) : t.position
 }
 
+/**
+ * 결과·리포트의 팀 안 순서(D-169): 직급(임원 → 팀장 → 사원 — 직급의 평가 구분 기준, 같은 구분이면 직급 목록 순서) → 이름 가나다순.
+ * 직급을 찾을 수 없으면 맨 뒤
+ */
+export function byTierThenName(s: S & Pick<AppState, 'employees'>, cycle: Pick<Cycle, 'status'>) {
+  const list = positionsOf(s)
+  const CLS = ['임원', '팀장', '사원']
+  const rank = (t: { employeeId: ID; position: string }) => {
+    const i = list.findIndex((p) => p.name === targetPosition(s, cycle, t))
+    if (i < 0) return 9999
+    const c = CLS.indexOf(list[i].evalClass)
+    return (c < 0 ? 3 : c) * 1000 + i
+  }
+  return (a: { employeeId: ID; position: string; name: string }, b: { employeeId: ID; position: string; name: string }) => rank(a) - rank(b) || a.name.localeCompare(b.name, 'ko')
+}
+
 /** 회차 문항: 직무별 문항이 없으면(새 직무) 관리직 → 첫 번째 문항 */
 export const templateFor = (c: Pick<Cycle, 'templateByJob'>, job: ID): ID => c.templateByJob[job] ?? c.templateByJob.office ?? Object.values(c.templateByJob)[0]
 

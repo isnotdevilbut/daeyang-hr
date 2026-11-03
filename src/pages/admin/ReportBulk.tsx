@@ -2,8 +2,8 @@ import { useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useAppState } from '../../data/store'
 import { cycleLabel } from '../../domain/cycle'
-import type { Cycle, TargetSnapshot } from '../../domain/types'
-import { positionsOf, targetPosition } from '../../domain/catalog'
+import type { Cycle } from '../../domain/types'
+import { byTierThenName } from '../../domain/catalog'
 import { Modal } from '../../components/ui'
 import { templateXlsx } from '../../domain/xlsx'
 import { csvCell, evalParts, REPORT_HEAD, ReportSheet, reportHtml, reportRows, saveFile, sheetModel } from './Report'
@@ -23,10 +23,10 @@ export function BulkDownload({ cycle, ids, onClose }: { cycle: Cycle; ids: strin
   const [inc, setInc] = useState<Record<string, boolean>>({ self: true, lead: true, exec: true })
   const [kind, setKind] = useState<Kind>('xlsx')
   const on = (k: string) => { const g = k.split(':')[0]; return g in inc ? inc[g] : true }
-  // 파일 안 순서 = 결과 화면과 같은 고정 순서(팀 가나다 → 직급 목록 순서 → 이름, D-111)
+  // 파일 안 순서 = 결과 화면과 같은 고정 순서(팀 가나다 → 직급 → 이름, D-169)
   const targets = useMemo(() => {
-    const rank = (t: TargetSnapshot) => { const i = positionsOf(s).findIndex((p) => p.name === targetPosition(s, cycle, t)); return i < 0 ? 99 : i }
-    return cycle.targets.filter((t) => ids.includes(t.employeeId)).sort((a, b) => a.departmentName.localeCompare(b.departmentName, 'ko') || rank(a) - rank(b) || a.name.localeCompare(b.name, 'ko'))
+    const order = byTierThenName(s, cycle)
+    return cycle.targets.filter((t) => ids.includes(t.employeeId)).sort((a, b) => a.departmentName.localeCompare(b.departmentName, 'ko') || order(a, b))
   }, [s, cycle, ids])
   const sheets = targets.map((t) => { const parts = evalParts(s, cycle, t); return { t, parts, m: sheetModel(s, cycle, t, parts, on) } })
   const fileBase = `${cycleLabel(cycle)}_개인리포트_${targets.length}명`.replace(/[\\/:*?"<>|]/g, '_')
@@ -46,9 +46,9 @@ export function BulkDownload({ cycle, ids, onClose }: { cycle: Cycle; ids: strin
     saveFile(`${fileBase}.csv`, 'text/csv;charset=utf-8', '﻿' + [head, ...rows].map((r) => r.map(csvCell).join(',')).join('\r\n') + '\r\n')
   }
   return (
-    <Modal title={`선택 항목 다운로드 (${targets.length}명)`} onClose={onClose}>
+    <Modal title="선택 항목 다운로드" onClose={onClose}>
       <div className="bulk-dl">
-        <p className="muted small bulk-who">{targets.map((t) => t.name).join(', ')}</p>
+        <p className="muted small bulk-who"><b>{targets.length}명</b> · {targets.map((t) => t.name).join(', ')}</p>
         <fieldset className="bulk-set">
           <legend>포함 항목</legend>
           {GROUPS.map((g) => <label key={g.key} className="check"><input type="checkbox" checked={inc[g.key]} onChange={(e) => setInc({ ...inc, [g.key]: e.target.checked })} /> {g.label}</label>)}
