@@ -1497,3 +1497,8 @@ details[open] > summary > .toggle-ic { transform: rotate(180deg); }
 .catalog-tbl .count-toggle:hover { color: var(--brand-navy); background: rgba(9, 82, 158, 0.06); border: 0; }
 .catalog-tbl .count-toggle[aria-expanded='true'] { background: none; border: 0; color: var(--brand-navy); }
 .catalog-tbl input[type=text] { width: 100%; min-width: 120px; }
+/* D-145: 업로드 안내 = 항목별 짧은 줄(굵은 제목 + 설명) */
+.upload-guide { list-style: none; margin: 8px 0 14px; padding: 10px 14px; display: grid; gap: 6px; border-radius: 10px; background: var(--surface-tint, #f3f7fc); font-size: 14.5px; color: var(--text-sub); }
+.upload-guide li { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+.upload-guide b { min-width: 9.5em; color: var(--brand-navy); font-weight: 800; }
+@media (max-width: 640px) { .upload-guide b { min-width: 0; width: 100%; } }
