@@ -228,7 +228,7 @@ function Assignments({ cycle, locked, execDraft, setExecDraft, onSave, msg }: { 
                         onChange={() => {
                           const to = onAll ? '' : ex.id
                           const skipped = shown.filter((r) => fixed(r) && r.cur !== to && (to || r.cur === ex.id))
-                          if (setMany(pick, to) && skipped.length) setNote(`${tm}: 제출된 ${skipped.length}명(${skipped.map((r) => r.t.name).join(', ')})은 바꾸지 않았습니다.`)
+                          if (setMany(pick, to) && skipped.length) setNote(`${tm}: ${skipped.map((r) => r.t.name).join(', ')}은(는) 바꿀 수 없어 그대로 두었습니다.`)
                           else setNote('')
                         }} />
                       <button type="button" className="exec-team-toggle" aria-expanded={isOpen} onClick={() => setOpen((o) => ({ ...o, [key]: !o[key] }))}>
@@ -245,14 +245,13 @@ function Assignments({ cycle, locked, execDraft, setExecDraft, onSave, msg }: { 
                             <li key={r.t.employeeId} className={`${execDraft[r.t.employeeId] !== undefined ? 'changed' : ''} ${fixed(r) ? 'fixed' : ''}`}>
                               <label>
                                 {fixed(r) && on
-                                  // 이 임원이 제출한 평가: 체크 고정(회색 비활성 대신 진한 체크 + '제출'), 해제·이동 불가
-                                  ? <input type="checkbox" className="locked-on" checked readOnly aria-disabled="true" aria-label={`${ex.name} 담당 ${r.t.name} (제출, 변경 불가)`} onClick={(e) => e.preventDefault()} />
+                                  // 이 임원이 제출한 평가: 체크 고정(회색 비활성 대신 진한 체크), 해제·이동 불가
+                                  ? <input type="checkbox" className="locked-on" checked readOnly aria-disabled="true" aria-label={`${ex.name} 담당 ${r.t.name} (변경 불가)`} onClick={(e) => e.preventDefault()} />
                                   : <input type="checkbox" checked={on} disabled={lock} aria-label={`${ex.name} 담당 ${r.t.name}`} onChange={(e) => { setNote(''); setMany([r], e.target.checked ? ex.id : '') }} />}
                                 <b>{r.t.name}</b><span className="muted">{targetPosition(s, cycle, r.t)}</span>
                               </label>
-                              {fixed(r) && on && <span className="chip submitted tag">제출</span>}
-                              {fixed(r) && !on && <span className="muted small">{other} 제출</span>}
-                              {!fixed(r) && other && <span className="muted small">{other} 담당</span>}
+                              {/* D-163: '제출' 표시는 하지 않음(제출된 평가는 그대로 변경 불가 — 체크 고정) */}
+                              {other && <span className="muted small">{other} 담당</span>}
                               {!fixed(r) && !r.cur && <span className="chip unassigned tag">미지정</span>}
                               {r.st === 'draft' && on && execDraft[r.t.employeeId] === undefined && <span className="muted small">작성 중</span>}
                               {r.noLead && <span className="chip draft tag">팀장 설정 필요</span>}
