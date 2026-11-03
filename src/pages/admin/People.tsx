@@ -651,7 +651,7 @@ function FillUpload() {
           <ul className="ug-points">
             <li>열 순서는 상관없어요.</li>
             <li>파일에서 빈 칸인 곳은 원래 값이 그대로 남아요.</li>
-            <li>파일에 있는 새 열로 칼럼이 새로 생기지 않아요.</li>
+            <li>파일에 있는 새로운 열이 칼럼을 자동으로 만드는 건 방지했어요.</li>
             <li>팀·직급·직무는 여기서 바뀌지 않아요. 직원 목록의 '수정'에서 바꿔요.</li>
           </ul>
         </li>
@@ -757,10 +757,10 @@ function AddUpload() {
         <li><b>있으면 함께 등록</b> 직급 · 직무{cfs.length > 0 && <> · 추가한 칼럼({cfs.map((f) => f.name).join(' · ')})</>}</li>
         <li><b>알아 둘 점</b>
           <ul className="ug-points">
-            <li>직급 칸이 없거나 비어 있으면 <b className="em">사원</b>으로 등록돼요.</li>
-            <li>직무 칸이 없거나 비어 있으면 <b className="em">{activeJobs(s)[0]?.name ?? '첫 번째 직무'}</b>으로 등록돼요.</li>
+            <li>직급 칸이 없거나 비어 있으면 <b className="em">사원(임시)</b>으로 등록돼요.</li>
+            <li>직무 칸이 없거나 비어 있으면 <b className="em">{activeJobs(s)[0]?.name ?? '첫 번째 직무'}(임시)</b>으로 등록돼요.</li>
             <li>둘 다 나중에 직원 목록의 '수정'에서 바꿀 수 있어요.</li>
-            <li>열 순서는 상관없어요. 첫 줄의 열 이름(성명·사원번호·부서·소속 등)으로 찾아요.</li>
+            <li>열 순서는 상관없어요.</li>
           </ul>
         </li>
       </ul>
