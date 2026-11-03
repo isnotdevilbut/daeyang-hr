@@ -96,15 +96,13 @@ export default function EvalQuestions({ cycle }: { cycle: Cycle }) {
         <span className="spacer" />
         <button className="btn" onClick={() => setPreview(true)}>미리보기</button>
         <button className="btn" onClick={() => setImporting(true)}>엑셀·CSV 가져오기</button>
-        <button className="btn" onClick={() => mut((x) => { x.sections.push(newSection('새 영역')) })}>+ 영역 추가</button>
-        <button className="btn primary" disabled={t.sections.length === 0} onClick={() => setPicking({ sectionId: t.sections[t.sections.length - 1].id })}>+ 문항 추가</button>
       </div>
       {msg && <p className="feedback ok" role="status">✓ {msg}</p>}
       <PointsBar t={t} />
-      {t.sections.length === 0 && <div className="panel pad empty-start"><p>문항이 없습니다. 영역을 추가한 뒤 문항을 넣거나 엑셀·CSV로 가져오세요.</p></div>}
+      {t.sections.length === 0 && <div className="panel pad empty-start"><p>문항이 없습니다. 아래 '+ 영역 추가'로 영역을 만든 뒤 그 안에서 문항을 추가하거나 엑셀·CSV로 가져오세요.</p></div>}
 
       {t.sections.map((sec, si) => (
-        <section className="panel q-section" key={sec.id}>
+        <section className="panel q-section" key={sec.id} data-sec={sec.id}>
           <div className="q-sec-head">
             <input type="text" className="sec-title" aria-label="영역 이름" value={sec.title} onChange={(e) => mut((x) => { x.sections[si].title = e.target.value })} />
             <span className="muted">{sec.questions.filter((q) => q.active).length}문항</span>
@@ -153,6 +151,14 @@ export default function EvalQuestions({ cycle }: { cycle: Cycle }) {
           <div className="q-sec-foot"><button className="q-add" onClick={() => setPicking({ sectionId: sec.id })}>+ 이 영역에 문항 추가</button></div>
         </section>
       ))}
+      {/* D-126: 영역 추가는 문항 목록 맨 아래에서 — 새 영역이 생기면 그 영역으로 이동, 영역 안의 '+ 이 영역에 문항 추가'로 문항을 넣음 */}
+      <div className="q-add-sec">
+        <button className="btn soft" onClick={() => {
+          const sec = newSection('새 영역')
+          mut((x) => { x.sections.push(sec) })
+          requestAnimationFrame(() => { const el = document.querySelector<HTMLElement>(`[data-sec="${sec.id}"]`); el?.scrollIntoView({ behavior: 'smooth', block: 'center' }); el?.querySelector<HTMLInputElement>('input[type=text]')?.select() })
+        }}>+ 영역 추가</button>
+      </div>
 
       {picking && (
         <Modal title="문항 유형 선택" onClose={() => setPicking(null)}>

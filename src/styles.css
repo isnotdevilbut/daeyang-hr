@@ -1423,3 +1423,6 @@ label.field, fieldset.field legend { font-size: 16px; }
 .col-pick:hover { background: rgba(9, 82, 158, 0.08); color: var(--brand-navy); }
 .col-pick[aria-pressed='true'] { color: var(--brand-navy); }
 .col-pick:focus-visible { outline: 2px solid #20b8ca; outline-offset: 2px; }
+/* D-126: 문항 목록 맨 아래 영역 추가 */
+.q-add-sec { display: flex; justify-content: center; margin: 6px 0 24px; }
+.q-add-sec .btn { min-width: 200px; }

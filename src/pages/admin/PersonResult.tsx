@@ -240,7 +240,6 @@ function RecvList({ cycle, targetId }: { cycle: Cycle; targetId: string }) {
  */
 function WriteList({ cycle, evaluatorId }: { cycle: Cycle; evaluatorId: string }) {
   const s = useAppState()
-  const [view, setView] = useState<'all' | 'open' | 'done'>('all')
   const rows = activeWriteAssignments(cycle, s.employees)
     .concat(upwardAssignments(cycle, s.employees)) // 사원의 팀원→팀장평가(D-114)
     .filter((a) => a.evaluatorId === evaluatorId && a.direction !== 'self')
@@ -248,24 +247,17 @@ function WriteList({ cycle, evaluatorId }: { cycle: Cycle; evaluatorId: string }
     .filter((r) => !!r.t)
     // 미완료 먼저, 완료는 아래(D-093) — 같은 그룹 안에서는 팀·팀장 먼저·이름 순
     .sort((x, y) => Number(x.st === 'submitted') - Number(y.st === 'submitted') || x.t.teamName.localeCompare(y.t.teamName, 'ko') || Number(y.t.isTeamLead) - Number(x.t.isTeamLead) || x.t.name.localeCompare(y.t.name, 'ko'))
-  const done = rows.filter((r) => r.st === 'submitted').length
-  const shown = rows.filter((r) => view === 'all' || (view === 'done') === (r.st === 'submitted'))
-  const tabs = [['all', '전체', rows.length], ['open', '미완료', rows.length - done], ['done', '완료', done]] as const
+  const shown = rows // D-126: 전체·미완료·완료 개수 버튼 없이 모두 표시(미완료 먼저)
   return (
     <>
       <h2 id="write-title" className="section-title">담당 평가 현황</h2>
       <section className="panel recv-panel write-panel" aria-labelledby="write-title">
         {rows.length === 0 ? <p className="write-empty">배정된 평가 없음</p> : <>
-          <div className="write-tabs" role="group" aria-label="담당 평가 보기">
-            {tabs.map(([k, label, n]) => (
-              <button key={k} type="button" className={`write-tab ${view === k ? 'on' : ''}`} aria-pressed={view === k} onClick={() => setView(k)}>{label} <b>{n}</b></button>
-            ))}
-          </div>
           <div className="table-wrap">
             <table className="tbl write-tbl">
               <thead><tr><th>팀</th><th>직급</th><th>평가 대상자</th><th>상태</th></tr></thead>
               <tbody>
-                {shown.length === 0 ? <tr><td colSpan={4} className="empty-row">{view === 'done' ? '완료한 평가 없음' : '남은 평가 없음'}</td></tr> : shown.map((r) => (
+                {shown.map((r) => (
                   <tr key={r.a.id}>
                     <td>{r.t.teamName}</td>
                     <td>{targetPosition(s, cycle, r.t)}</td>
