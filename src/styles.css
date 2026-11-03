@@ -1492,3 +1492,8 @@ details[open] > summary > .toggle-ic { transform: rotate(180deg); }
 .emp-tbl .c-act { width: 170px; }
 .emp-tbl .btn.small.icon-btn { font-size: 13.5px; min-height: 34px; padding: 0 10px 0 9px; gap: 4px; }
 .emp-tbl .row-actions { gap: 6px; }
+/* D-144: 직무·직급 관리도 팀 관리와 같게 — 이름 칸 바로 고침, 인원 밑줄 글자, 명단 펼침 */
+.catalog-tbl .count-toggle { margin: 0 auto; min-height: 0; padding: 2px 4px; border: 0; border-radius: 4px; background: none; font-weight: 700; color: var(--brand-blue, #09529e); text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1.5px; }
+.catalog-tbl .count-toggle:hover { color: var(--brand-navy); background: rgba(9, 82, 158, 0.06); border: 0; }
+.catalog-tbl .count-toggle[aria-expanded='true'] { background: none; border: 0; color: var(--brand-navy); }
+.catalog-tbl input[type=text] { width: 100%; min-width: 120px; }

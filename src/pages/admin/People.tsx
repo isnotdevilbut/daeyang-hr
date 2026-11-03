@@ -452,6 +452,8 @@ function JobEditor() {
   const [err, setErr] = useState('')
   const [msg, setMsg] = useState('')
   const count = (j: JobDef) => jobUsage(s, j.id).filter((e) => e.active).length
+  const [open, setOpen] = useState<Set<string>>(new Set())
+  const toggle = (id: string) => setOpen((o) => { const n = new Set(o); if (n.has(id)) n.delete(id); else n.add(id); return n })
   const save = () => {
     if (!edit) return
     let e: string | null = null
@@ -477,22 +479,22 @@ function JobEditor() {
       </div>
       <div className="table-wrap" tabIndex={0}>
         <table className="tbl org-tbl catalog-tbl">
-          <thead><tr><th>직무</th><th>인원</th><th><span className="sr-only">수정·삭제</span></th></tr></thead>
+          <thead><tr><th>직무</th><th>인원</th><th>삭제</th></tr></thead>
           <tbody>
             {jobs.map((j) => [
               <tr key={j.id}>
-                {edit?.id === j.id ? <><td>{nameInput(`${j.name} 직무 이름`)}</td><td>{count(j)}명</td><td>{actions}</td></> : <>
-                  <td><b>{j.name}</b></td><td>{count(j)}명</td>
-                  <td><div className="row-actions">
-                    <button className="btn small" disabled={!!edit} onClick={() => { setEdit({ id: j.id, name: j.name }); setRemoving(null); setErr(''); setMsg('') }}>수정</button>
+                {/* D-144: 팀 관리와 같은 방식 — 이름은 칸에서 바로 고침(입력을 마치면 저장), 인원 = 밑줄 글자(누르면 명단), 수정 버튼 없음 */}
+                <td><InlineName label={`${j.name} 직무 이름`} value={j.name} onCommit={(name) => { let e: string | null = null; update((d) => { e = saveJob(d, j.id, name) }); if (e) { setErr(e); return false } setErr(''); setMsg(''); return true }} /></td>
+                <td><CountToggle n={count(j)} open={open.has(j.id)} controls={`job-m-${j.id}`} onClick={() => toggle(j.id)} /></td>
+                <td>
                     <button className="btn small danger" disabled={!!edit || jobs.length <= 1} title={jobs.length <= 1 ? '직무는 하나 이상 있어야 합니다' : undefined} onClick={() => {
                       setMsg(''); setErr('')
                       if (jobUsage(s, j.id).length) setRemoving({ id: j.id, to: '' })
                       else if (confirm(`'${j.name}' 직무를 삭제할까요?`)) remove(j, null)
                     }}>삭제</button>
-                  </div></td>
-                </>}
+                </td>
               </tr>,
+              open.has(j.id) && <MembersRow key={`${j.id}-m`} id={`job-m-${j.id}`} cols={3} list={jobUsage(s, j.id).filter((e) => e.active)} />,
               removing?.id === j.id && (
                 <tr key={`${j.id}-rm`} className="team-sub"><td colSpan={3}>
                   <div className="row team-move">
@@ -529,6 +531,8 @@ function PositionEditor() {
   const [err, setErr] = useState('')
   const [msg, setMsg] = useState('')
   const used = (p: PositionDef) => positionUsage(s, p.id).length
+  const [open, setOpen] = useState<Set<string>>(new Set())
+  const toggle = (id: string) => setOpen((o) => { const n = new Set(o); if (n.has(id)) n.delete(id); else n.add(id); return n })
   const save = () => {
     if (!edit) return
     const cls: EvalClass = (edit.id && positionById(s, edit.id)?.evalClass) || '사원'
@@ -560,22 +564,22 @@ function PositionEditor() {
       </div>
       <div className="table-wrap" tabIndex={0}>
         <table className="tbl org-tbl catalog-tbl">
-          <thead><tr><th>직급</th><th>인원</th><th><span className="sr-only">수정·삭제</span></th></tr></thead>
+          <thead><tr><th>직급</th><th>인원</th><th>삭제</th></tr></thead>
           <tbody>
             {list.map((p) => [
               <tr key={p.id}>
-                {edit?.id === p.id ? editRow(p) : <>
-                  <td><b>{p.name}</b></td><td>{positionUsage(s, p.id).filter((e) => e.active).length}명</td>
-                  <td><div className="row-actions">
-                    <button className="btn small" disabled={!!edit} onClick={() => { setEdit({ id: p.id, name: p.name }); setRemoving(null); setErr(''); setMsg('') }}>수정</button>
+                {/* D-144: 팀 관리와 같은 방식(이름 바로 고침·인원 밑줄·수정 버튼 없음). 평가 구분은 그대로 */}
+                <td><InlineName label={`${p.name} 직급 이름`} value={p.name} onCommit={(name) => { let e: string | null = null; update((d) => { e = savePosition(d, p.id, name, p.evalClass) }); if (e) { setErr(e); return false } setErr(''); setMsg(''); return true }} /></td>
+                <td><CountToggle n={positionUsage(s, p.id).filter((e) => e.active).length} open={open.has(p.id)} controls={`pos-m-${p.id}`} onClick={() => toggle(p.id)} /></td>
+                <td>
                     <button className="btn small danger" disabled={!!edit || !!p.builtIn} title={p.builtIn ? '기본 직급은 삭제할 수 없습니다' : undefined} onClick={() => {
                       setMsg(''); setErr('')
                       if (used(p)) setRemoving({ id: p.id, to: '' })
                       else if (confirm(`'${p.name}' 직급을 삭제할까요?`)) remove(p, null)
                     }}>삭제</button>
-                  </div></td>
-                </>}
+                </td>
               </tr>,
+              open.has(p.id) && <MembersRow key={`${p.id}-m`} id={`pos-m-${p.id}`} cols={3} list={positionUsage(s, p.id).filter((e) => e.active)} />,
               removing?.id === p.id && (
                 <tr key={`${p.id}-rm`} className="team-sub"><td colSpan={3}>
                   <div className="row team-move">
@@ -871,3 +875,34 @@ const MemoIcon = () => (
     <path d="M5.2 5.5h5.6M5.2 7.8h3.4" stroke="#a37c00" strokeWidth="1.1" strokeLinecap="round" />
   </svg>
 )
+
+/** 이름 바로 고치기(D-144, 팀 관리와 같은 칸) — 입력을 마치면(칸을 벗어나거나 Enter) 저장, 저장할 수 없으면(빈 이름·중복) 원래 이름으로 되돌림. Esc = 되돌림 */
+function InlineName({ label, value, onCommit }: { label: string; value: string; onCommit: (name: string) => boolean }) {
+  const [v, setV] = useState(value)
+  useEffect(() => setV(value), [value])
+  const commit = () => { if (v.trim() === value) { setV(value); return } if (!onCommit(v)) setV(value) }
+  return <input type="text" aria-label={label} value={v} onChange={(e) => setV(e.target.value)} onBlur={commit} onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') { setV(value); (e.target as HTMLInputElement).blur() } }} />
+}
+
+/** 인원 = 밑줄 글자(누르면 아래로 명단), 팀 관리와 같은 모양 */
+function CountToggle({ n, open, controls, onClick }: { n: number; open: boolean; controls: string; onClick: () => void }) {
+  return <button type="button" className="count-toggle" aria-expanded={open} aria-controls={controls} onClick={onClick}>{n}명</button>
+}
+
+/** 펼친 명단 — 팀 가나다순 → 임원·팀장·사원 → 이름순, 이름 옆에 팀 */
+function MembersRow({ id, cols, list }: { id: string; cols: number; list: Employee[] }) {
+  const s = useAppState()
+  const team = (e: Employee) => s.teams.find((t) => t.id === e.teamId)?.name ?? ''
+  const sorted = [...list].sort((a, b) => team(a).localeCompare(team(b), 'ko') || TIERS.indexOf(tierOf(s, a)) - TIERS.indexOf(tierOf(s, b)) || a.name.localeCompare(b.name, 'ko'))
+  return (
+    <tr id={id} className="team-sub">
+      <td colSpan={cols}>
+        {sorted.length === 0 ? <p className="muted team-empty">해당 직원이 없습니다.</p> : (
+          <ul className="team-members">
+            {sorted.map((m) => <li key={m.id}><b>{m.name}</b><span className="chip tag na">{team(m) || '팀 없음'}</span></li>)}
+          </ul>
+        )}
+      </td>
+    </tr>
+  )
+}
