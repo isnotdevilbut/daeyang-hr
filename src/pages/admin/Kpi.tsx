@@ -359,9 +359,9 @@ function BlendPanel({ cycle, editable }: { cycle: Cycle; editable: boolean }) {
  * 직급별 최종 반영 비율(D-103, 자문 예시) — 요소별 켜기·비율 입력·활성 합계 100% 검증·저장만 한다.
  * 점수에는 아직 적용하지 않음: 사원 '자기평가 80%'의 의미 미정(기존 계산 유지). 상향평가 — 팀장: 팀원→팀장평가는 있으나(D-114) 점수 반영 방식 미정, 임원: 팀장→임원 상향평가는 아직 없음(D-149)
  */
-const PART_TEXT: Record<FinalPart, string> = { personal: '자기평가(의미 미정)', self: '자기평가', kpi: '팀 KPI', upward: '상향평가' }
-/** 상향평가 표시(D-149): 팀장 = 팀원→팀장평가(있음, 반영 방식 미정), 임원 = 팀장→임원 상향평가(아직 없음 — 켤 수 없음) */
-const partLabel = (tier: keyof FinalBlendPlan, key: FinalPart) => key !== 'upward' ? PART_TEXT[key] : tier === 'lead' ? '팀원→팀장평가(반영 방식 미정)' : '팀장→임원 상향평가(아직 없음)'
+const PART_TEXT: Record<FinalPart, string> = { personal: '자기평가', self: '자기평가', kpi: '팀 KPI', upward: '상향평가' }
+/** D-153: 팀장(팀원→팀장평가)·임원(팀장→임원) 모두 '상향평가'로 표시. 임원 상향평가는 아직 없어 켤 수 없음(마우스를 올리면 안내) */
+const partLabel = (_tier: keyof FinalBlendPlan, key: FinalPart) => PART_TEXT[key]
 const TIER_TEXT = { member: '사원', lead: '팀장', exec: '임원' } as const
 function FinalPlan({ cycle, editable }: { cycle: Cycle; editable: boolean }) {
   const saved = cycle.finalBlendPlan ?? FINAL_BLEND_EXAMPLE()
@@ -379,7 +379,7 @@ function FinalPlan({ cycle, editable }: { cycle: Cycle; editable: boolean }) {
   return (
     <section className="final-plan open" aria-labelledby="fp-title">
       {/* D-149: 접기 없이 제목과 항목을 바로 표시 */}
-      <h3 id="fp-title" className="fp-title">직급별 최종 반영 비율 <span className="muted">자문 예시 · 적용 보류</span></h3>
+      <h3 id="fp-title" className="fp-title">직급별 최종 반영 비율</h3>
       <table className="tbl final-plan-tbl">
         <thead><tr><th>직급</th><th>반영 요소</th><th>활성 합계</th></tr></thead>
         <tbody>
@@ -391,7 +391,7 @@ function FinalPlan({ cycle, editable }: { cycle: Cycle; editable: boolean }) {
                 <td>
                   <div className="fp-items">
                     {d[tier].map((it, i) => (
-                      <label key={it.key} className="fp-item">
+                      <label key={it.key} className="fp-item" title={it.key === 'upward' && tier === 'exec' ? '팀장이 임원을 평가하는 상향평가는 아직 없어요' : undefined}>
                         <input type="checkbox" checked={it.on} disabled={!editable || (it.key === 'upward' && tier === 'exec')} onChange={(e) => setItem(tier, i, { on: e.target.checked })} />
                         {partLabel(tier, it.key)}
                         <input type="text" inputMode="decimal" aria-label={`${TIER_TEXT[tier]} ${PART_TEXT[it.key]} 비율`} disabled={!editable} value={it.pct ?? ''} onChange={(e) => setItem(tier, i, { pct: e.target.value === '' ? null : Number(e.target.value) })} />%
@@ -406,7 +406,6 @@ function FinalPlan({ cycle, editable }: { cycle: Cycle; editable: boolean }) {
         </tbody>
       </table>
       <div className="fp-foot">
-        <span className="muted small">사원 ‘자기평가’의 의미와 상향평가 반영 방식이 정해지기 전까지, 점수 계산은 위 ‘개인평가 반영’(기존 방식)을 사용합니다.</span>
         <span className="spacer" />
         {msg && <span className={`feedback ${msg.ok ? 'ok' : 'fail'}`} role={msg.ok ? 'status' : 'alert'}>{msg.ok ? '✓' : '✕'} {msg.text}</span>}
         <button className="btn small primary" disabled={!editable || !dirty} onClick={save}>저장</button>
