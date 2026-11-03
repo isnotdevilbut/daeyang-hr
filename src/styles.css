@@ -1413,3 +1413,5 @@ label.field, fieldset.field legend { font-size: 16px; }
 .st-legend .st-ico { width: 20px; height: 20px; font-size: 11px; }
 @media (max-width: 640px) { .st-legend { margin-left: 0; width: 100%; gap: 12px; font-size: 13.5px; } }
 @media (forced-colors: active) { .st-ico { border: 1px solid CanvasText; } }
+/* D-117: 여러 건 칸 — 남은 건이 있으면 빨강 대신 굵은 검정(모두 제출이면 초록 그대로) */
+.writes-sum.open { color: #14161f; font-weight: 800; }

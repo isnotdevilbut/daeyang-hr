@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAppState } from '../../data/store'
 import { useSelectedCycle } from '../../data/hooks'
@@ -82,6 +82,22 @@ function Body({ s, cycle }: { s: AppState; cycle: Cycle }) {
       progressFilter(r, pick, onlyOpen),
   )
   const openOn = pick?.kind === 'open'
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const [glow, setGlow] = useState<{ left: number; width: number; height: number } | null>(null)
+  // 테두리 = 첫 평가 열(자기평가) 왼쪽 ~ 마지막 평가 열(임원평가) 오른쪽, 높이 = 표 전체. 표·창 크기·필터가 바뀌면 다시 잼
+  useLayoutEffect(() => {
+    const wrap = wrapRef.current
+    if (!wrap) return
+    const measure = () => {
+      const a = openOn ? wrap.querySelector<HTMLElement>('th[data-col="1"]') : null
+      const z = openOn ? wrap.querySelector<HTMLElement>(`th[data-col="${STAGE_COLS.length}"]`) : null
+      const tbl = wrap.querySelector<HTMLElement>('table')
+      setGlow(a && z && tbl ? { left: a.offsetLeft + 1, width: z.offsetLeft + z.offsetWidth - a.offsetLeft - 2, height: tbl.offsetHeight } : null)
+    }
+    measure()
+    const ro = new ResizeObserver(measure); ro.observe(wrap); const tbl = wrap.querySelector('table'); if (tbl) ro.observe(tbl)
+    return () => ro.disconnect()
+  }, [openOn, filtered.length])
   // 미완료자 카드는 이미 미완료만 보여 주므로 "미완료만"은 적용된 것으로 표시(충돌 없음)
   const filtering = !!needle || !!tier || (onlyOpen && !openOn)
   const nameCount = new Map<string, number>()
@@ -93,7 +109,6 @@ function Body({ s, cycle }: { s: AppState; cycle: Cycle }) {
   const same = (p: CardPick) => JSON.stringify(p) === JSON.stringify(pick)
   const choose = (p: CardPick) => { clearFilters(); setPick(same(p) ? null : p) }
   const changeOnlyOpen = (v: boolean) => { setOnlyOpen(v); if (v && pick?.kind === 'complete') setPick(null) } // 완료 카드와 모순 → 해제
-  const title = pick?.kind === 'open' ? '미완료자' : pick?.kind === 'complete' ? '완료자' : '전체 대상자'
   const scopeLabel = pick?.kind === 'open' ? '미완료자' : pick?.kind === 'complete' ? '완료자' : '전체'
 
   return (
@@ -106,12 +121,8 @@ function Body({ s, cycle }: { s: AppState; cycle: Cycle }) {
       </div>
 
       <section className="panel" aria-label="직원별 진행 현황">
-        <div className="list-head" aria-live="polite">
-          <h2>{title} · <b>{scope.length}</b>명</h2>
-          {filtering && <span className="muted">표시 <b>{filtered.length}</b>명 / {scopeLabel} {scope.length}명</span>}
-          <span className="st-legend" aria-hidden><span><StatusIcon done /> 완료</span><span><StatusIcon done={false} /> 미완료</span><span><span className="na-dash">—</span> 해당 없음</span></span>
-        </div>
-        <div className="filters">
+        {/* D-117: 카드와 겹치는 '전체 대상자 · n명' 제목·범례 제거 — 검색·필터를 쓸 때만 표시 인원을 필터 줄에 */}
+        <div className="filters progress-filters">
           <input type="search" placeholder="이름·팀·사번 검색" value={q} onChange={(e) => setQ(e.target.value)} aria-label="이름·팀·사번 검색" />
           <select value={tier} onChange={(e) => setTier(e.target.value)} aria-label="직급">
             <option value="">전체 직급</option>
@@ -119,14 +130,17 @@ function Body({ s, cycle }: { s: AppState; cycle: Cycle }) {
           </select>
           <label className={`check ${openOn ? 'is-implied' : ''}`} title={openOn ? '미완료자 카드를 고르면 미완료자만 보입니다' : undefined}><input type="checkbox" checked={onlyOpen || openOn} disabled={openOn} onChange={(e) => changeOnlyOpen(e.target.checked)} /> 미완료만</label>
           <span className="spacer" />
+          {filtering && <span className="muted" aria-live="polite">표시 <b>{filtered.length}</b>명 / {scopeLabel} {scope.length}명</span>}
           {filtering && <button className="btn small" onClick={clearFilters}>필터 초기화</button>}
         </div>
-        <div className="table-wrap" tabIndex={0} aria-label="표가 넓으면 옆으로 밀어 보세요">
+        <div className="table-wrap" ref={wrapRef} tabIndex={0} aria-label="표가 넓으면 옆으로 밀어 보세요">
+          {/* 미완료자 카드 선택 시 평가 네 열(자기평가~임원평가)을 감싸는 글라스 그라데이션 테두리 한 장(D-117, D-086 방식) — 클릭 방해 없음 */}
+          <div className={`col-frame ${glow ? 'on' : ''}`} aria-hidden style={glow ? { transform: `translateX(${glow.left}px)`, width: glow.width, height: glow.height } : undefined} />
           <table className="tbl progress-tbl">
             <thead>
               <tr>
                 <th className="c-team">팀</th><th className="c-tier">직급</th><th className="c-name">이름</th>
-                {STAGE_COLS.map((h, i) => <th key={i} className="c-eval">{h}</th>)}
+                {STAGE_COLS.map((h, i) => <th key={i} data-col={i + 1} className="c-eval">{h}</th>)}
                 <th className="c-act"><span className="sr-only">상세</span></th>
               </tr>
             </thead>

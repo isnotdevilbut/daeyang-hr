@@ -3,6 +3,7 @@ import { scoringV16 } from './scoringV16'
 import { execPerTeam } from './execTeamsV17'
 import { upwardV18 } from './upward'
 import { joinAllStaff } from './joinAllV19'
+import { moreDemo } from './demoV20'
 import { rosterAndPaths } from './rosterV12'
 import { ensureCatalog } from './catalog'
 import { syncCycle } from './cycleSync'
@@ -19,7 +20,7 @@ import { createCycle, DEFAULT_TEMPLATE_BY_JOB, eligibleTargets } from './cycle'
 import { isUnlocked } from './progress'
 
 // v2: 상향평가 제외 / v3: 단계 반영 비율 회차별 / v4: KPI 지표·개인평가 반영. 이전 저장본은 data/migrate.ts에서 변환
-export const SCHEMA_VERSION = 19
+export const SCHEMA_VERSION = 20
 
 function rng(seed: number) {
   return () => {
@@ -61,7 +62,8 @@ export function displayAnswer(v: string): string {
 }
 
 /** legacy = 네 팀 정리 전의 이전 구조 그대로 (변환 테스트용) */
-export function createSeed(opts: { legacy?: boolean } = {}): AppState {
+/** until: 그 저장 구조 버전까지의 단계만(이전 버전 저장 데이터 시험용 — 화면은 항상 최신) */
+export function createSeed(opts: { legacy?: boolean; until?: number } = {}): AppState {
   const teams: Team[] = [
     { id: 'tm-plan', departmentId: 'd-a-mgmt', name: '경영기획팀', leadId: 'e04' },
     { id: 'tm-sales', departmentId: 'd-a-mgmt', name: '영업팀', leadId: 'e07' },
@@ -210,5 +212,7 @@ export function createSeed(opts: { legacy?: boolean } = {}): AppState {
   scoringV16(state) // 평가표 배점·팀장 자기평가표·반영 비율 20/40/40 (D-103) — 저장 데이터 변환과 같은 함수
   execPerTeam(state) // 임원 팀마다 한 명 (D-110) — 저장 데이터 변환과 같은 함수
   upwardV18(state) // 팀원→팀장평가 배정·시연 응답 (D-114) — 저장 데이터 변환과 같은 함수
+  if ((opts.until ?? SCHEMA_VERSION) < 20) { state.schemaVersion = opts.until!; return state }
+  moreDemo(state) // 시연 완료 비중 높임 (D-117) — 저장 데이터 변환과 같은 함수
   return state
 }

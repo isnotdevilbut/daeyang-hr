@@ -15,6 +15,7 @@ import { scoringV16 } from '../domain/scoringV16'
 import { execPerTeam } from '../domain/execTeamsV17'
 import { upwardV18 } from '../domain/upward'
 import { joinAllStaff } from '../domain/joinAllV19'
+import { moreDemo } from '../domain/demoV20'
 import { tierOf } from '../domain/org'
 
 export interface MigrationResult { state: AppState; notes: string[] }
@@ -208,7 +209,13 @@ export function migrate(raw: any): MigrationResult | null {
     s.schemaVersion = 19
   }
 
-  if (s.schemaVersion !== 19) return null
+  if (s.schemaVersion === 19) {
+    // v19 → v20 (D-117): 시연 완료 비중 높임 — 응답 없는(또는 시연 임시저장) 배정에만 시연 제출, 순차 잠금·시연 완료 구성 유지, 사용자 응답 그대로
+    notes.push(...moreDemo(s))
+    s.schemaVersion = 20
+  }
+
+  if (s.schemaVersion !== 20) return null
   return { state: s as AppState, notes }
 }
 
