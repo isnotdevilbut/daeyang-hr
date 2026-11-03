@@ -101,7 +101,8 @@ export default function EvalSettings({ cycle, onCreate, onSelect, part }: { cycl
   return (
     <>
       {/* 저장·되돌리기는 하위 탭 바로 아래 오른쪽, 스크롤해도 상단 내비게이션 아래에 붙어 보임 (D-080). 평가 복제·새 평가는 같은 줄 왼쪽 */}
-      <div className="tab-actions settings-bar">
+      {/* D-166: 평가 참여자(평가자 배정 탭)는 위쪽 저장·되돌리기 줄 없이 영역 제목 줄의 저장 버튼만 */}
+      {part === 'info' && <div className="tab-actions settings-bar">
         {part === 'info' && <>
           <button className="btn" onClick={() => confirmLeave() && setCloning(true)}>평가 복제</button>
           <button className="btn" onClick={() => confirmLeave() && onCreate()}>+ 새 평가</button>
@@ -112,7 +113,7 @@ export default function EvalSettings({ cycle, onCreate, onSelect, part }: { cycl
           <button className="btn" disabled={!dirty} onClick={() => { setF(initial); setMsg(null) }}>되돌리기</button>
           <button className="btn primary" disabled={!dirty} onClick={save}>저장</button>
         </div>
-      </div>
+      </div>}
       {part === 'info' && <section className="panel pad">
         <h2>기본 정보</h2>
         <div className="grid settings-grid">
@@ -141,6 +142,10 @@ export default function EvalSettings({ cycle, onCreate, onSelect, part }: { cycl
           {/* 참여 체크에만 적용 — 자기평가 설정은 그대로 */}
           <button className="btn small" disabled={locked} onClick={() => setF({ ...f, join: people.map((e) => e.id) })}>모두 선택</button>
           <button className="btn small" disabled={locked} onClick={() => setF({ ...f, join: [] })}>모두 해제</button>
+          {part === 'people' && <div className="sec-save">
+            {msg && <span className={`feedback ${msg.ok ? 'ok' : 'fail'}`} role={msg.ok ? 'status' : 'alert'}>{msg.ok ? '✓' : '✕'} {msg.text}</span>}
+            <button className="btn primary small" disabled={!dirty} onClick={save}>저장</button>
+          </div>}
         </div>
         {locked && <p className="muted">확정된 평가라 참여자를 바꿀 수 없습니다.</p>}
         {/* 실제 담당자가 없는 평가(팀장 없는 팀 등) — 임의 담당자를 만들지 않고 짧게 알림 (D-081) */}

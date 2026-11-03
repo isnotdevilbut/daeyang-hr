@@ -146,7 +146,6 @@ function Assignments({ cycle, locked, execDraft, setExecDraft, onSave, msg }: { 
   const s = useAppState()
   const [q, setQ] = useState('')
   const [team, setTeam] = useState('')
-  const [onlyFree, setOnlyFree] = useState(false)
   const [note, setNote] = useState('') // 팀 전체 선택이 제출된 평가 때문에 일부만 반영됐을 때 짧은 안내
   const [open, setOpen] = useState<Record<string, boolean>>({}) // `${임원}|${팀}` → 펼침 (선택과 무관)
   const execs = cycleExecs(s, cycle)
@@ -165,7 +164,7 @@ function Assignments({ cycle, locked, execDraft, setExecDraft, onSave, msg }: { 
   type Row = (typeof rows)[number]
   const teams = [...new Set(rows.map((r) => r.t.teamName))]
   const qq = q.trim()
-  const visible = (r: Row) => (!team || r.t.teamName === team) && (!qq || r.t.name.includes(qq) || r.t.teamName.includes(qq)) && (!onlyFree || !r.cur)
+  const visible = (r: Row) => (!team || r.t.teamName === team) && (!qq || r.t.name.includes(qq) || r.t.teamName.includes(qq))
   const unassigned = rows.filter((r) => !r.cur)
   const fixed = (r: Row) => r.st === 'submitted'
   /** 여러 대상자를 한 번에 바꾸기 — 다른 임원 담당·작성 중 평가는 한 번 확인. 제출된 평가는 건너뜀 */
@@ -202,7 +201,7 @@ function Assignments({ cycle, locked, execDraft, setExecDraft, onSave, msg }: { 
           <option value="">전체 팀</option>
           {teams.map((x) => <option key={x}>{x}</option>)}
         </select>
-        <label className="check"><input type="checkbox" checked={onlyFree} onChange={(e) => setOnlyFree(e.target.checked)} /> 미지정만</label>
+        {/* D-166: '미지정만' 거르기 제거 */}
       </div>
       {unassigned.length > 0 && <p className="exec-free-note">미지정: {unassigned.map((r) => r.t.name).join(', ')} <span className="muted">— 담당 임원을 체크하기 전까지 임원평가 미완료</span></p>}
       {note && <p className="exec-free-note exec-note" role="status">{note}</p>}
@@ -217,7 +216,7 @@ function Assignments({ cycle, locked, execDraft, setExecDraft, onSave, msg }: { 
                 const shown = all.filter(visible)
                 if (!shown.length) return null
                 const key = `${ex.id}|${tm}`
-                const isOpen = !!open[key] || !!qq || onlyFree
+                const isOpen = !!open[key] || !!qq
                 const sel = all.filter((r) => r.cur === ex.id).length
                 const pick = shown.filter((r) => !fixed(r) || r.cur === ex.id) // 팀 전체 선택 대상: 보이는 사람만, 다른 임원에게 제출된 평가 제외
                 // 팀 체크(D-087): 보이는 팀원이 모두 이 임원 담당일 때만 체크, 일부·없음은 빈 칸(부분 표시 없음 — 인원은 'n/m명'으로)
