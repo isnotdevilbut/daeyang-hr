@@ -232,7 +232,6 @@ export function ReportSheet({ s, cycle, parts, m }: { s: AppState; cycle: Cycle;
           <table><tbody>
             {on('scores.base') && <tr><th>개인 평가 점수</th><td>{r.combined.base === null ? '미완료' : fmt(r.combined.base)}</td></tr>}
             {on('scores.kpi') && <tr><th>팀 KPI</th><td>{r.kpi === null ? '—' : `${fmt(r.kpi)} (${r.combined.kpiApplied ? `반영 ${r.kpiBlend.kpi}%` : '미반영'})`}</td></tr>}
-            {on('scores.kpi') && r.kpiBlend.enabled && <tr><th>KPI 반영 후 점수</th><td>{r.combined.kpiApplied && r.combined.afterKpi !== null ? fmt(r.combined.afterKpi) : '—'}</td></tr>}
             {on('scores.final') && <>
               <tr><th>팀 보정</th><td>{fmtSigned(r.dept)}</td></tr>
               <tr><th>개인 보정</th><td>{fmtSigned(r.person)}</td></tr>

@@ -74,7 +74,7 @@ function Body({ cycle, ids, setIds, pickable }: { cycle: Cycle; ids: string[]; s
                       onChange={(e) => setIds(e.target.checked ? [...new Set([...ids, ...teamIds])] : ids.filter((id) => !teamIds.includes(id)))} /></th>}
                     <th className="c-team">팀</th><th className="c-pos">직급</th><th className="c-name">이름</th>
                     <th className="num c-score">개인 평가 점수</th>
-                    {kpiOn && <><th className="num c-score">팀 KPI</th><th className="num c-score">KPI 반영 후 점수</th></>}
+                    {kpiOn && <th className="num c-score">팀 KPI</th>}{/* D-168: 'KPI 반영 후 점수' 열 제거 — 최종 점수와 겹침 */}
                     <th className="num c-score">최종 점수</th><th className="center c-grade">최종 등급</th>
                     <th className="c-btn"><span className="sr-only">상세</span></th><th className="c-btn"><span className="sr-only">리포트</span></th>
                   </tr>
@@ -105,9 +105,8 @@ function ResultRow({ cycle, t, r, kpiOn, pick }: { cycle: Cycle; t: TargetSnapsh
       <td className="num">{c.base !== null ? fmt(c.base) : <Pending text={baseState} />}</td>
       {kpiOn && (
         <>
-          {/* KPI는 팀별 선택 항목(D-074): 유효한 KPI가 없으면 —, 실제로 반영해 계산한 경우에만 반영 후 점수 */}
+          {/* KPI는 팀별 선택 항목(D-074): 유효한 KPI가 없으면 — */}
           <td className="num">{r.kpi !== null ? fmt(r.kpi) : <span className="na-dash" aria-label="없음">—</span>}</td>
-          <td className="num">{c.kpiApplied && c.afterKpi !== null ? fmt(c.afterKpi) : <span className="na-dash" aria-label="없음">—</span>}</td>
         </>
       )}
       <td className="num final">{c.final !== null ? fmt(c.final) : <span className="muted">—</span>}</td>

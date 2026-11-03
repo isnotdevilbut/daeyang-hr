@@ -345,7 +345,7 @@ function BlendPanel({ cycle, editable }: { cycle: Cycle; editable: boolean }) {
         </div>
         {/* 계산식: 적용 오른쪽 남는 공간(D-095) — 좁으면 다음 줄, 길면 이 칸 안에서 줄바꿈 */}
         {on && pv !== null && kv !== null && Number.isFinite(pv) && Number.isFinite(kv) && (
-          <p className="bl-g formula">KPI 반영 후 점수 = 개인평가 기초 점수 × {pv}% + 팀 KPI 점수 × {kv}%</p>
+          <p className="bl-g formula">최종 점수(보정 전) = 개인평가 기초 점수 × {pv}% + 팀 KPI 점수 × {kv}%</p>
         )}
       </div>
       {/* 적용 결과는 설정 줄 아래 짧게 — 계산식·입력 위치를 밀지 않음 */}
