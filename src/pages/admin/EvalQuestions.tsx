@@ -4,7 +4,7 @@ import { update, useAppState } from '../../data/store'
 import { useDirty } from '../../data/dirty'
 import {
   answeredCount, appendImported, BASIC_TYPES, ctxFor, cycleHasResponses, defaultOptions, directionsFromRules, isChoice,
-  newQuestion, newSection, parseQuestionTable, canImportQuestions, Q_COLUMNS, Q_REQUIRED, questionSetIds, RULE_TEXT, RULES, rulesOf, TYPE_TEXT, validateQuestion,
+  newQuestion, newSection, parseQuestionTable, questionBlocks, canImportQuestions, Q_COLUMNS, Q_REQUIRED, questionSetIds, RULE_TEXT, RULES, rulesOf, TYPE_TEXT, validateQuestion,
   type QUploadResult,
 } from '../../domain/questions'
 import { type AnswerValue, type Cycle, type EvaluatorRule, type JobType, type Lang, type Question, type QuestionTr, type QuestionType, type Section, type Template } from '../../domain/types'
@@ -458,7 +458,7 @@ function PreviewFlow({ rule, sections, frameRef }: { rule: EvaluatorRule; sectio
   )
 }
 
-type QLoaded = { file: string; sheets: Sheet[]; sheet: number }
+type QLoaded = { file: string; sheets: Sheet[]; sheet: number; block: number | null }
 
 /**
  * 문항 일괄 업로드(D-118) — 조직 관리 명단 업로드와 같은 흐름: 파일 선택(.xlsx/.csv, 여러 시트면 시트 선택) → 표 미리보기·행별 검증 →
@@ -471,13 +471,22 @@ function Import({ cycle, t, onClose, onDone, mut }: { cycle: Cycle; t: Template;
   const [mode, setMode] = useState<'append' | 'replace'>('append')
   const [inputKey, setInputKey] = useState(0)
   const hasResp = cycleHasResponses(s, cycle)
-  // 적용평가 칸이 비었을 때: 팀원→팀장평가만 쓰는 평가표면 팀원→팀장평가, 그 외 자기평가(문항 추가와 같은 기본값)
+  // 적용평가 칸이 비었을 때 = 이 평가표 버전의 적용 평가(예: 팀원→팀장 평가표 → 팀원→팀장평가, 팀장 자기평가표 → 자기평가). 버전이 없으면 자기평가
   const v = cycle.versions?.find((x) => x.templateId === t.id)
-  const defRules: EvaluatorRule[] = v && v.scope.rules.length === 1 && v.scope.rules[0] === 'upward' ? ['upward'] : ['self']
-  const table = loaded?.sheets[loaded.sheet]?.rows ?? null
+  const defRules: EvaluatorRule[] = v?.scope.rules.length ? [...v.scope.rules] : ['self']
+  // 한 시트에 표가 여러 개면(D-123) 표 제목으로 고름 — 처음엔 이 평가표에 맞는 표(팀원→팀장 → '상향', 팀장 자기평가 → '본인·자기')
+  const blocks = loaded ? questionBlocks(loaded.sheets[loaded.sheet]?.rows ?? []) : []
+  const guess = () => {
+    const want = defRules.includes('upward') ? /상향|팀원|부하/ : /본인|자기/
+    const i = blocks.findIndex((b) => want.test(b.title))
+    return i >= 0 ? i : 0
+  }
+  const blockIdx = loaded ? Math.min(loaded.block ?? guess(), Math.max(0, blocks.length - 1)) : 0
+  const table = loaded ? blocks[blockIdx]?.table ?? null : null
+  const offset = blocks[blockIdx]?.offset ?? 0
   // 이 평가표 버전의 적용 평가와 겹치지 않는 문항은 어디에도 보이지 않으므로 행 오류로(예: 공통 평가표에 팀원→팀장평가 문항)
   const res: QUploadResult | null = table ? (() => {
-    const r = parseQuestionTable(table, defRules)
+    const r = parseQuestionTable(table, defRules, offset)
     const scope = v?.scope.rules
     if (scope?.length) for (const row of r.rows) {
       const q = row.question
@@ -492,7 +501,7 @@ function Import({ cycle, t, onClose, onDone, mut }: { cycle: Cycle; t: Template;
     if (!f) return
     const r = await readRosterFile(f.name, new Uint8Array(await f.arrayBuffer())) // 명단 업로드와 같은 파일 읽기(XLSX 직접 해석·CSV 글자 판별)
     if (!r.ok) return setReadErr(r.error)
-    setLoaded({ file: f.name, sheets: r.sheets, sheet: 0 })
+    setLoaded({ file: f.name, sheets: r.sheets, sheet: 0, block: null })
   }
   const apply = () => {
     if (!res || !canImportQuestions(res)) return
@@ -516,8 +525,15 @@ function Import({ cycle, t, onClose, onDone, mut }: { cycle: Cycle; t: Template;
           <span className="muted">{loaded ? loaded.file : '엑셀(.xlsx) 또는 CSV(.csv)'}</span>
           {loaded && loaded.sheets.length > 1 && (
             <label className="row sheet-pick">시트
-              <select value={loaded.sheet} onChange={(e) => setLoaded({ ...loaded, sheet: Number(e.target.value) })}>
+              <select value={loaded.sheet} onChange={(e) => setLoaded({ ...loaded, sheet: Number(e.target.value), block: null })}>
                 {loaded.sheets.map((sh, i) => <option key={i} value={i}>{sh.name}</option>)}
+              </select>
+            </label>
+          )}
+          {blocks.length > 1 && (
+            <label className="row sheet-pick">표
+              <select aria-label="가져올 표" value={blockIdx} onChange={(e) => setLoaded({ ...loaded!, block: Number(e.target.value) })}>
+                {blocks.map((b, i) => <option key={i} value={i}>{b.title}</option>)}
               </select>
             </label>
           )}
@@ -532,6 +548,7 @@ function Import({ cycle, t, onClose, onDone, mut }: { cycle: Cycle; t: Template;
               <span className={bad.length ? 'err' : ''}>오류 <b>{bad.length}</b>행</span>
               {res.ignored.length > 0 && <span className="muted">쓰지 않는 열(등록 안 함): {res.ignored.join(', ')}</span>}
             </div>
+            {res.notes?.map((n, i) => <p key={i} className="muted small q-note">{n}</p>)}
             <fieldset className="sub-settings">
               <legend>가져오기 방식</legend>
               <label className="check"><input type="radio" name="qmode" checked={mode === 'append'} onChange={() => setMode('append')} /> 추가 (기존 문항 뒤에, 같은 이름의 영역에 넣음)</label>

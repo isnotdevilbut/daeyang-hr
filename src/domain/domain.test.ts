@@ -2795,3 +2795,54 @@ describe('장현우 팀원→팀장평가 5/6 (D-121)', async () => {
     expect(leadUpwardOpen(u)).toEqual([])
   })
 })
+
+describe('구분·배점·평가내용 표(영역 표)·한 시트 여러 표 (D-123)', async () => {
+  const Q = await import('./questions')
+  const P = await import('./points')
+  const X = await import('./xlsx')
+  const R = await import('./roster')
+  const SHEET = [
+    ['', '', ''], ['팀장 본인평가 예시', '', ''], ['', '', ''],
+    ['구분', '배점', '평가내용'],
+    ['업무성과', '30', '부서 목표 달성도, 업무 추진실적, 성과 창출 및 개선실적'],
+    ['리더십 및\n조직관리', '25', '업무분장, 구성원 지도·육성, 갈등 조정, 조직 운영능력'],
+    ['직무역량 및\n의사결정', '20', '직무 전문성, 문제해결 능력, 상황 판단 및 의사결정의 적절성'],
+    ['책임감 및\n규정준수', '15', '관리자로서의 책임 이행, 회사규정 준수, 리스크 예방 및 대응'],
+    ['협업 및 조\n직기여', '10', '타 부서 협력, 경영방침 이행, 조직 전체의 목표 달성 기여'],
+    ['합계', '100', ''], ['', '', ''],
+    ['임원 및 팀장 상향평가 예시', '', ''], ['', '', ''],
+    ['구분', '배점', '평가내용'],
+    ['업무지시 및\n관리능력', '25', '업무지시의 명확성, 업무분장의 적정성, 업무 진행상황 관리'],
+    ['리더십 및\n의사결정', '25', '문제해결 능력, 합리적인 의사결정, 책임 있는 업무처리'],
+    ['소통 및 피\n드백', '20', '구성원 의견 경청, 원활한 의사소통, 적절한 업무지도 및 피드백'],
+    ['공정성 및\n신뢰성', '20', '구성원에 대한 공정한 대우, 객관적인 업무평가, 일관된 원칙 적용'],
+    ['조직문화 및\n협업', '10', '상호존중, 갈등관리, 협력적인 근무환경 조성'],
+    ['합계', '100', ''],
+  ]
+  it('엑셀 한 시트의 두 표 → 표 제목으로 나눔, 한 줄 = 영역(배점 = 영역 배점, 평가내용 = 5점 척도 문항·설명), 합계 줄 제외·확인', async () => {
+    const r = await R.readRosterFile('평가표.xlsx', X.templateXlsx('평가표', SHEET[0], SHEET.slice(1)))
+    const blocks = Q.questionBlocks((r as any).sheets[0].rows)
+    expect(blocks.map((b) => b.title)).toEqual(['팀장 본인평가 예시', '임원 및 팀장 상향평가 예시'])
+    const self = Q.parseQuestionTable(blocks[0].table, ['self'])
+    expect(Q.canImportQuestions(self)).toBe(true)
+    expect(self.rows.map((x) => [x.section, x.sectionPoints, x.question!.type, x.question!.purpose])).toEqual([
+      ['업무성과', 30, 'scale5', 'score'], ['리더십 및 조직관리', 25, 'scale5', 'score'], ['직무역량 및 의사결정', 20, 'scale5', 'score'], ['책임감 및 규정준수', 15, 'scale5', 'score'], ['협업 및 조 직기여', 10, 'scale5', 'score'],
+    ])
+    expect(self.rows[0].question!.title).toBe('부서 목표 달성도, 업무 추진실적, 성과 창출 및 개선실적')
+    expect(self.rows[0].question!.points).toBeUndefined() // 문항 배점 아님
+    expect(self.notes!.join()).toContain('합계 줄 100점 = 배점 합 100점')
+    const t: any = { sections: [] }
+    Q.appendImported(t, self.rows)
+    expect(t.sections.map((x: any) => [x.title, x.points, x.desc, x.questions.length])).toEqual(self.rows.map((x) => [x.section, x.sectionPoints, x.question!.title, 1]))
+    expect(P.usesPoints(t)).toBe(true)
+    expect(P.pointsErrors(t)).toEqual([])
+    const up = Q.parseQuestionTable(blocks[1].table, ['upward'])
+    expect(up.rows.map((x) => x.sectionPoints)).toEqual([25, 25, 20, 20, 10])
+    expect(up.rows.every((x) => x.question!.rules!.join() === 'upward')).toBe(true)
+  })
+  it('합계가 배점 합과 다르면 안내(막지는 않음)', () => {
+    const res = Q.parseQuestionTable([['구분', '배점', '평가내용'], ['A', '60', 'a'], ['B', '30', 'b'], ['합계', '100', '']])
+    expect(Q.canImportQuestions(res)).toBe(true)
+    expect(res.notes!.join()).toContain('다릅니다')
+  })
+})

@@ -151,7 +151,7 @@ export function weightSum(stages: { order: number }[], w: Record<number, number 
 
 // ── 문항 일괄 업로드 (엑셀 .xlsx / CSV, D-118 — 조직 관리 명단 업로드와 같은 흐름) ─────────────
 // 파일 → 표(첫 번째로 비어 있지 않은 행 = 머리글, 열 이름으로 찾아 순서 무관) → 행마다 검증 → 오류가 하나라도 있으면 아무것도 넣지 않음
-export const Q_COLUMNS = ['영역', '질문', '유형', '필수', '선택지', '선택지점수', '적용평가', '배점', '도움말'] as const
+export const Q_COLUMNS = ['영역', '질문', '유형', '필수', '선택지', '선택지점수', '적용평가', '배점', '영역배점', '도움말'] as const
 /** 꼭 있어야 하는 열은 질문 하나(D-120). 영역이 없으면 '미분류', 유형이 없으면 선택지가 있으면 단일선택·없으면 긴 서술형 — 문항 관리에서 나중에 고침 */
 export const Q_REQUIRED = ['질문'] as const
 export const Q_DEFAULT_SECTION = '미분류'
@@ -160,6 +160,7 @@ const Q_HEADER_ALIAS: Record<string, string> = {
   평가영역: '영역', 평가항목: '영역', 항목: '영역', 구분: '영역', 영역명: '영역',
   문항: '질문', 문항내용: '질문', 질문내용: '질문', 평가내용: '질문', 내용: '질문',
   문항유형: '유형', 응답유형: '유형', 형식: '유형', 응답방식: '유형',
+  영역배점: '영역배점', 영역점수: '영역배점',
   필수여부: '필수', 보기: '선택지', 선택항목: '선택지', 점수: '선택지점수', 적용: '적용평가', 평가유형: '적용평가', 문항배점: '배점', 설명: '도움말', 안내: '도움말',
 }
 export const Q_MAX_ROWS = 500
@@ -189,8 +190,8 @@ export function splitCsvLine(line: string): string[] {
   return out
 }
 
-export interface QRow { line: number; section: string; question: Question | null; errors: string[]; /** 막지 않는 안내(기본값으로 채운 영역·유형) */ notes?: string[] }
-export interface QUploadResult { headerError: string | null; ignored: string[]; rows: QRow[] }
+export interface QRow { line: number; section: string; question: Question | null; errors: string[]; /** 막지 않는 안내(기본값으로 채운 영역·유형) */ notes?: string[]; /** 영역 배점·설명(D-123: 구분·배점·평가내용 표) */ sectionPoints?: number | null; sectionDesc?: string }
+export interface QUploadResult { headerError: string | null; ignored: string[]; rows: QRow[]; /** 표 전체 안내(합계 확인 등) */ notes?: string[] }
 
 /** CSV 글자(붙여넣기·이전 호환) → 표 → 검증 */
 export function parseQuestionCsv(text: string, defaultRules?: EvaluatorRule[]): QUploadResult {
@@ -199,7 +200,7 @@ export function parseQuestionCsv(text: string, defaultRules?: EvaluatorRule[]): 
 
 const hnorm = (h: string) => { const k = h.replace(/^﻿/, '').replace(/[\s*]/g, ''); return Q_HEADER_ALIAS[k] ?? k }
 /** 표(엑셀 시트·CSV) → 문항 행. defaultRules = 적용평가 칸이 비었을 때(없으면 자기평가) — 팀원→팀장 평가표면 팀원→팀장평가 */
-export function parseQuestionTable(table: string[][], defaultRules: EvaluatorRule[] = ['self']): QUploadResult {
+export function parseQuestionTable(table: string[][], defaultRules: EvaluatorRule[] = ['self'], lineOffset = 0): QUploadResult {
   const hi = table.findIndex((r) => r.some((c) => (c ?? '').trim()))
   if (hi < 0) return { headerError: '빈 파일입니다.', ignored: [], rows: [] }
   const header = table[hi].map((h) => hnorm(h ?? ''))
@@ -208,10 +209,19 @@ export function parseQuestionTable(table: string[][], defaultRules: EvaluatorRul
   const miss = Q_REQUIRED.filter((c) => !header.includes(c))
   if (miss.length) return { headerError: `필수 열이 없습니다: ${miss.join(', ')}`, ignored: [], rows: [] }
   const ignored = table[hi].map((h) => (h ?? '').trim()).filter((h, i) => h && !(Q_COLUMNS as readonly string[]).includes(header[i]))
-  const body = table.slice(hi + 1).map((c, i) => ({ c, line: hi + i + 2 })).filter(({ c }) => c.some((x) => (x ?? '').trim()))
+  // 행 번호 = 시트의 실제 행(표가 여러 개면 그 표의 시작 위치만큼)
+  const body = table.slice(hi + 1).map((c, i) => ({ c, line: lineOffset + hi + i + 2 })).filter(({ c }) => c.some((x) => (x ?? '').trim()))
   if (body.length > Q_MAX_ROWS) return { headerError: `한 번에 ${Q_MAX_ROWS}행까지 올릴 수 있습니다.`, ignored, rows: [] }
-  const col = (cells: string[], k: string) => (header.includes(k) ? (cells[header.indexOf(k)] ?? '').trim() : '')
-  const rows = body.map(({ c, line }): QRow => {
+  const col = (cells: string[], k: string) => (header.includes(k) ? (cells[header.indexOf(k)] ?? '').replace(/\s*\n\s*/g, ' ').trim() : '')
+  // D-123: '합계' 줄은 문항이 아님 — 영역 배점 합과 맞는지만 확인
+  const TOTAL = ['합계', '계', '총계', '소계', '총점']
+  const isTotal = (c: string[]) => TOTAL.includes(col(c, '영역').replace(/\s/g, '')) && !col(c, '질문')
+  const totals = body.filter(({ c }) => isTotal(c)).map(({ c }) => Number(col(c, '배점') || col(c, '영역배점')))
+  const items = body.filter(({ c }) => !isTotal(c))
+  // 영역 표(구분·배점·평가내용 — 영역마다 한 줄): 배점 = 영역 배점, 평가내용 = 그 영역의 5점 척도 문항·영역 설명(팀장 자기평가표와 같은 구조)
+  const secNames = items.map(({ c }) => col(c, '영역')).filter(Boolean)
+  const areaMode = header.includes('배점') && !header.includes('영역배점') && secNames.length === items.length && new Set(secNames).size === secNames.length && items.length > 0
+  const rows = items.map(({ c, line }): QRow => {
     const errors: string[] = []
     const notes: string[] = []
     const title = col(c, '질문')
@@ -219,9 +229,11 @@ export function parseQuestionTable(table: string[][], defaultRules: EvaluatorRul
     let section = col(c, '영역')
     if (!section) { section = Q_DEFAULT_SECTION; notes.push(`영역 없음 → '${Q_DEFAULT_SECTION}'`) }
     const typeRaw = col(c, '유형')
+    const scored = !!(col(c, '배점') || col(c, '영역배점'))
     let type: QuestionType | undefined = TYPE_ALIAS[typeRaw.replace(/\s+/g, ' ')] ?? TYPE_ALIAS[typeRaw.replace(/\s/g, '')]
     if (!type) {
-      type = col(c, '선택지').split('|').filter((x) => x.trim()).length >= 2 ? 'single' : 'long'
+      // 배점이 있으면 점수 문항(5점 척도), 선택지가 2개 이상이면 단일선택, 그 외 긴 서술형
+      type = col(c, '선택지').split('|').filter((x) => x.trim()).length >= 2 ? 'single' : scored ? 'scale5' : 'long'
       notes.push(typeRaw ? `유형 '${typeRaw}' 모름 → ${TYPE_TEXT[type]}` : `유형 없음 → ${TYPE_TEXT[type]}`)
     }
     const reqRaw = col(c, '필수')
@@ -233,6 +245,10 @@ export function parseQuestionTable(table: string[][], defaultRules: EvaluatorRul
     const ptsRaw = col(c, '배점')
     const pts = ptsRaw === '' ? null : Number(ptsRaw)
     if (pts !== null && !(Number.isFinite(pts) && pts >= 0)) errors.push(`배점: '${ptsRaw}'은(는) 0 이상 숫자가 아님`)
+    const secPtsRaw = areaMode ? ptsRaw : col(c, '영역배점')
+    const secPts = secPtsRaw === '' ? null : Number(secPtsRaw)
+    if (!areaMode && secPts !== null && !(Number.isFinite(secPts) && secPts >= 0)) errors.push(`영역배점: '${secPtsRaw}'은(는) 0 이상 숫자가 아님`)
+    if (areaMode && secPts !== null && Number.isFinite(secPts)) notes.push(`영역 배점 ${secPts}점`)
     if (errors.length) return { line, section, question: null, errors, notes }
     const q = newQuestion(type)
     q.title = title
@@ -252,7 +268,8 @@ export function parseQuestionTable(table: string[][], defaultRules: EvaluatorRul
       if (labels.length !== q.options.length) errors.push(`선택지: ${TYPE_TEXT[type]}는 선택지 ${q.options.length}개(| 로 구분)`)
       else q.options = q.options.map((o, k) => ({ ...o, label: labels[k] }))
     }
-    if (pts !== null) q.points = pts
+    if (pts !== null && !areaMode) q.points = pts // 영역 표에서는 배점 = 영역 배점(문항 배점 아님)
+    if (type === 'scale5' || type === 'grade') q.purpose = 'score'
     if (scoreRaw) {
       if (!isChoice(type)) errors.push('선택지점수: 주관식·서술형은 점수에 반영할 수 없음')
       else {
@@ -265,9 +282,40 @@ export function parseQuestionTable(table: string[][], defaultRules: EvaluatorRul
     } else if (type !== 'scale5') {
       q.purpose = 'info'
     }
-    return { line, section, question: errors.length ? null : q, errors, notes }
+    const extra = secPts !== null && Number.isFinite(secPts) && secPts >= 0 ? { sectionPoints: secPts, ...(areaMode ? { sectionDesc: title } : {}) } : {}
+    return { line, section, question: errors.length ? null : q, errors, notes, ...extra }
   })
-  return { headerError: null, ignored, rows }
+  const tnotes: string[] = []
+  if (totals.length) {
+    const sum = rows.reduce((a, r) => a + (r.sectionPoints ?? r.question?.points ?? 0), 0)
+    const tot = totals[totals.length - 1]
+    tnotes.push(Number.isFinite(tot) && Math.abs(tot - sum) < 0.001 ? `합계 줄 ${tot}점 = 배점 합 ${+sum.toFixed(2)}점(합계 줄은 문항으로 넣지 않음)` : `합계 줄 ${tot}점과 배점 합 ${+sum.toFixed(2)}점이 다릅니다(합계 줄은 문항으로 넣지 않음)`)
+  }
+  if (areaMode) tnotes.push('구분·배점·평가내용 표: 한 줄 = 영역 하나(배점 = 영역 배점, 평가내용 = 그 영역의 문항·영역 설명)')
+  return { headerError: null, ignored, rows, notes: tnotes }
+}
+
+/**
+ * 한 시트에 표가 여러 개(예: '팀장 본인평가 예시'·'임원 및 팀장 상향평가 예시')면 머리글 행마다 나눈다(D-123).
+ * 머리글 = 질문(평가내용·문항) 열이 있는 행. 제목 = 머리글 바로 위의 글자 한 칸짜리 행. 머리글이 하나면 표 하나
+ */
+export function questionBlocks(table: string[][]): { title: string; table: string[][]; offset: number }[] {
+  const isHead = (r: string[]) => { const h = r.map((x) => hnorm(x ?? '')); return h.includes('질문') && h.filter((x) => (Q_COLUMNS as readonly string[]).includes(x)).length >= 2 }
+  const heads = table.map((r, i) => (isHead(r) ? i : -1)).filter((i) => i >= 0)
+  if (heads.length <= 1) return [{ title: '', table, offset: 0 }]
+  return heads.map((h, k) => {
+    const end = heads[k + 1] ?? table.length
+    let title = ''
+    for (let i = h - 1; i >= (k ? heads[k - 1] + 1 : 0); i--) {
+      const cells = table[i].map((x) => (x ?? '').trim()).filter(Boolean)
+      if (cells.length === 1) { title = cells[0]; break }
+      if (cells.length > 1) break
+    }
+    // 다음 표의 제목 행은 이 표에서 뺀다
+    let stop = end
+    if (k + 1 < heads.length) for (let i = end - 1; i > h; i--) { const n = table[i].filter((x) => (x ?? '').trim()).length; if (n === 0) continue; if (n === 1) stop = i; break }
+    return { title: title || `표 ${k + 1}`, table: table.slice(h, stop), offset: h }
+  })
 }
 
 /** 명단 업로드와 같은 규칙: 오류 행이 하나라도 있으면 아무것도 넣지 않음(부분 등록 없음) */
@@ -279,6 +327,8 @@ export function appendImported(t: Template, rows: QRow[]) {
     if (!r.question) continue
     let sec = t.sections.find((x) => x.title === r.section)
     if (!sec) { sec = newSection(r.section); t.sections.push(sec) }
+    if (typeof r.sectionPoints === 'number') sec.points = r.sectionPoints // 파일에 영역 배점이 있으면 그 값(D-123)
+    if (r.sectionDesc && !sec.desc) sec.desc = r.sectionDesc
     sec.questions.push(r.question)
   }
 }
