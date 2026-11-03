@@ -1461,3 +1461,17 @@ details[open] > summary > .toggle-ic { transform: rotate(180deg); }
 /* D-136: 일괄 업로드 방식 선택 */
 .upload-kind { gap: 18px; margin: 0 0 12px; padding: 10px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-tint); }
 .upload + .upload { margin-top: 16px; } /* D-137: 명단 업로드 아래 칼럼 값 채우기 */
+
+/* D-138: 팀장 고르기 — 기본 select와 같은 모양, 펼친 목록은 가운데 정렬·여백 없음·팀 이름으로 묶음 */
+.lead-pick { position: relative; width: 100%; min-width: 140px; }
+.lead-btn { width: 100%; min-height: 44px; padding: 0 50px; border: 1px solid var(--line-strong, #c8cfdc); border-radius: var(--r-sm, 10px); font: inherit; font-size: 16px; color: var(--text); text-align: center; cursor: pointer;
+  background-color: var(--surface-solid); background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%2309529e' stop-opacity='0.09'/%3E%3Cstop offset='1' stop-color='%2320b8ca' stop-opacity='0.16'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='28' height='28' rx='8' fill='url%28%23g%29'/%3E%3Cpath d='M7.5 11 14 17.5 20.5 11' fill='none' stroke='%2309529e' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; background-size: 28px 28px; box-shadow: 0 1px 2px rgba(27, 30, 77, 0.06); }
+.lead-btn:hover, .lead-btn[aria-expanded='true'] { border-color: rgba(32, 184, 202, 0.85); background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%2309529e' stop-opacity='0.12'/%3E%3Cstop offset='1' stop-color='%2320b8ca' stop-opacity='0.26'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='28' height='28' rx='8' fill='url%28%23g%29'/%3E%3Cpath d='M7.5 11 14 17.5 20.5 11' fill='none' stroke='%230a6f80' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+.lead-btn:focus-visible { outline: none; border-color: var(--brand-teal); box-shadow: var(--ring); }
+.lead-cur { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lead-menu { position: absolute; z-index: 30; left: 0; right: 0; top: calc(100% + 4px); max-height: 320px; overflow-y: auto; padding: 0; background: #fff; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 28px -10px rgba(9, 82, 158, 0.35); text-align: center; }
+.lead-grp-h { position: sticky; top: 0; padding: 6px 10px; font-size: 13px; font-weight: 800; color: var(--text-sub); background: var(--surface-tint, #f3f7fc); border-top: 1px solid var(--line-soft); }
+.lead-opt { display: block; width: 100%; margin: 0; padding: 8px 10px; border: 0; background: none; font: inherit; font-size: 15px; color: var(--text); text-align: center; cursor: pointer; }
+.lead-opt.hi { background: rgba(32, 184, 202, 0.10); }
+.lead-opt.on { font-weight: 800; color: var(--brand-navy); background: rgba(9, 82, 158, 0.08); }
+.lead-menu { position: fixed; top: auto; right: auto; z-index: 1000; max-height: min(320px, 60vh); }

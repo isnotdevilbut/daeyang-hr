@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { update, useAppState } from '../../data/store'
 import { can } from '../../domain/permissions'
 import { activeTeams, applyTier, customFieldErrors, customFieldUsage, customValueText, deleteCustomField, deleteEmployee, deleteTeam, nameConflicts, otherLead, saveCustomField, syncTiers, teamMembers, teamNameError, tierOf, TIERS } from '../../domain/org'
@@ -323,17 +324,11 @@ function OrgEditor() {
   const toggle = (id: string) => { const n = new Set(open); if (n.has(id)) n.delete(id); else n.add(id); setOpen(n) }
 
   /** 팀장 후보: 이 팀 소속 먼저, 다른 팀 직원은 팀 이름을 붙여 구분 (소속은 바꾸지 않음) */
-  const LeadOptions = ({ teamId }: { teamId: string | null }) => {
+  // D-138: 팀장 후보 = 팀별로 묶음(그 팀이 맨 위, 나머지 팀 가나다순), 글자 = '(직급 · 팀) 이름'
+  const leadGroups = (teamId: string | null) => {
     const pool = active.filter((e) => !e.isExecutive && !e.isCeo) // 임원은 팀장 후보가 아님 (직급 = 임원·팀장·사원 중 하나)
-    const mine = pool.filter((e) => e.teamId === teamId).sort((a, b) => a.name.localeCompare(b.name, 'ko'))
-    const others = pool.filter((e) => e.teamId !== teamId).sort((a, b) => teamName(a.teamId).localeCompare(teamName(b.teamId), 'ko') || a.name.localeCompare(b.name, 'ko'))
-    return (
-      <>
-        <option value="">(미지정)</option>
-        {mine.length > 0 && <optgroup label="이 팀">{mine.map((m) => <option key={m.id} value={m.id}>{m.name} ({m.position})</option>)}</optgroup>}
-        <optgroup label="다른 팀">{others.map((m) => <option key={m.id} value={m.id}>{m.name} ({m.position} · {teamName(m.teamId)})</option>)}</optgroup>
-      </>
-    )
+    const ids = [...new Set(pool.map((e) => e.teamId))].sort((a, b) => Number(b === teamId) - Number(a === teamId) || teamName(a).localeCompare(teamName(b), 'ko'))
+    return ids.map((gid) => ({ id: gid, label: `${teamName(gid) || '팀 없음'}${gid === teamId ? ' (이 팀)' : ''}`, items: pool.filter((e) => e.teamId === gid).sort((a, b) => a.name.localeCompare(b.name, 'ko')).map((m) => ({ id: m.id, label: `(${m.position} · ${teamName(m.teamId)}) ${m.name}` })) }))
   }
   const saveDraft = () => {
     if (!draft) return
@@ -381,9 +376,7 @@ function OrgEditor() {
                   <tr key={t.id}>
                     <td><input type="text" aria-label={`${t.name} 팀 이름`} value={t.name} onChange={(e) => update((x) => { x.teams.find((y) => y.id === t.id)!.name = e.target.value })} /></td>
                     <td>
-                      <select aria-label={`${t.name} 팀장`} value={t.leadId ?? ''} onChange={(e) => update((x) => { x.teams.find((y) => y.id === t.id)!.leadId = e.target.value || null; syncTiers(x); syncOpenCycles(x) })}>
-                        <LeadOptions teamId={t.id} />
-                      </select>
+                      <LeadPicker label={`${t.name} 팀장`} value={t.leadId ?? ''} groups={leadGroups(t.id)} onChange={(v) => update((x) => { x.teams.find((y) => y.id === t.id)!.leadId = v || null; syncTiers(x); syncOpenCycles(x) })} />
                     </td>
                     <td>
                       <button type="button" className="count-toggle" aria-expanded={isOpen} aria-controls={`members-${t.id}`} onClick={() => toggle(t.id)}>
@@ -426,7 +419,7 @@ function OrgEditor() {
               {draft && (
                 <tr className="team-draft">
                   <td><input type="text" aria-label="새 팀 이름" placeholder="팀 이름" value={draft.name} autoFocus onChange={(e) => { setDraft({ ...draft, name: e.target.value }); setDraftErr('') }} onKeyDown={(e) => e.key === 'Enter' && saveDraft()} /></td>
-                  <td><select aria-label="새 팀 팀장" value={draft.leadId} onChange={(e) => setDraft({ ...draft, leadId: e.target.value })}><LeadOptions teamId={null} /></select></td>
+                  <td><LeadPicker label="새 팀 팀장" value={draft.leadId} groups={leadGroups(null)} onChange={(v) => setDraft({ ...draft, leadId: v })} /></td>
                   <td className="muted">0명</td>
                   <td><div className="row draft-actions"><button className="btn small primary" onClick={saveDraft}>저장</button><button className="btn small" onClick={() => { setDraft(null); setDraftErr('') }}>취소</button></div></td>
                 </tr>
@@ -800,5 +793,63 @@ function AddUpload() {
         </>
       )}
     </section>
+  )
+}
+
+/**
+ * 팀장 고르기(D-138): 기본 select 대신 직접 그린 펼침 목록 — 펼친 목록도 칸 가운데 정렬·여백 없이, 팀 이름으로 묶음.
+ * 키보드: 위·아래로 이동, Enter 선택, Esc 닫기. 바깥을 누르면 닫힘
+ */
+function LeadPicker({ label, value, groups, onChange }: { label: string; value: string; groups: { id: string; label: string; items: { id: string; label: string }[] }[]; onChange: (v: string) => void }) {
+  const [open, setOpen] = useState(false)
+  const [hi, setHi] = useState<string | null>(null)
+  const [pos, setPos] = useState<{ left: number; top: number; width: number; up: boolean } | null>(null)
+  const ref = useRef<HTMLDivElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+  // 목록은 문서 맨 위(body)에 띄워 표 상자에 잘리지 않게 — 칸 바로 아래(아래 공간이 모자라면 위)
+  const place = () => { const r = ref.current?.getBoundingClientRect(); if (r) setPos({ left: r.left, top: r.bottom + 4, width: r.width, up: innerHeight - r.bottom < 260 && r.top > innerHeight - r.bottom }) }
+  const flat = [{ id: '', label: '(미지정)' }, ...groups.flatMap((g) => g.items)]
+  const cur = flat.find((x) => x.id === value) ?? flat[0]
+  useEffect(() => {
+    if (!open) return
+    place()
+    const down = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node) && !menuRef.current?.contains(e.target as Node)) setOpen(false) }
+    const away = (e: Event) => { if (!(e.target instanceof Node) || !menuRef.current?.contains(e.target)) setOpen(false) } // 화면을 스크롤하거나 크기가 바뀌면 닫음
+    document.addEventListener('mousedown', down); window.addEventListener('scroll', away, true); window.addEventListener('resize', away)
+    requestAnimationFrame(() => { const m = menuRef.current, o = m?.querySelector<HTMLElement>('[aria-selected="true"]'); if (m && o) m.scrollTop = o.offsetTop - m.clientHeight / 2 + o.offsetHeight / 2 })
+    return () => { document.removeEventListener('mousedown', down); window.removeEventListener('scroll', away, true); window.removeEventListener('resize', away) }
+  }, [open])
+  const pick = (id: string) => { setOpen(false); if (id !== value) onChange(id) }
+  const key = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') { setOpen(false); return }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault(); if (!open) { setOpen(true); setHi(value); return }
+      const i = Math.max(0, flat.findIndex((x) => x.id === (hi ?? value)))
+      setHi(flat[Math.min(flat.length - 1, Math.max(0, i + (e.key === 'ArrowDown' ? 1 : -1)))].id)
+    }
+    if (e.key === 'Enter' && open && hi !== null) { e.preventDefault(); pick(hi) }
+  }
+  const opt = (x: { id: string; label: string }) => (
+    <button key={x.id || 'none'} type="button" role="option" aria-selected={x.id === value} className={`lead-opt ${x.id === value ? 'on' : ''} ${x.id === hi ? 'hi' : ''}`} onMouseEnter={() => setHi(x.id)} onClick={() => pick(x.id)}>{x.label}</button>
+  )
+  return (
+    <div className="lead-pick" ref={ref} onKeyDown={key}>
+      <button type="button" className="lead-btn" aria-label={label} aria-haspopup="listbox" aria-expanded={open} onClick={() => { setOpen(!open); setHi(value) }}>
+        <span className="lead-cur">{cur.label}</span>
+      </button>
+      {open && pos && createPortal(
+        <div className="lead-menu" ref={menuRef} role="listbox" aria-label={label} onKeyDown={key}
+          style={{ left: pos.left, width: pos.width, ...(pos.up ? { bottom: innerHeight - pos.top + 48 } : { top: pos.top }) }}>
+          {opt(flat[0])}
+          {groups.map((g) => (
+            <div key={g.id} role="group" aria-label={g.label} className="lead-grp">
+              <div className="lead-grp-h">{g.label}</div>
+              {g.items.map(opt)}
+            </div>
+          ))}
+        </div>,
+        document.body,
+      )}
+    </div>
   )
 }
