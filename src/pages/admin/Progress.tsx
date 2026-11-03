@@ -199,16 +199,14 @@ function RecvBadge({ status }: { status: CellStatus }) {
 
 /**
  * 단계 칸 = 그 직원이 그 단계에서 작성할 업무(선행 대기도 미완료). 배정 없음 —, 1건 ✓ 완료/미완료,
- * 여러 건 "5/9 완료 · 4건 미완료"(모두 제출이면 초록 "9/9 완료")
+ * 여러 건 "5/9 완료" — 남은 건이 있으면 빨간 글씨, 모두 제출이면 초록(D-108: "n건 미완료" 문구 제거)
  */
 function Writes({ w }: { w: WriteSummary }) {
   if (w.total === 0) return <span className="na-dash" aria-label="배정 없음">—</span>
   if (w.total === 1) return w.open ? <span className="chip stage todo">미완료</span> : <span className="chip stage done">✓ 완료</span>
-  // 여러 건: "1/2 완료"와 "1건 미완료"를 별도 요소로(가운뎃점 없이 간격으로 구분, 좁으면 위아래) — D-074
   return (
-    <span className={`writes-sum ${w.open ? 'open' : 'done'}`}>
+    <span className={`writes-sum ${w.open ? 'open' : 'done'}`} aria-label={w.open ? `${w.total}건 중 ${w.done}건 완료, ${w.open}건 미완료` : undefined}>
       <span className="w-done">{w.done}/{w.total} 완료</span>
-      {w.open > 0 && <b className="w-open">{w.open}건 미완료</b>}
     </span>
   )
 }

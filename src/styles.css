@@ -1397,3 +1397,5 @@ th.cf-th .cf-head { margin-left: 14px; padding: 2px 5px; }
 .modal-x { flex: none; width: 36px; height: 36px; display: inline-grid; place-items: center; border: 0; border-radius: 50%; background: transparent; color: var(--text-sub); font-size: 19px; line-height: 1; cursor: pointer; margin: -4px -6px -4px 0; }
 .modal-x:hover { background: rgba(9, 82, 158, 0.08); color: var(--brand-navy); }
 .modal-x:focus-visible { outline: 2px solid #20b8ca; outline-offset: 1px; }
+/* D-108: 여러 건 작성 업무 — 남은 건이 있으면 "3/8 완료" 전체를 빨간 글씨(굵게), 모두 제출이면 초록 */
+.writes-sum.open { color: #a3141c; font-weight: 700; }
