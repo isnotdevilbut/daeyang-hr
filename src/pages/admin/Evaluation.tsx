@@ -12,7 +12,8 @@ import EvalQuestions from './EvalQuestions'
 import EvalAssign from './EvalAssign'
 
 export type EvalTab = 'settings' | 'questions' | 'assign'
-const TABS: [EvalTab, string][] = [['settings', '평가 설정'], ['questions', '문항 관리'], ['assign', '평가자·가중치 설정']]
+// 탭 순서(D-154): 문항 관리 → 평가자·가중치 설정 → 평가 설정. 처음 들어오면 첫 탭(문항 관리)
+const TABS: [EvalTab, string][] = [['questions', '문항 관리'], ['assign', '평가자·가중치 설정'], ['settings', '평가 설정']]
 
 export default function Evaluation() {
   const s = useAppState()
@@ -20,7 +21,7 @@ export default function Evaluation() {
   const [cycle, selectCycle, cycles] = useSelectedCycle()
   const [creating, setCreating] = useState(false)
   if (!can(s.session.role, 'manageCycles')) return <Forbidden />
-  const tab = (TABS.some(([k]) => k === params.get('tab')) ? params.get('tab') : 'settings') as EvalTab
+  const tab = (TABS.some(([k]) => k === params.get('tab')) ? params.get('tab') : 'questions') as EvalTab
   const goTab = (k: EvalTab) => { if (k !== tab && confirmLeave()) setParams({ tab: k }) }
   const pick = (id: string) => { if (confirmLeave()) selectCycle(id) }
 
