@@ -608,16 +608,12 @@ function PositionEditor() {
 type Loaded = { file: string; sheets: Sheet[]; sheet: number }
 
 /** 직원 명단 업로드: 파일 선택 → 표 미리보기·검증 → 등록 (검증 전 자동 등록 없음, 차단 오류가 있으면 등록 안 함) */
-/** 일괄 업로드(D-136): 새 직원 등록 / 기존 직원 칼럼 값 채우기 — 칼럼은 CSV로 만들지 않음(직원 목록의 '+ 칼럼 추가'로만) */
+/** 일괄 업로드(D-136·D-137): 직원 명단 업로드(새 직원 등록) 아래에 칼럼 값 채우기 — 칼럼은 CSV로 만들지 않음(직원 목록의 '+ 칼럼 추가'로만) */
 function Upload() {
-  const [kind, setKind] = useState<'add' | 'fill'>('add')
   return (
     <>
-      <fieldset className="row upload-kind" aria-label="업로드 방식">
-        <label className="check"><input type="radio" name="upload-kind" checked={kind === 'add'} onChange={() => setKind('add')} /> 새 직원 등록</label>
-        <label className="check"><input type="radio" name="upload-kind" checked={kind === 'fill'} onChange={() => setKind('fill')} /> 기존 직원 칼럼 값 채우기</label>
-      </fieldset>
-      {kind === 'add' ? <AddUpload /> : <FillUpload />}
+      <AddUpload />
+      <FillUpload />
     </>
   )
 }
@@ -649,7 +645,7 @@ function FillUpload() {
   }
   return (
     <section className="panel pad upload">
-      <div className="row"><h2 style={{ margin: 0 }}>기존 직원 칼럼 값 채우기</h2></div>
+      <div className="row"><h2 style={{ margin: 0 }}>칼럼 값 채우기</h2><span className="muted">이미 등록된 직원의 칼럼 값을 사번으로 한꺼번에</span></div>
       <p className="muted upload-cols">필수 열: 사번 · 채울 칼럼: {cfs.length ? cfs.map((f) => f.name).join(' · ') : '없음(직원 목록에서 + 칼럼 추가)'} · 빈 칸은 그대로 · 칼럼은 새로 만들지 않음 · 팀·직급·이름·직무는 바꾸지 않음(직원 수정 창에서)</p>
       <div className="row upload-pick">
         <label className="btn primary file-btn">
