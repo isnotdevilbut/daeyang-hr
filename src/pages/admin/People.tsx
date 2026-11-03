@@ -6,7 +6,7 @@ import { activeTeams, applyTier, customFieldErrors, customFieldUsage, customValu
 import { syncOpenCycles } from '../../domain/cycleSync'
 import { joinOpenCycles } from '../../domain/cycle'
 import { activeJobs, classDefault, deleteJob, deletePosition, jobName, jobUsage, positionById, positionName, positionsOf, positionUsage, saveJob, savePosition } from '../../domain/catalog'
-import { applyRosterFill, canFill, canRegister, checkRoster, checkRosterFill, readRosterFile, ROSTER_FIELDS, ROSTER_HEADER, rosterEmployees, rosterLeads, type ExistingMode, type RosterRow } from '../../domain/roster'
+import { applyRosterFill, canFill, canRegister, checkRoster, checkRosterFill, readRosterFile, ROSTER_FIELDS, rosterEmployees, rosterLeads, type ExistingMode, type RosterRow } from '../../domain/roster'
 import type { Sheet } from '../../domain/xlsx'
 import type { CustomField, Employee, EvalClass, JobDef, PositionDef } from '../../domain/types'
 import { Forbidden, Modal, Notice } from '../../components/ui'
@@ -639,7 +639,7 @@ function FillUpload() {
   return (
     <section className="panel pad upload">
       <div className="row"><h2 style={{ margin: 0 }}>칼럼 값 채우기</h2><span className="muted">이미 등록된 직원의 칼럼 값을 사번으로 한꺼번에</span></div>
-      <p className="muted upload-cols">필수 열: 사번 · 채울 칼럼: {cfs.length ? cfs.map((f) => f.name).join(' · ') : '없음(직원 목록에서 + 칼럼 추가)'} · 빈 칸은 그대로 · 칼럼은 새로 만들지 않음 · 팀·직급·이름·직무는 바꾸지 않음(직원 수정 창에서)</p>
+      <p className="muted upload-cols">필요한 열: 사번 또는 이름(직원 찾기) + 채울 칼럼 이름 · 채울 칼럼: {cfs.length ? cfs.map((f) => f.name).join(' · ') : '없음(직원 목록에서 + 칼럼 추가)'} · 빈 칸은 그대로 · 칼럼은 새로 만들지 않음 · 팀·직급·직무는 바꾸지 않음(직원 수정 창에서)</p>
       <div className="row upload-pick">
         <label className="btn primary file-btn">
           파일 선택
@@ -731,7 +731,7 @@ function AddUpload() {
       <div className="row">
         <h2 style={{ margin: 0 }}>직원 명단 업로드</h2>
       </div>
-      <p className="muted upload-cols">필수 열: {ROSTER_HEADER.join(' · ')}{cfs.length > 0 && <> · 선택 열(추가한 칼럼): {cfs.map((f) => f.name).join(' · ')}</>}</p>
+      <p className="muted upload-cols">필수 열: 이름 · 사번 · 팀 · 선택 열: 직급(비우면 사원) · 직무(비우면 {activeJobs(s)[0]?.name ?? '첫 직무'}){cfs.length > 0 && <> · 추가한 칼럼: {cfs.map((f) => f.name).join(' · ')}</>} · 열 이름은 성명·사원번호·부서처럼 달라도 됨</p>
       <div className="row upload-pick">
         <label className="btn primary file-btn">
           파일 선택
@@ -759,13 +759,8 @@ function AddUpload() {
             {res.extra.length > 0 && <span className="muted">함께 등록할 칼럼: {res.extra.map((f) => f.name).join(', ')}</span>}
             {res.ignored.length > 0 && <span className="muted">쓰지 않는 열(등록 안 함): {res.ignored.join(', ')}</span>}
           </div>
-          {res.existingDup > 0 && (
-            <fieldset className="row dup-mode">
-              <legend>이미 등록된 사번</legend>
-              <label className="check"><input type="radio" name="dupmode" checked={mode === 'error'} onChange={() => setMode('error')} /> 오류로 표시</label>
-              <label className="check"><input type="radio" name="dupmode" checked={mode === 'skip'} onChange={() => setMode('skip')} /> 건너뛰기</label>
-            </fieldset>
-          )}
+          {/* D-141: 중복 처리 체크 — 항상 보임. 켜면 이미 등록된 사번·파일 안에서 두 번 나온 사번(뒤쪽 행)은 빼고 나머지만 등록, 끄면 중복을 오류로 막음 */}
+          <label className="check dup-check"><input type="checkbox" checked={mode === 'skip'} onChange={(e) => setMode(e.target.checked ? 'skip' : 'error')} /> 중복 사번은 빼고 업로드 <span className="muted">(이미 등록된 직원·파일 안에서 두 번 나온 사번 — 끄면 중복이 있을 때 등록하지 않음)</span></label>
           <div className="table-wrap upload-preview" tabIndex={0}>
             <table className="tbl">
               <thead><tr><th className="num">행</th>{ROSTER_FIELDS.map((f) => <th key={f.key}>{f.label}</th>)}{res.extra.map((f) => <th key={f.id}>{f.name}</th>)}<th>확인</th></tr></thead>
@@ -779,6 +774,7 @@ function AddUpload() {
                       {r.errors.length > 0
                         ? r.errors.map((e, i) => <div key={i} className="err-msg">{e.col}: {e.msg}</div>)
                         : r.skip ? <span className="chip na">건너뜀</span> : <span className="chip submitted">✓</span>}
+                      {r.errors.length === 0 && r.notes?.map((n, i) => <div key={i} className="muted small">{n}</div>)}
                     </td>
                   </tr>
                 ))}

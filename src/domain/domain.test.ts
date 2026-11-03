@@ -508,8 +508,9 @@ describe('엑셀(.xlsx) 읽기: 여러 시트·공유 문자열·숫자·수식'
     const r = checkRoster((await readXlsx(await build()))[1].rows, s.employees, s.teams, 'skip')
     expect(r.rows.map((x) => [x.line, x.v.empNo])).toEqual([[3, '101'], [4, '0012']])
     expect(r.rows[1].skip).toBe(true) // 기존 0012 → 건너뛰기
-    expect(r.rows[1].errors).toEqual([{ col: '직급', msg: '비어 있음' }])
-    expect(canRegister(r)).toBe(false)
+    expect(r.rows[1].errors).toEqual([]) // D-141: 빈 직급은 오류 대신 기본값(사원) + 안내
+    expect(r.rows[1].notes).toContain('직급 없음 → 사원')
+    expect(canRegister(r)).toBe(r.rows.every((x) => !x.errors.length)) // 오류 행이 없으면 등록 가능(빈 직급은 기본값)
   })
 })
 
@@ -2499,7 +2500,7 @@ describe('명단 업로드 양식·추가 열 (D-104)', () => {
   })
   it('필수 열이 빠지거나 같은 열이 두 번이면 파일 오류', () => {
     const s = cats(createSeed())
-    expect(checkRoster(csv('팀,직급,이름,사번\n설계팀,사원,가,0901'), s.employees, s.teams, 'error', s).error).toBe('필수 열이 없습니다: 직무')
+    expect(checkRoster(csv('직급,이름,사번\n사원,가,0901'), s.employees, s.teams, 'error', s).error).toBe('필수 열이 없습니다: 팀') // D-141: 필수 = 이름·사번·팀
     expect(checkRoster(csv('팀,직급,이름,직무,사번,근무지,근무지\n설계팀,사원,가,관리직,0901,a,b'), s.employees, s.teams, 'error', s).error).toContain("'근무지' 열이 두 번")
   })
 })
@@ -2923,7 +2924,7 @@ describe('기존 직원 칼럼 값 채우기 (D-136)', async () => {
     const before = structuredClone(s.employees)
     const r = R.checkRosterFill([['사번', '이름', '팀', '근무지', '근무 형태', '비고'], ['0005', '다른이름', '없는팀', '본사', '야간', 'x'], ['0006', '', '', '', '주간', '']], s.employees, s)
     expect(r.error).toBeNull()
-    expect(r.fixed).toEqual(['이름', '팀']); expect(r.ignored).toEqual(['비고'])
+    expect(r.fixed).toEqual(['팀']); expect(r.ignored).toEqual(['비고']) // 이름 열은 직원 확인용(D-141), 팀은 바꾸지 않는 열
     expect(R.canFill(r)).toBe(true)
     expect(r.rows[0].changes.map((c) => [c.field, c.before, c.after])).toEqual([['근무지', '', '본사'], ['근무 형태', '', '야간']])
     expect(R.applyRosterFill(s, r)).toBe(2)
@@ -2941,5 +2942,36 @@ describe('기존 직원 칼럼 값 채우기 (D-136)', async () => {
     expect(r.errorRows).toBe(4)
     expect(R.checkRosterFill([['사번', '근무지'], ['0005', 'a']], createSeed().employees, {}).error).toContain('+ 칼럼 추가')
     expect(R.checkRosterFill([['사번', '비고'], ['0005', 'a']], s.employees, s).error).toContain('채울 칼럼 열이 없습니다')
+  })
+})
+
+describe('업로드 필수 열 최소화·중복 제외·이름으로 칼럼 값 채우기 (D-141)', async () => {
+  const R = await import('./roster')
+  it('이름·사번·팀만 있어도 등록(직급 사원·직무 첫 직무), 다른 이름의 머리글(성명·사원번호·부서) 인식', () => {
+    const s = createSeed()
+    const r = R.checkRoster(parseCsv('성명,사원번호,부서\n가상하나,0901,설계팀'), s.employees, s.teams.filter((x) => !x.archived), 'error', s)
+    expect(r.error).toBeNull(); expect(R.canRegister(r)).toBe(true)
+    expect(r.rows[0].notes).toEqual(['직급 없음 → 사원', '직무 없음 → 관리직'])
+    expect(R.rosterEmployees(r, () => 'x')[0]).toMatchObject({ name: '가상하나', empNo: '0901', position: '사원', jobType: 'office' })
+  })
+  it("'중복 사번은 빼고 업로드': 이미 등록된 사번·파일 안 두 번째 행은 건너뛰고 나머지 등록, 끄면 막음", () => {
+    const s = createSeed()
+    const t = parseCsv('이름,사번,팀\n가,0901,설계팀\n나,0901,설계팀\n다,0005,설계팀\n라,0902,생산팀')
+    const teams = s.teams.filter((x) => !x.archived)
+    const off = R.checkRoster(t, s.employees, teams, 'error', s)
+    expect(R.canRegister(off)).toBe(false)
+    const on = R.checkRoster(t, s.employees, teams, 'skip', s)
+    expect(R.canRegister(on)).toBe(true)
+    expect(on.rows.map((x) => x.skip)).toEqual([false, true, true, false])
+    expect(R.rosterEmployees(on, (i) => `n${i}`).map((e) => e.name)).toEqual(['가', '라'])
+  })
+  it('칼럼 값 채우기: 사번 없이 이름만으로 찾음, 동명이인은 그 행만 오류', () => {
+    const s = createSeed(); s.customFields = [{ id: 'cf', name: '근무지', type: 'text', options: [] }]
+    const r = R.checkRosterFill([['이름', '근무지'], ['최유진', '본사']], s.employees, s)
+    expect(R.canFill(r)).toBe(true); expect(r.rows[0].empNo).toBe('0005')
+    s.employees.push({ ...s.employees.find((e) => e.name === '최유진')!, id: 'dup', empNo: '0999' })
+    const d = R.checkRosterFill([['이름', '근무지'], ['최유진', '본사']], s.employees, s)
+    expect(d.rows[0].errors[0].msg).toContain('사번 열을 넣어')
+    expect(R.checkRosterFill([['근무지'], ['본사']], s.employees, s).error).toContain('사번 또는 이름')
   })
 })

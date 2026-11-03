@@ -11,12 +11,14 @@ export const MAX_ROWS = 2000
 
 export type RosterKey = 'empNo' | 'name' | 'team' | 'position' | 'job'
 export const ROSTER_FIELDS: { key: RosterKey; label: string; aliases: string[] }[] = [
-  { key: 'team', label: '팀', aliases: ['팀', '팀명', '소속팀', 'team'] },
-  { key: 'position', label: '직급', aliases: ['직급', 'position'] },
-  { key: 'name', label: '이름', aliases: ['이름', '성명', '직원명', 'name'] },
-  { key: 'job', label: '직무', aliases: ['직무', '직군', 'job'] },
-  { key: 'empNo', label: '사번', aliases: ['사번', '사원번호', '직원번호', 'empno', 'emp_no', 'employeeno'] },
+  { key: 'team', label: '팀', aliases: ['팀', '팀명', '소속팀', '소속', '부서', '부서명', '소속부서', 'team', 'dept', 'department'] },
+  { key: 'position', label: '직급', aliases: ['직급', '직위', '직책', '직급명', 'position', 'rank', 'title'] },
+  { key: 'name', label: '이름', aliases: ['이름', '성명', '직원명', '사원명', '성함', 'name'] },
+  { key: 'job', label: '직무', aliases: ['직무', '직군', '직종', '업무구분', 'job'] },
+  { key: 'empNo', label: '사번', aliases: ['사번', '사원번호', '직원번호', '사번(id)', '아이디', 'id', 'empno', 'emp_no', 'employeeno', 'employeeid'] },
 ]
+/** 꼭 있어야 하는 열(D-141): 이름·사번·팀. 직급이 없으면 '사원', 직무가 없으면 첫 번째 직무(미리보기에 안내) */
+export const ROSTER_REQUIRED: RosterKey[] = ['name', 'empNo', 'team']
 export const ROSTER_HEADER = ROSTER_FIELDS.map((f) => f.label)
 const LABEL = Object.fromEntries(ROSTER_FIELDS.map((f) => [f.key, f.label])) as Record<RosterKey, string>
 
@@ -75,6 +77,7 @@ export interface RosterRow {
   errors: CellError[]
   skip: boolean // 기존 사번과 겹쳐 건너뜀 (사용자가 "건너뛰기"를 고른 경우)
   existing?: string // 겹친 기존 직원 이름
+  notes?: string[] // 막지 않는 안내(기본값으로 채운 직급·직무, 건너뛴 이유)
   custom: Record<string, string> // 분류 기준 ID → 파일의 글자 그대로(화면 표시용)
   customIds: Record<string, string> // 분류 기준 ID → 저장할 값(텍스트 = 글자, 선택형 = 선택지 ID). 빈 칸은 넣지 않음
   teamId?: string
@@ -110,7 +113,7 @@ export function checkRoster(table: string[][], employees: Employee[], teams: Tea
     if (hits.length > 1) return { ...empty, error: `'${f.label}' 열이 두 번 이상 있습니다.` }
     idx[f.key] = hits[0] ?? -1
   }
-  const missing = ROSTER_FIELDS.filter((f) => idx[f.key] < 0).map((f) => f.label)
+  const missing = ROSTER_FIELDS.filter((f) => ROSTER_REQUIRED.includes(f.key) && idx[f.key] < 0).map((f) => f.label)
   if (missing.length) return { ...empty, error: `필수 열이 없습니다: ${missing.join(', ')}` }
   const used = new Set(Object.values(idx))
   // 추가 열 → 분류 기준(이름 일치, 공백 무시)
@@ -136,7 +139,11 @@ export function checkRoster(table: string[][], employees: Employee[], teams: Tea
   })
   for (const row of rows) {
     const err = (k: RosterKey, msg: string) => row.errors.push({ col: LABEL[k], msg })
-    for (const f of ROSTER_FIELDS) if (!row.v[f.key]) err(f.key, '비어 있음')
+    for (const f of ROSTER_FIELDS) if (ROSTER_REQUIRED.includes(f.key) && !row.v[f.key]) err(f.key, '비어 있음')
+    // 직급·직무가 없으면 기본값(D-141) — 나중에 직원 목록에서 고침
+    const note = (m: string) => (row.notes ??= []).push(m)
+    if (!row.v.position) { const d = positions.find((x) => x.evalClass === '사원') ?? positions[0]; if (d) { row.v.position = d.name; note(`직급 없음 → ${d.name}`) } }
+    if (!row.v.job && jobs[0]) { row.v.job = jobs[0].name; note(`직무 없음 → ${jobs[0].name}`) }
     // 분류 기준 값은 선택 입력(빈 칸 = 값 없음). 선택형은 선택지 이름과 같아야 함
     for (const f of extra) {
       const text = row.custom[f.id]
@@ -148,12 +155,15 @@ export function checkRoster(table: string[][], employees: Employee[], teams: Tea
     }
     if (row.v.empNo) {
       const lines = byNo.get(row.v.empNo)!
-      if (lines.length > 1) err('empNo', `파일 안에서 중복 (${lines.filter((l) => l !== row.line).join(', ')}행)`)
       const ex = employees.find((e) => e.empNo === row.v.empNo)
       if (ex) {
         row.existing = ex.name
         if (mode === 'error') err('empNo', `이미 등록된 사번 (${ex.name})`)
-        else row.skip = true
+        else { row.skip = true; note(`이미 등록된 사번(${ex.name}) — 건너뜀`) }
+      } else if (lines.length > 1) {
+        // 파일 안 중복(D-141): '중복 제외'면 처음 나온 행만 등록하고 나머지는 건너뜀
+        if (mode === 'skip' && lines[0] !== row.line) { row.skip = true; note(`파일 안 중복(${lines[0]}행과 같은 사번) — 건너뜀`) }
+        else if (mode === 'error') err('empNo', `파일 안에서 중복 (${lines.filter((l) => l !== row.line).join(', ')}행)`)
       }
     }
     if (row.v.team) {
@@ -237,31 +247,48 @@ export function checkRosterFill(table: string[][], employees: Employee[], cat: P
   const hi = table.findIndex((r) => r.some((c) => (c ?? '').trim()))
   if (hi < 0) return { ...empty, error: '빈 파일입니다.' }
   const header = table[hi].map((h) => (h ?? '').trim())
-  const noIdx = header.findIndex((h) => ROSTER_FIELDS.find((f) => f.key === 'empNo')!.aliases.includes(norm(h)))
-  if (noIdx < 0) return { ...empty, error: '사번 열이 없습니다(사번으로 직원을 찾습니다).' }
+  // 직원 찾기(D-141): 사번 열이 있으면 사번, 없으면 이름(동명이인은 그 행만 사번이 필요)
+  const alias = (k: RosterKey) => ROSTER_FIELDS.find((f) => f.key === k)!.aliases
+  const noIdx = header.findIndex((h) => alias('empNo').includes(norm(h)))
+  const nameIdx = header.findIndex((h) => alias('name').includes(norm(h)))
+  if (noIdx < 0 && nameIdx < 0) return { ...empty, error: '사번 또는 이름 열이 필요합니다(그 열로 직원을 찾습니다).' }
+  const keyIdx = noIdx >= 0 ? noIdx : nameIdx
   const fixedKeys = ROSTER_FIELDS.filter((f) => f.key !== 'empNo')
-  const fixed = header.filter((h, i) => h && i !== noIdx && fixedKeys.some((f) => f.aliases.includes(norm(h))))
+  const fixed = header.filter((h, i) => h && i !== noIdx && i !== nameIdx && fixedKeys.some((f) => f.aliases.includes(norm(h))))
   const cfIdx = new Map<CustomField, number>()
   for (const f of cfs) {
-    const hits = header.map((h, i) => (i !== noIdx && norm(h) === norm(f.name) ? i : -1)).filter((i) => i >= 0)
+    const hits = header.map((h, i) => (i !== noIdx && i !== nameIdx && norm(h) === norm(f.name) ? i : -1)).filter((i) => i >= 0)
     if (hits.length > 1) return { ...empty, error: `'${f.name}' 열이 두 번 이상 있습니다.` }
     if (hits.length) cfIdx.set(f, hits[0])
   }
   const fields = [...cfIdx.entries()].sort((a, b) => a[1] - b[1]).map(([f]) => f)
-  const used = new Set([noIdx, ...cfIdx.values()])
+  const used = new Set([noIdx, nameIdx, ...cfIdx.values()])
   const ignored = header.filter((h, i) => h && !used.has(i) && !fixed.includes(h))
   if (!fields.length) return { ...empty, ignored, fixed, error: `채울 칼럼 열이 없습니다. 열 이름을 만든 칼럼 이름(${cfs.map((f) => f.name).join(', ')})과 같게 쓰세요.` }
   const body = table.slice(hi + 1).map((r, i) => ({ r, line: hi + i + 2 })).filter(({ r }) => r.some((c) => (c ?? '').trim()))
   if (body.length > MAX_ROWS) return { ...empty, ignored, fixed, fields, error: `한 번에 ${MAX_ROWS.toLocaleString()}행까지 올릴 수 있습니다.` }
   const seen = new Map<string, number[]>()
-  body.forEach(({ r, line }) => { const no = (r[noIdx] ?? '').trim(); if (no) seen.set(no, [...(seen.get(no) ?? []), line]) })
+  const keyOf = (r: string[]) => (r[keyIdx] ?? '').trim()
+  body.forEach(({ r, line }) => { const k = keyOf(r); if (k) seen.set(k, [...(seen.get(k) ?? []), line]) })
+  const keyCol = noIdx >= 0 ? '사번' : '이름'
   const rows: FillRow[] = body.map(({ r, line }) => {
-    const empNo = (r[noIdx] ?? '').trim()
+    const empNo = noIdx >= 0 ? (r[noIdx] ?? '').trim() : ''
+    const nm = nameIdx >= 0 ? (r[nameIdx] ?? '').trim() : ''
     const errors: CellError[] = []
-    const e = empNo ? employees.find((x) => x.active && x.empNo === empNo) : undefined
-    if (!empNo) errors.push({ col: '사번', msg: '비어 있음' })
-    else if (!e) errors.push({ col: '사번', msg: '재직 중인 직원 중 이 사번이 없음' })
-    if (empNo && seen.get(empNo)!.length > 1) errors.push({ col: '사번', msg: `파일 안에서 중복 (${seen.get(empNo)!.filter((l) => l !== line).join(', ')}행)` })
+    let e: Employee | undefined
+    if (noIdx >= 0) {
+      e = empNo ? employees.find((x) => x.active && x.empNo === empNo) : undefined
+      if (!empNo) errors.push({ col: '사번', msg: '비어 있음' })
+      else if (!e) errors.push({ col: '사번', msg: '재직 중인 직원 중 이 사번이 없음' })
+    } else {
+      const same = nm ? employees.filter((x) => x.active && x.name.trim() === nm) : []
+      if (!nm) errors.push({ col: '이름', msg: '비어 있음' })
+      else if (!same.length) errors.push({ col: '이름', msg: '재직 중인 직원 중 이 이름이 없음' })
+      else if (same.length > 1) errors.push({ col: '이름', msg: `이름이 같은 직원 ${same.length}명 — 사번 열을 넣어 구분하세요` })
+      else e = same[0]
+    }
+    const k = keyOf(r)
+    if (k && seen.get(k)!.length > 1) errors.push({ col: keyCol, msg: `파일 안에서 중복 (${seen.get(k)!.filter((l) => l !== line).join(', ')}행)` })
     const changes: FillChange[] = []
     for (const f of fields) {
       const text = (r[cfIdx.get(f)!] ?? '').trim()
@@ -277,7 +304,7 @@ export function checkRosterFill(table: string[][], employees: Employee[], cat: P
       const label = (v: string) => (f.type === 'select' ? f.options.find((x) => x.id === v)?.label ?? '' : v)
       changes.push({ fieldId: f.id, field: f.name, before: label(cur), after: text, value })
     }
-    return { line, empNo, name: e?.name ?? '', employeeId: e?.id, changes, errors }
+    return { line, empNo: e?.empNo ?? empNo, name: e?.name ?? nm, employeeId: e?.id, changes, errors }
   })
   return { error: null, ignored, fixed, fields, rows, errorRows: rows.filter((x) => x.errors.length).length, changed: rows.filter((x) => !x.errors.length && x.changes.length).length }
 }
