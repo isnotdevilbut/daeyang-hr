@@ -98,7 +98,7 @@ function NewEvaluation({ onClose, onCreated }: { onClose: () => void; onCreated:
       </div>
       <p className="muted" style={{ marginTop: 10 }}>대상자 {s.employees.filter((e) => e.active && isEvalTarget(e)).length}명으로 시작합니다. 만든 뒤 대상자·문항·평가자를 바꿀 수 있습니다.</p>
       {err && <p className="feedback fail" role="alert">✕ {err}</p>}
-      <div className="row" style={{ marginTop: 12 }}><span className="spacer" /><button className="btn" onClick={onClose}>취소</button><button className="btn primary" onClick={create}>만들기</button></div>
+      <div className="row" style={{ marginTop: 12 }}><span className="spacer" /><button className="btn primary" onClick={create}>만들기</button></div>
     </Modal>
   )
 }

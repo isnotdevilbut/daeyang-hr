@@ -197,7 +197,7 @@ function CloneModal({ cycle, onClose, onDone }: { cycle: Cycle; onClose: () => v
     <Modal title="평가 복제" onClose={onClose}>
       <label className="field">새 평가 이름<input type="text" value={name} onChange={(e) => setName(e.target.value)} /></label>
       <p className="muted" style={{ marginTop: 10 }}>문항·평가자 구성·반영 비율·대상자를 가져옵니다. 응답·제출 상태·결과는 가져오지 않습니다.</p>
-      <div className="row" style={{ marginTop: 12 }}><span className="spacer" /><button className="btn" onClick={onClose}>취소</button><button className="btn primary" disabled={!name.trim()} onClick={go}>복제</button></div>
+      <div className="row" style={{ marginTop: 12 }}><span className="spacer" /><button className="btn primary" disabled={!name.trim()} onClick={go}>복제</button></div>
     </Modal>
   )
 }

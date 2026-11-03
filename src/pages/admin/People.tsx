@@ -200,7 +200,7 @@ function FieldModal({ field, onClose }: { field: CustomField; onClose: () => voi
         </fieldset>
       )}
       {err.length > 0 && <div className="feedback fail" role="alert">{err.map((x) => <div key={x}>✕ {x}</div>)}</div>}
-      <div className="row" style={{ marginTop: 14 }}><span className="spacer" /><button className="btn" onClick={onClose}>취소</button><button className="btn primary" onClick={save}>{isNew ? '추가' : '저장'}</button></div>
+      <div className="row" style={{ marginTop: 14 }}><span className="spacer" /><button className="btn primary" onClick={save}>{isNew ? '추가' : '저장'}</button></div>
     </Modal>
   )
 }
@@ -221,7 +221,7 @@ function MemoModal({ emp, onClose }: { emp: Employee; onClose: () => void }) {
   return (
     <Modal title={`메모 — ${emp.name}`} onClose={onClose}>
       <label className="field">메모<textarea className="memo-text" rows={7} value={v} autoFocus onChange={(e) => setV(e.target.value)} /></label>
-      <div className="row" style={{ marginTop: 14 }}><span className="spacer" /><button className="btn" onClick={onClose}>취소</button><button className="btn primary" onClick={save}>저장</button></div>
+      <div className="row" style={{ marginTop: 14 }}><span className="spacer" /><button className="btn primary" onClick={save}>저장</button></div>
     </Modal>
   )
 }
@@ -305,7 +305,7 @@ function EmployeeModal({ emp, onClose }: { emp: Employee; onClose: () => void })
       {err && <p className="feedback fail" role="alert">✕ {err}</p>}
       <div className="row modal-foot">
         {emp.id && <button className="btn danger" onClick={remove}>직원 삭제</button>}
-        <span className="spacer" /><button className="btn" onClick={onClose}>취소</button><button className="btn primary" onClick={save}>저장</button>
+        <span className="spacer" /><button className="btn primary" onClick={save}>저장</button>
       </div>
     </Modal>
   )

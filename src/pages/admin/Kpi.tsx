@@ -284,7 +284,6 @@ function KpiModal({ dialog, cycle, deptId, blank, k, onClose, onSaved }: { dialo
       {errors.length > 0 && <div className="feedback fail" role="alert">{errors.map((x) => <div key={x}>✕ {x}</div>)}</div>}
       <div className="row" style={{ marginTop: 14 }}>
         <span className="spacer" />
-        <button className="btn" onClick={onClose}>취소</button>
         <button className="btn primary" onClick={method === 'manual' ? saveManual : saveIndicator}>{dialog.kind === 'add' && method === 'indicator' ? '추가' : '저장'}</button>
       </div>
     </Modal>

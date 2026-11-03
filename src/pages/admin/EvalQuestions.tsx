@@ -333,7 +333,7 @@ function QuestionEditor({ t, editing, answered, onClose, onSave }: {
         </details>
       </div>
       {errors.length > 0 && <div className="feedback fail" role="alert">{errors.map((e) => <div key={e}>✕ {e}</div>)}</div>}
-      <div className="row" style={{ marginTop: 14 }}><span className="spacer" /><button className="btn" onClick={close}>취소</button><button className="btn primary" onClick={save}>{editing.isNew ? '추가' : '저장'}</button></div>
+      <div className="row" style={{ marginTop: 14 }}><span className="spacer" /><button className="btn primary" onClick={save}>{editing.isNew ? '추가' : '저장'}</button></div>
     </Modal>
   )
 }
@@ -505,7 +505,6 @@ function Import({ cycle, t, onClose, onDone, mut }: { cycle: Cycle; t: Template;
           </div>
           <div className="row" style={{ marginTop: 10 }}>
             <span className="spacer" />
-            <button className="btn" onClick={onClose}>취소</button>
             <button className="btn primary" disabled={!ok.length || (mode === 'replace' && hasResp)} onClick={() => { if (mode === 'append' || confirm(`기존 문항을 모두 지우고 ${ok.length}개로 교체할까요?`)) apply() }}>{mode === 'replace' ? '교체' : '추가'} ({ok.length}개)</button>
           </div>
         </>
