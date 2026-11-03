@@ -350,14 +350,14 @@ function QuestionEditor({ t, editing, answered, onClose, onSave }: {
 /**
  * 미리보기 (D-061): 직원 응답 화면과 같은 페이지 흐름(ResponsePager)을 그대로 쓴다.
  * 답변·진행 상태는 이 창의 메모리에만 있고 응답 저장소·제출 상태·진행 현황·점수에 쓰지 않는다.
- * 평가 유형·직무·대상을 바꾸면 문항과 화면 구성을 다시 계산하고 처음부터 시작, 모바일·PC 전환은 폭만 바꾼다.
+ * 평가 유형·직무·대상을 바꾸면 문항과 화면 구성을 다시 계산하고 처음부터 시작. 화면 폭은 PC 하나(D-152).
  */
 function Preview({ t: current, cycle, onClose }: { t: Template; cycle: Cycle; onClose: () => void }) {
   const [rule, setRule] = useState<EvaluatorRule>('self')
   const s = useAppState()
   const [job0, setJob] = useState<JobType>('office')
   const [lead, setLead] = useState(false)
-  const [mobile, setMobile] = useState(true)
+  const mobile = false // D-152: 미리보기는 PC 화면 하나(모바일·PC 전환 제거)
   const frameRef = useRef<HTMLDivElement>(null)
   // 평가표 버전(D-082): 평가 유형·대상 팀·대상 직급으로 실제와 같은 함수(resolveVersion)로 고른 평가표를 보여 준다
   const versioned = !!cycle.versions
@@ -405,10 +405,6 @@ function Preview({ t: current, cycle, onClose }: { t: Template; cycle: Cycle; on
               <option value="member">사원</option><option value="lead">팀장</option>
             </select>
           )}
-          <div className="seg" role="group" aria-label="화면 폭">
-            <button className={mobile ? 'on' : ''} onClick={() => setMobile(true)}>모바일</button>
-            <button className={!mobile ? 'on' : ''} onClick={() => setMobile(false)}>PC</button>
-          </div>
           <span className="muted">입력해도 저장되지 않습니다</span>
         </div>
         {draftPreview && <p className="preview-version" role="status">초안 미리보기: <b>{curV!.pending?.name ?? curV!.name}</b> (적용 전)</p>}
