@@ -29,7 +29,7 @@ export function BulkDownload({ cycle, ids, onClose }: { cycle: Cycle; ids: strin
     return cycle.targets.filter((t) => ids.includes(t.employeeId)).sort((a, b) => a.departmentName.localeCompare(b.departmentName, 'ko') || order(a, b))
   }, [s, cycle, ids])
   const sheets = targets.map((t) => { const parts = evalParts(s, cycle, t); return { t, parts, m: sheetModel(s, cycle, t, parts, on) } })
-  const fileBase = `${cycleLabel(cycle)}_개인리포트_${targets.length}명`.replace(/[\\/:*?"<>|]/g, '_')
+  const fileBase = `${cycleLabel(cycle)}_개인리포트_선택`.replace(/[\\/:*?"<>|]/g, '_')
   const go = () => {
     const a4s = [...document.querySelectorAll<HTMLElement>('.bulk-shell .a4')]
     if (kind === 'print') {
@@ -48,7 +48,7 @@ export function BulkDownload({ cycle, ids, onClose }: { cycle: Cycle; ids: strin
   return (
     <Modal title="선택 항목 다운로드" onClose={onClose}>
       <div className="bulk-dl">
-        <p className="muted small bulk-who"><b>{targets.length}명</b> · {targets.map((t) => t.name).join(', ')}</p>
+        <p className="muted small bulk-who">{targets.map((t) => t.name).join(', ')}</p>
         <fieldset className="bulk-set">
           <legend>포함 항목</legend>
           {GROUPS.map((g) => <label key={g.key} className="check"><input type="checkbox" checked={inc[g.key]} onChange={(e) => setInc({ ...inc, [g.key]: e.target.checked })} /> {g.label}</label>)}

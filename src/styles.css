@@ -1585,3 +1585,4 @@ body.drag-sorting, body.drag-sorting * { cursor: grabbing !important; user-selec
   body.print-bulk .bulk-shell { display: block !important; }
 }
 @media screen { .bulk-shell { display: none !important; } }
+.result-head-actions { gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; } /* D-170 */

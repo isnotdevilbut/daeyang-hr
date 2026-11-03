@@ -32,16 +32,18 @@ export default function Results() {
       <div className="page-head">
         <h1>결과 · 리포트</h1>
         {cycle && (
+          <div className="row result-head-actions">
+            {/* D-170: 평가 회차 왼쪽에 전체 선택 · 선택 항목 다운로드(늘 보임, 고른 사람이 없으면 누를 수 없음). 인원 수는 적지 않음 */}
+            {canReport && (() => { const all = cycle.targets.map((t) => t.employeeId); const full = all.length > 0 && all.every((id) => ids.includes(id)); return <button className="btn" onClick={() => setIds(full ? [] : all)}>{full ? '전체 해제' : '전체 선택'}</button> })()}
+            {canReport && <button className="btn" disabled={!ids.length} title={ids.length ? undefined : '표에서 사람을 먼저 고르세요'} onClick={() => setBulk(true)}>선택 항목 다운로드</button>}
           <div className="cycle-pick">
-            {/* D-169: 회차 왼쪽 전체 선택(모두 골라져 있으면 전체 해제) */}
-            {canReport && (() => { const all = cycle.targets.map((t) => t.employeeId); const full = all.length > 0 && all.every((id) => ids.includes(id)); return <button className="btn small" onClick={() => setIds(full ? [] : all)}>{full ? '전체 해제' : '전체 선택'}</button> })()}
             <label>
               <span className="pick-label">평가 회차</span>
               <select value={cycle.id} onChange={(e) => selectCycle(e.target.value)}>
                 {cycles.map((c) => <option key={c.id} value={c.id}>{cycleLabel(c)}</option>)}
               </select>
             </label>
-            {canReport && ids.length > 0 && <button className="btn primary small" onClick={() => setBulk(true)}>선택 항목 다운로드</button>}
+          </div>
           </div>
         )}
       </div>
