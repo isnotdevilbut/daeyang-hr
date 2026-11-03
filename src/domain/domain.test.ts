@@ -1043,7 +1043,8 @@ describe('응답 화면 칸 진행 표시 (D-058)', () => {
 describe('팀 관리 (D-064·D-065)', () => {
   it('인원 = 이 팀 소속 재직 직원, 팀장 먼저, 다른 팀 소속 팀장은 세지 않음', () => {
     const s = createSeed()
-    expect(teamMembers(s, 'tm-prod2').map((e) => e.id).slice(0, 1)).toEqual(['e17']) // 권민혁(팀장) 먼저
+    expect(teamMembers(s, 'tm-prod2').map((e) => e.id).slice(0, 2)).toEqual(['e23', 'e17']) // D-139: 임원(전상철) → 팀장(권민혁) → 사원
+    expect(teamMembers(s, 'tm-prod2').slice(2).every((e) => !e.isExecutive && !s.teams.some((t) => t.leadId === e.id))).toBe(true)
     expect(teamMembers(s, 'tm-prod2')).toHaveLength(10) // D-079 9명 + D-110 임원 1명
     s.teams.find((t) => t.id === 'tm-prod2')!.leadId = 'e05' // 다른 팀 직원을 팀장으로
     expect(teamMembers(s, 'tm-prod2').map((e) => e.id)).not.toContain('e05')

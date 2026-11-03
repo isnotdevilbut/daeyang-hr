@@ -1475,3 +1475,8 @@ details[open] > summary > .toggle-ic { transform: rotate(180deg); }
 .lead-opt.hi { background: rgba(32, 184, 202, 0.10); }
 .lead-opt.on { font-weight: 800; color: var(--brand-navy); background: rgba(9, 82, 158, 0.08); }
 .lead-menu { position: fixed; top: auto; right: auto; z-index: 1000; max-height: min(320px, 60vh); }
+/* D-139: 팀 인원 = 밑줄 글자 링크(눌러서 명단 펼치기) — 토글 버튼 모양 대신 */
+.team-tbl .count-toggle { min-height: 0; padding: 2px 4px; border: 0; border-radius: 4px; background: none; font-weight: 700; color: var(--brand-blue, #09529e); text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1.5px; }
+.team-tbl .count-toggle:hover { color: var(--brand-navy); background: rgba(9, 82, 158, 0.06); border: 0; }
+.team-tbl .count-toggle[aria-expanded='true'] { background: none; border: 0; color: var(--brand-navy); }
+.team-tbl .count-toggle:focus-visible { outline: 2px solid #20b8ca; outline-offset: 2px; }

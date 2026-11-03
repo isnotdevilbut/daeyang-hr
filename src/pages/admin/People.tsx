@@ -380,7 +380,7 @@ function OrgEditor() {
                     </td>
                     <td>
                       <button type="button" className="count-toggle" aria-expanded={isOpen} aria-controls={`members-${t.id}`} onClick={() => toggle(t.id)}>
-                        {members.length}명 <span aria-hidden>{isOpen ? '▴' : '▾'}</span>
+                        {members.length}명
                       </button>
                     </td>
                     <td><button className="btn small danger" onClick={() => startRemove(t.id, t.name)}>삭제</button></td>

@@ -104,11 +104,12 @@ export function deleteEmployee(d: AppState, id: string) {
 export const activeTeams = (s: Pick<AppState, 'teams'>) => s.teams.filter((t) => !t.archived)
 
 /** 팀 구성원 = 이 팀 소속 재직 직원. 팀장(이 팀 소속일 때만) 먼저, 나머지는 이름순. 다른 팀 소속 팀장은 세지 않는다 */
+/** 팀 소속 재직 직원 — 직급 순서(임원 → 팀장 → 사원, D-139) → 이름순. 같은 직급이면 이 팀 팀장이 먼저 */
 export function teamMembers(s: AppState, teamId: string): Employee[] {
   const lead = s.teams.find((t) => t.id === teamId)?.leadId
   return s.employees
     .filter((e) => e.active && e.teamId === teamId)
-    .sort((a, b) => Number(b.id === lead) - Number(a.id === lead) || a.name.localeCompare(b.name, 'ko'))
+    .sort((a, b) => TIERS.indexOf(tierOf(s, a)) - TIERS.indexOf(tierOf(s, b)) || Number(b.id === lead) - Number(a.id === lead) || a.name.localeCompare(b.name, 'ko'))
 }
 
 /** 새 팀·이름 변경 검증: 빈 이름, 현재 조직의 다른 팀과 같은 이름(업로드·화면에서 팀을 이름으로 찾으므로 전체에서 하나) */
