@@ -107,8 +107,8 @@ export default function PersonResultPage() {
       {/* 이 직원이 다른 사람에게 평가받는 내용 — 위의 작성할 업무(미완료 평가)와 따로 (D-071) */}
       <h2 className="section-title">평가 현황</h2>
       <RecvList cycle={cycle} targetId={t.employeeId} />
-      {/* 자기평가를 켠 임원: 본인 자기평가(위 평가 현황)와 담당 대상자 평가를 따로 (D-089). 사원: 작성할 팀원→팀장평가(D-114) */}
-      {(() => { const e = s.employees.find((x) => x.id === t.employeeId); return e && (e.isExecutive || e.isCeo || upwardAssignments(cycle, s.employees).some((a) => a.evaluatorId === e.id)) ? <WriteList cycle={cycle} evaluatorId={t.employeeId} /> : null })()}
+      {/* D-127: 같은 '평가 현황' 아래 — 받는 평가(위) + 이 사람이 해야 할 평가(아래, 사원·팀장·임원 모두: 팀장평가·임원평가·팀원→팀장평가). 해야 할 평가가 없으면 표시 안 함 */}
+      <WriteList cycle={cycle} evaluatorId={t.employeeId} title={false} />
       {/* 제목은 상자 밖, 내용은 상자 안 — 평가 현황과 같은 구조 (D-087) */}
       <div className="detail-grid">
         <div className="detail-col">
@@ -238,7 +238,7 @@ function RecvList({ cycle, targetId }: { cycle: Cycle; targetId: string }) {
  * 담당 평가 현황(D-089): 이 평가자가 작성할 대상자 평가(자기평가 제외). 진행 현황 표의 작성 건수와 같은 배정(activeWriteAssignments)을 쓴다.
  * 완료 = 제출, 미완료 = 미시작·작성 중·선행 단계 대기 — 상태 칸은 완료/미완료만(세부 상태 문구 없음, D-111). 보기만(대신 작성·제출 없음)
  */
-function WriteList({ cycle, evaluatorId }: { cycle: Cycle; evaluatorId: string }) {
+function WriteList({ cycle, evaluatorId, title = true }: { cycle: Cycle; evaluatorId: string; title?: boolean }) {
   const s = useAppState()
   const rows = activeWriteAssignments(cycle, s.employees)
     .concat(upwardAssignments(cycle, s.employees)) // 사원의 팀원→팀장평가(D-114)
@@ -248,17 +248,19 @@ function WriteList({ cycle, evaluatorId }: { cycle: Cycle; evaluatorId: string }
     // 미완료 먼저, 완료는 아래(D-093) — 같은 그룹 안에서는 팀·팀장 먼저·이름 순
     .sort((x, y) => Number(x.st === 'submitted') - Number(y.st === 'submitted') || x.t.teamName.localeCompare(y.t.teamName, 'ko') || Number(y.t.isTeamLead) - Number(x.t.isTeamLead) || x.t.name.localeCompare(y.t.name, 'ko'))
   const shown = rows // D-126: 전체·미완료·완료 개수 버튼 없이 모두 표시(미완료 먼저)
+  if (!title && rows.length === 0) return null
   return (
     <>
-      <h2 id="write-title" className="section-title">담당 평가 현황</h2>
-      <section className="panel recv-panel write-panel" aria-labelledby="write-title">
+      {title && <h2 id="write-title" className="section-title">평가 현황</h2>}
+      <section className="panel recv-panel write-panel" aria-label="해야 할 평가">
         {rows.length === 0 ? <p className="write-empty">배정된 평가 없음</p> : <>
           <div className="table-wrap">
             <table className="tbl write-tbl">
-              <thead><tr><th>팀</th><th>직급</th><th>평가 대상자</th><th>상태</th></tr></thead>
+              <thead><tr><th>평가 유형</th><th>팀</th><th>직급</th><th>평가 대상자</th><th>상태</th></tr></thead>
               <tbody>
                 {shown.map((r) => (
                   <tr key={r.a.id}>
+                    <td>{(() => { const rule = ctxFor(cycle, r.a).rule; return rule ? RULE_TEXT[rule] : '' })()}</td>
                     <td>{r.t.teamName}</td>
                     <td>{targetPosition(s, cycle, r.t)}</td>
                     <td><b>{r.t.name}</b></td>

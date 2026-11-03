@@ -1426,3 +1426,10 @@ label.field, fieldset.field legend { font-size: 16px; }
 /* D-126: 문항 목록 맨 아래 영역 추가 */
 .q-add-sec { display: flex; justify-content: center; margin: 6px 0 24px; }
 .q-add-sec .btn { min-width: 200px; }
+/* D-127: 평가 현황 아래 '해야 할 평가' 표 — 평가 유형 열 추가로 5열, 받는 평가 표와 간격 */
+.write-tbl th, .write-tbl td, .panel .write-tbl th:first-child, .panel .write-tbl td:first-child { width: 20%; }
+.recv-panel + .write-panel { margin-top: 12px; }
+@media (max-width: 640px) {
+  .write-tbl { min-width: 520px; }
+  .write-tbl th:nth-child(n), .write-tbl td:nth-child(n) { width: 20%; }
+}
