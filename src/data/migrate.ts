@@ -15,7 +15,7 @@ import { scoringV16 } from '../domain/scoringV16'
 import { execPerTeam } from '../domain/execTeamsV17'
 import { upwardV18 } from '../domain/upward'
 import { joinAllStaff } from '../domain/joinAllV19'
-import { moreDemo } from '../domain/demoV20'
+import { leadUpwardOpen, moreDemo } from '../domain/demoV20'
 import { tierOf } from '../domain/org'
 
 export interface MigrationResult { state: AppState; notes: string[] }
@@ -215,7 +215,13 @@ export function migrate(raw: any): MigrationResult | null {
     s.schemaVersion = 20
   }
 
-  if (s.schemaVersion !== 20) return null
+  if (s.schemaVersion === 20) {
+    // v20 → v21 (D-121): 장현우가 받는 팀원→팀장평가 5/6(시연 응답 한 건만 미제출로, 사용자 응답 그대로)
+    notes.push(...leadUpwardOpen(s))
+    s.schemaVersion = 21
+  }
+
+  if (s.schemaVersion !== 21) return null
   return { state: s as AppState, notes }
 }
 

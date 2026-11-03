@@ -3,7 +3,7 @@ import { scoringV16 } from './scoringV16'
 import { execPerTeam } from './execTeamsV17'
 import { upwardV18 } from './upward'
 import { joinAllStaff } from './joinAllV19'
-import { moreDemo } from './demoV20'
+import { leadUpwardOpen, moreDemo } from './demoV20'
 import { rosterAndPaths } from './rosterV12'
 import { ensureCatalog } from './catalog'
 import { syncCycle } from './cycleSync'
@@ -20,7 +20,7 @@ import { createCycle, DEFAULT_TEMPLATE_BY_JOB, eligibleTargets } from './cycle'
 import { isUnlocked } from './progress'
 
 // v2: 상향평가 제외 / v3: 단계 반영 비율 회차별 / v4: KPI 지표·개인평가 반영. 이전 저장본은 data/migrate.ts에서 변환
-export const SCHEMA_VERSION = 20
+export const SCHEMA_VERSION = 21
 
 function rng(seed: number) {
   return () => {
@@ -214,5 +214,6 @@ export function createSeed(opts: { legacy?: boolean; until?: number } = {}): App
   upwardV18(state) // 팀원→팀장평가 배정·시연 응답 (D-114) — 저장 데이터 변환과 같은 함수
   if ((opts.until ?? SCHEMA_VERSION) < 20) { state.schemaVersion = opts.until!; return state }
   moreDemo(state) // 시연 완료 비중 높임 (D-117) — 저장 데이터 변환과 같은 함수
+  leadUpwardOpen(state) // 장현우 팀원→팀장평가 5/6 (D-121) — 저장 데이터 변환과 같은 함수
   return state
 }

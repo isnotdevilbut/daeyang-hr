@@ -49,3 +49,24 @@ export function moreDemo(s: AppState): string[] {
   }
   return notes
 }
+
+/**
+ * v20 → v21 (D-121): 시연 구성 — 장현우(설계팀 팀장)가 받는 팀원→팀장평가를 5/6으로(모두 완료 → 한 건 미제출).
+ * 시연 제출(demo) 한 건만 되돌린다(사번이 가장 늦은 팀원). 사용자가 쓴 응답은 건드리지 않고, 이미 미제출이 있으면 그대로. 다시 실행해도 같다
+ */
+export function leadUpwardOpen(s: AppState): string[] {
+  const notes: string[] = []
+  const lead = s.employees.find((e) => e.id === 'e10' && e.active && s.teams.some((t) => !t.archived && t.leadId === e.id))
+  if (!lead) return notes
+  for (const c of s.cycles) {
+    if (!open(c)) continue
+    const ups = upwardAssignments(c, s.employees).filter((a) => a.targetId === lead.id)
+    if (!ups.length || ups.some((a) => statusOf(s.responses, a.id) !== 'submitted')) continue
+    const no = (id: string) => s.employees.find((e) => e.id === id)?.empNo ?? ''
+    const pick = ups.filter((a) => s.responses[a.id]?.demo).sort((a, b) => no(b.evaluatorId).localeCompare(no(a.evaluatorId), 'ko', { numeric: true }))[0]
+    if (!pick) continue
+    delete s.responses[pick.id]
+    notes.push(`${c.name}: ${lead.name} 팀원→팀장평가 시연 응답 1건 미제출로(${s.employees.find((e) => e.id === pick.evaluatorId)?.name})`)
+  }
+  return notes
+}

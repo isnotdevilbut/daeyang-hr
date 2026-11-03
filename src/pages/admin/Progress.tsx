@@ -166,7 +166,7 @@ function Body({ s, cycle }: { s: AppState; cycle: Cycle }) {
                     </span>
                   </td>
                   {/* 열 순서: 자기평가 · 팀원→팀장평가(1단계 분류, D-114) · 팀장평가 · 임원평가 */}
-                  {[r.cells[0], r.up, r.cells[1], r.cells[2]].map((cell, i) => <td key={i} className="writes c-eval"><span className="cell-in"><Cell c={cell} /></span></td>)}
+                  {[r.cells[0], r.up, r.cells[1], r.cells[2]].map((cell, i) => <td key={i} className="writes c-eval"><span className="cell-in"><Cell c={cell} plain={i === 1} /></span></td>)}
                   <td className="c-act">{can(s.session.role, 'viewResults') && <Link className="btn small" to={`/admin/results/${r.t.employeeId}?from=progress`} onClick={() => { try { sessionStorage.setItem(SCROLL_KEY, String(window.scrollY)) } catch { /* 무시 */ } }}>상세</Link>}</td>
                 </tr>
               ))}
@@ -192,9 +192,10 @@ function cardGlow(e: React.PointerEvent) {
 const STAGE_COLS = ['자기평가', '팀원→팀장평가', '팀장평가', '임원평가']
 
 /** 칸: 받는 평가 = 완료/미완료(선행 대기·평가자 미지정도 미완료), 작성 업무 = 건수, 적용 안 됨 — */
-function Cell({ c }: { c: ProgressCell }) {
+/** plain = 팀원→팀장평가 열(D-121): 여러 건 'x/y 완료'는 모두 끝나도 초록 대신 굵은 검정 */
+function Cell({ c, plain }: { c: ProgressCell; plain?: boolean }) {
   if (c.kind === 'na') return <span className="na-dash" aria-label="해당 없음">—</span>
-  if (c.kind === 'write') return <Writes w={c.w} />
+  if (c.kind === 'write') return <Writes w={c.w} plain={plain} />
   return <RecvBadge status={c.status} />
 }
 function RecvBadge({ status }: { status: CellStatus }) {
@@ -212,11 +213,11 @@ function StatusIcon({ done, title }: { done: boolean; title?: string }) {
  * 단계 칸 = 그 직원이 그 단계에서 작성할 업무(선행 대기도 미완료). 배정 없음 —, 1건 ✓ 완료/미완료,
  * 여러 건 "5/9 완료" — 남은 건이 있으면 빨간 글씨, 모두 제출이면 초록(D-108: "n건 미완료" 문구 제거)
  */
-function Writes({ w }: { w: WriteSummary }) {
+function Writes({ w, plain }: { w: WriteSummary; plain?: boolean }) {
   if (w.total === 0) return <span className="na-dash" aria-label="배정 없음">—</span>
   if (w.total === 1) return <StatusIcon done={!w.open} />
   return (
-    <span className={`writes-sum ${w.open ? 'open' : 'done'}`} aria-label={w.open ? `${w.total}건 중 ${w.done}건 완료, ${w.open}건 미완료` : undefined}>
+    <span className={`writes-sum ${w.open || plain ? 'open' : 'done'}`} aria-label={w.open ? `${w.total}건 중 ${w.done}건 완료, ${w.open}건 미완료` : undefined}>
       <span className="w-done">{w.done}/{w.total} 완료</span>
     </span>
   )
