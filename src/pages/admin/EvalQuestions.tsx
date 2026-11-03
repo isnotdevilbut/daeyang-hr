@@ -21,23 +21,31 @@ import { pointsErrors, usesPoints } from '../../domain/points'
 import { activeVersions, liveVersions, addVersion, applyVersion, applyVersions, blankTemplate, cloneTemplate, deleteVersion, pickKey, resolveVersion, saveVersionDraft, scopeTargets, versionUsed, type VersionProblem } from '../../domain/versions'
 import type { TemplateVersion, VersionScope } from '../../domain/types'
 
+/** 끌어서 옮길 자리: list = 영역 번호(영역을 옮길 때는 0), slot = 그 목록에서 끼워 넣을 자리(0 ~ 개수) */
+type DragPos = { list: number; slot: number }
 /**
- * 끌어서 순서 바꾸기(D-158). 손잡이를 누른 채 위아래로 움직이면 놓일 자리에 선이 보이고, 놓으면 그 자리로 옮긴다.
- * 같은 묶음(data-drag-group)끼리만 — 마우스·터치 모두(pointer 이벤트). 화면 위·아래 끝에서는 저절로 스크롤
+ * 끌어서 순서 바꾸기(D-158·D-159). 손잡이를 누른 채 위아래로 움직이면 놓일 자리에 선이 보이고, 놓으면 그 자리로 옮긴다.
+ * 영역은 영역끼리, 문항은 다른 영역으로도(D-159 — 포인터가 있는 영역에 놓임, 빈 영역도 가능). 마우스·터치 모두(pointer 이벤트), 화면 위·아래 끝에서는 저절로 스크롤
  */
-function useDragSort(onDrop: (group: string, from: number, to: number) => void) {
-  const [drag, setDrag] = useState<{ group: string; from: number; slot: number } | null>(null)
-  const start = (group: string, from: number) => (e: React.PointerEvent) => {
+function useDragSort(onDrop: (kind: 'sec' | 'q', from: DragPos, to: DragPos) => void) {
+  const [drag, setDrag] = useState<{ kind: 'sec' | 'q'; from: DragPos; to: DragPos } | null>(null)
+  const slotIn = (els: HTMLElement[], y: number) => { const k = els.findIndex((el) => { const r = el.getBoundingClientRect(); return y < r.top + r.height / 2 }); return k < 0 ? els.length : k }
+  const target = (kind: 'sec' | 'q', y: number): DragPos => {
+    const secs = [...document.querySelectorAll<HTMLElement>('[data-drag-group="sec"]')]
+    if (kind === 'sec') return { list: 0, slot: slotIn(secs, y) }
+    let list = secs.findIndex((el) => y < el.getBoundingClientRect().bottom)
+    if (list < 0) list = secs.length - 1
+    return { list, slot: slotIn([...secs[list].querySelectorAll<HTMLElement>('[data-drag-group="q"]')], y) }
+  }
+  const start = (kind: 'sec' | 'q', from: DragPos) => (e: React.PointerEvent) => {
     if (e.button !== 0) return
     e.preventDefault()
-    let slot = from
-    setDrag({ group, from, slot })
+    let to = from
+    setDrag({ kind, from, to })
     document.body.classList.add('drag-sorting')
     const onMove = (ev: PointerEvent) => {
-      const els = [...document.querySelectorAll<HTMLElement>(`[data-drag-group="${CSS.escape(group)}"]`)]
-      const k = els.findIndex((el) => { const r = el.getBoundingClientRect(); return ev.clientY < r.top + r.height / 2 })
-      slot = k < 0 ? els.length : k
-      setDrag({ group, from, slot })
+      to = target(kind, ev.clientY)
+      setDrag({ kind, from, to })
       if (ev.clientY < 70) window.scrollBy(0, -18)
       else if (ev.clientY > window.innerHeight - 70) window.scrollBy(0, 18)
     }
@@ -45,18 +53,23 @@ function useDragSort(onDrop: (group: string, from: number, to: number) => void) 
       window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', end); window.removeEventListener('pointercancel', end)
       document.body.classList.remove('drag-sorting')
       setDrag(null)
-      const to = slot > from ? slot - 1 : slot
-      if (ev.type === 'pointerup' && to !== from) onDrop(group, from, to)
+      const same = to.list === from.list
+      if (same && (to.slot === from.slot || to.slot === from.slot + 1)) return
+      if (ev.type === 'pointerup') onDrop(kind, from, { list: to.list, slot: same && to.slot > from.slot ? to.slot - 1 : to.slot })
     }
     window.addEventListener('pointermove', onMove); window.addEventListener('pointerup', end); window.addEventListener('pointercancel', end)
   }
   /** 끄는 중인 항목·놓일 자리 표시(앞에 선 / 마지막이면 뒤에 선). 제자리면 선 없음 */
-  const cls = (group: string, i: number, n: number) => {
-    if (!drag || drag.group !== group) return ''
-    const same = drag.slot === drag.from || drag.slot === drag.from + 1
-    return [i === drag.from ? 'dragging' : '', !same && drag.slot === i ? 'drop-before' : '', !same && drag.slot === n && i === n - 1 ? 'drop-after' : ''].filter(Boolean).join(' ')
+  const cls = (kind: 'sec' | 'q', list: number, i: number, n: number) => {
+    if (!drag || drag.kind !== kind) return ''
+    const { from, to } = drag
+    const stay = to.list === from.list && (to.slot === from.slot || to.slot === from.slot + 1)
+    const here = !stay && to.list === list
+    return [from.list === list && from.slot === i ? 'dragging' : '', here && to.slot === i ? 'drop-before' : '', here && to.slot === n && i === n - 1 ? 'drop-after' : ''].filter(Boolean).join(' ')
   }
-  return { start, cls }
+  /** 문항이 없는 영역에 놓을 때 그 영역 표시 */
+  const into = (list: number) => (drag?.kind === 'q' && drag.to.list === list && drag.from.list !== list ? 'drop-into' : '')
+  return { start, cls, into }
 }
 
 function DragHandle({ label, onStart, onKey }: { label: string; onStart: (e: React.PointerEvent) => void; onKey: (d: number) => void }) {
@@ -81,7 +94,7 @@ export default function EvalQuestions({ cycle }: { cycle: Cycle }) {
   const [preview, setPreview] = useState(false)
   const [importing, setImporting] = useState(false)
   const [msg, setMsg] = useState('')
-  const drop = useDragSort((g, from, to) => reorder(g, from, to))
+  const drop = useDragSort((kind, from, to) => reorder(kind, from, to))
   const live = s.cycles.find((c) => c.id === cycle.id)!
   const t = live.templates[setId]
   if (!t) return <div className="panel pad">이 평가에 연결된 문항이 없습니다.</div>
@@ -130,10 +143,11 @@ export default function EvalQuestions({ cycle }: { cycle: Cycle }) {
     })
   }
   const move = <T,>(arr: T[], i: number, d: number) => { const j = i + d; if (j >= 0 && j < arr.length) [arr[i], arr[j]] = [arr[j], arr[i]] }
-  // D-158: 영역·문항 순서는 손잡이(⠿)를 끌어서 바꿈 — 문항은 같은 영역 안에서만
-  const reorder = (group: string, from: number, to: number) => mut((x) => {
-    const arr: unknown[] = group === 'sec' ? x.sections : x.sections.find((y) => `q:${y.id}` === group)?.questions ?? []
-    const [it] = arr.splice(from, 1); arr.splice(to, 0, it)
+  // D-158·D-159: 영역·문항 순서는 손잡이(⠿)를 끌어서 바꿈 — 문항은 다른 영역으로도 옮길 수 있음(문항 ID·응답은 그대로)
+  const reorder = (kind: 'sec' | 'q', from: DragPos, to: DragPos) => mut((x) => {
+    if (kind === 'sec') { const [it] = x.sections.splice(from.slot, 1); x.sections.splice(to.slot, 0, it); return }
+    const [q] = x.sections[from.list].questions.splice(from.slot, 1)
+    x.sections[to.list].questions.splice(to.slot, 0, q)
   })
 
   return (
@@ -155,9 +169,9 @@ export default function EvalQuestions({ cycle }: { cycle: Cycle }) {
       {t.sections.length === 0 && <div className="panel pad empty-start"><p>문항이 없습니다. 아래 '+ 영역 추가'로 영역을 만든 뒤 그 안에서 문항을 추가하거나 엑셀·CSV로 가져오세요.</p></div>}
 
       {t.sections.map((sec, si) => (
-        <section className={`panel q-section ${drop.cls('sec', si, t.sections.length)}`} key={sec.id} data-sec={sec.id} data-drag-group="sec">
+        <section className={`panel q-section ${drop.cls('sec', 0, si, t.sections.length)} ${drop.into(si)}`} key={sec.id} data-sec={sec.id} data-drag-group="sec">
           <div className="q-sec-head">
-            <DragHandle label={`${sec.title} 영역 순서 바꾸기 — 끌어서 옮기기(키보드 ↑↓)`} onStart={drop.start('sec', si)} onKey={(d) => mut((x) => move(x.sections, si, d))} />
+            <DragHandle label={`${sec.title} 영역 순서 바꾸기 — 끌어서 옮기기(키보드 ↑↓)`} onStart={drop.start('sec', { list: 0, slot: si })} onKey={(d) => mut((x) => move(x.sections, si, d))} />
             <input type="text" className="sec-title" aria-label="영역 이름" value={sec.title} onChange={(e) => mut((x) => { x.sections[si].title = e.target.value })} />
             <span className="muted">{sec.questions.filter((q) => q.active).length}문항</span>
             {/* 영역 배점(D-103) — 비우면 점수에 넣지 않는 영역 */}
@@ -176,8 +190,8 @@ export default function EvalQuestions({ cycle }: { cycle: Cycle }) {
                 const rules = rulesOf(q)
                 const scope = [rules.map((r) => RULE_TEXT[r]).join('·'), q.jobs?.length === 1 ? `${jobName(s, q.jobs[0])}만` : '', q.targetRoles?.length === 1 ? (q.targetRoles[0] === 'lead' ? '팀장 대상' : '사원 대상') : '', q.teams?.length ? `팀 ${q.teams.length}곳만` : '', q.positions?.length ? `직급 ${q.positions.length}개만` : ''].filter(Boolean).join(' · ')
                 return (
-                  <li key={q.id} className={`q-row ${q.active ? '' : 'off'} ${drop.cls(`q:${sec.id}`, qi, sec.questions.length)}`} data-drag-group={`q:${sec.id}`}>
-                    <DragHandle label={`${q.title || '문항'} 순서 바꾸기 — 끌어서 옮기기(키보드 ↑↓)`} onStart={drop.start(`q:${sec.id}`, qi)} onKey={(d) => mut((x) => move(x.sections[si].questions, qi, d))} />
+                  <li key={q.id} className={`q-row ${q.active ? '' : 'off'} ${drop.cls('q', si, qi, sec.questions.length)}`} data-drag-group="q">
+                    <DragHandle label={`${q.title || '문항'} 순서 바꾸기 — 끌어서 옮기기(키보드 ↑↓)`} onStart={drop.start('q', { list: si, slot: qi })} onKey={(d) => mut((x) => move(x.sections[si].questions, qi, d))} />
                     <span className="q-no">{q.active ? ++no : '–'}</span>
                     <div className="q-main">
                       <div className="q-title">{q.title || '(제목 없음)'}{!q.active && <span className="chip na tag">사용 중지</span>}</div>
