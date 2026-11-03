@@ -11,6 +11,7 @@ import { createSeed } from '../domain/seed'
 import { ensureCatalog } from '../domain/catalog'
 import { syncCycle } from '../domain/cycleSync'
 import { v15 } from '../domain/demoV15'
+import { scoringV16 } from '../domain/scoringV16'
 import { tierOf } from '../domain/org'
 
 export interface MigrationResult { state: AppState; notes: string[] }
@@ -179,7 +180,14 @@ export function migrate(raw: any): MigrationResult | null {
     s.schemaVersion = 15
   }
 
-  if (s.schemaVersion !== 15) return null
+  if (s.schemaVersion === 15) {
+    // v15 → v16 (D-103): 평가표 배점(사원 35·20·20·10·15)·팀장 자기평가표 버전·단계 반영 비율 20/40/40(이전 개발용 기본값일 때만)·직급별 최종 반영 예시 보관.
+    // 준비·진행 회차만, 응답·문항 ID·번역·배정·확정 회차 그대로
+    notes.push(...scoringV16(s))
+    s.schemaVersion = 16
+  }
+
+  if (s.schemaVersion !== 16) return null
   return { state: s as AppState, notes }
 }
 

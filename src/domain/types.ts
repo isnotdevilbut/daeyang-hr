@@ -100,6 +100,8 @@ export interface Question {
   required: boolean
   purpose: 'score' | 'info' // 점수 문항 / 정보 수집 문항
   maxPoints: number | null // 원본 양식의 표시 배점 (참고용)
+  /** 영역 안 문항 배점(D-103) — 영역 달성 비율을 구할 때의 문항 비중. 영역 배점과 중복 합산하지 않는다. 서술형은 채점값 범위(0~배점) */
+  points?: number | null
   options: Option[]
   directions: Direction[] // 이 문항에 답하는 평가 방향 (self / down)
   active: boolean
@@ -116,7 +118,8 @@ export interface Question {
   positions?: ID[]
 }
 
-export interface Section { id: ID; title: string; area: AreaKey | null; questions: Question[]; i18n?: { ru?: SectionTr } }
+/** points = 영역 배점(D-103). 하나라도 있으면 그 평가표는 배점 방식으로 계산(없으면 이전 방식). desc = 영역 설명(관리자 편집·참고) */
+export interface Section { id: ID; title: string; area: AreaKey | null; questions: Question[]; i18n?: { ru?: SectionTr }; points?: number | null; desc?: string }
 
 export interface Template {
   id: ID
@@ -128,6 +131,8 @@ export interface Template {
   version: number
   sourceNote: string
   sections: Section[]
+  /** 등급 문항의 점수 환산(D-103, 평가표별 수정 가능). 없으면 기본 A=5·B=4·C=3·D=2·E=1 */
+  gradeScale?: Record<string, number>
 }
 
 // ── 회차·배정·응답 ─────────────────────────────────
@@ -214,6 +219,8 @@ export interface Cycle {
   /** 지정 버전 둘 이상이 같은 평가에 겹칠 때 관리자가 고른 버전 — 키 = 겹친 버전 ID를 정렬해 '|'로 이은 값 */
   versionPicks?: Record<string, ID>
   /** 부서 KPI의 개인평가 반영 (D-041). 기존 회차는 꺼진 상태로 변환 */
+  /** 직급별 최종 반영 예시(D-103, 보관·검증만 — 적용 보류) */
+  finalBlendPlan?: FinalBlendPlan
   kpiBlend: KpiBlend
   targets: TargetSnapshot[]
   assignments: Assignment[]
@@ -266,6 +273,11 @@ export interface KpiIndicator {
 
 /** 회차별 부서 KPI 개인평가 반영 설정. 비율은 % (합계 100) */
 export interface KpiBlend { enabled: boolean; personal: number | null; kpi: number | null }
+
+/** 직급별 최종 반영 요소(D-103, 자문 예시) — 저장·검증만 하고 아직 점수에 적용하지 않는다(의미·상향평가 미정) */
+export type FinalPart = 'personal' | 'self' | 'kpi' | 'upward'
+export interface FinalBlendItem { key: FinalPart; on: boolean; pct: number | null }
+export type FinalBlendPlan = Record<'member' | 'lead' | 'exec', FinalBlendItem[]>
 
 export interface CalcPolicy {
   id: ID
@@ -324,6 +336,8 @@ export interface AppState {
   kpiIndicators: KpiIndicator[]
   policy: CalcPolicy
   adjustments: Adjustment[]
+  /** 서술형 점수 문항의 관리자 채점값(D-103): 배정 ID → 문항 ID → 점수(0~문항 배점). 없으면 미채점(0점 아님) */
+  manualScores?: Record<ID, Record<ID, number>>
   session: DemoSession
   /** 직원 분류 기준(없으면 빈 목록) */
   customFields?: CustomField[]

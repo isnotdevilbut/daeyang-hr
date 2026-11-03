@@ -15,6 +15,7 @@ import { needsReview, sectionNeedsReview, t as tr } from '../../i18n'
 import { Modal } from '../../components/ui'
 import { jobName, positionName, positionsOf } from '../../domain/catalog'
 import { activeTeams } from '../../domain/org'
+import { GRADE_LETTERS, gradeScaleOf, pointsErrors, usesPoints } from '../../domain/points'
 import { activeVersions, liveVersions, addVersion, applyVersion, applyVersions, blankTemplate, cloneTemplate, deleteVersion, pickKey, resolveVersion, saveVersionDraft, scopeTargets, versionUsed, type VersionProblem } from '../../domain/versions'
 import type { TemplateVersion, VersionScope } from '../../domain/types'
 
@@ -42,6 +43,7 @@ export default function EvalQuestions({ cycle }: { cycle: Cycle }) {
       x.version += 1
     })
   const answered = (qid: string) => answeredCount(s, live, qid)
+  const closedCycle = live.status === '확정' // 확정 회차의 배점은 바꾸지 않음(과거 결과 보존)
   const total = t.sections.reduce((a, x) => a + x.questions.filter((q) => q.active).length, 0)
   let no = 0
   const setLabel = (id: string) => {
@@ -90,6 +92,7 @@ export default function EvalQuestions({ cycle }: { cycle: Cycle }) {
         <button className="btn primary" disabled={t.sections.length === 0} onClick={() => setPicking({ sectionId: t.sections[t.sections.length - 1].id })}>+ 문항 추가</button>
       </div>
       {msg && <p className="feedback ok" role="status">✓ {msg}</p>}
+      <PointsBar t={t} disabled={closedCycle} onChange={(fn) => mut(fn)} />
       {t.sections.length === 0 && <div className="panel pad empty-start"><p>문항이 없습니다. 영역을 추가한 뒤 문항을 넣거나 CSV로 가져오세요.</p></div>}
 
       {t.sections.map((sec, si) => (
@@ -97,12 +100,18 @@ export default function EvalQuestions({ cycle }: { cycle: Cycle }) {
           <div className="q-sec-head">
             <input type="text" className="sec-title" aria-label="영역 이름" value={sec.title} onChange={(e) => mut((x) => { x.sections[si].title = e.target.value })} />
             <span className="muted">{sec.questions.filter((q) => q.active).length}문항</span>
+            {/* 영역 배점(D-103) — 비우면 점수에 넣지 않는 영역 */}
+            <label className="sec-pts">배점<input type="number" inputMode="decimal" className="no-spin" aria-label={`${sec.title} 영역 배점`} disabled={closedCycle} value={sec.points ?? ''} placeholder="—"
+              onWheel={(e) => e.currentTarget.blur()} onChange={(e) => mut((x) => { x.sections[si].points = e.target.value === '' ? null : Number(e.target.value) })} />점</label>
             <SectionRu sec={sec} onChange={(fn) => mut((x) => fn(x.sections[si]))} />
             <span className="spacer" />
             {si > 0 && <button className="btn small" aria-label={`${sec.title} 영역 위로`} onClick={() => mut((x) => move(x.sections, si, -1))}>↑</button>}
             {si < t.sections.length - 1 && <button className="btn small" aria-label={`${sec.title} 영역 아래로`} onClick={() => mut((x) => move(x.sections, si, 1))}>↓</button>}
             <button className="btn small danger" onClick={() => removeSection(si)}>영역 삭제</button>
           </div>
+          {(typeof sec.points === 'number' || sec.desc) && (
+            <div className="sec-desc"><input type="text" aria-label={`${sec.title} 영역 설명`} placeholder="영역 설명 (예: 근태·업무집중도 등)" value={sec.desc ?? ''} onChange={(e) => mut((x) => { x.sections[si].desc = e.target.value })} /></div>
+          )}
           {sec.questions.length === 0 ? <p className="empty-row">문항이 없습니다.</p> : (
             <ol className="q-list">
               {sec.questions.map((q, qi) => {
@@ -169,6 +178,26 @@ export default function EvalQuestions({ cycle }: { cycle: Cycle }) {
   )
 }
 
+/** 평가표 배점 요약(D-103): 영역 배점 합계·등급 환산(A~E)·오류. 배점이 하나도 없으면 이전 방식이라 합계 대신 안내 없이 등급 환산만 */
+function PointsBar({ t, disabled, onChange }: { t: Template; disabled: boolean; onChange: (fn: (t: Template) => void) => void }) {
+  const on = usesPoints(t)
+  const sum = t.sections.reduce((a, x) => a + (typeof x.points === 'number' ? x.points : 0), 0)
+  const errs = pointsErrors(t)
+  const scale = gradeScaleOf(t)
+  return (
+    <div className="points-bar">
+      {on && <span className={`pb-sum ${errs.some((e) => e.includes('합계')) ? 'bad' : 'good'}`}>영역 배점 합계 <b>{+sum.toFixed(2)}</b>점</span>}
+      <span className="pb-grade" role="group" aria-label="등급 환산 점수">등급 환산
+        {GRADE_LETTERS.map((g) => (
+          <label key={g}>{g}<input type="number" inputMode="decimal" className="no-spin" aria-label={`${g} 등급 점수`} disabled={disabled} value={scale[g] ?? ''}
+            onWheel={(e) => e.currentTarget.blur()} onChange={(e) => onChange((x) => { x.gradeScale = { ...gradeScaleOf(x), [g]: e.target.value === '' ? NaN : Number(e.target.value) } })} /></label>
+        ))}
+      </span>
+      {errs.length > 0 && <span className="feedback fail pb-err" role="alert">✕ {errs[0]}{errs.length > 1 ? ` 외 ${errs.length - 1}건` : ''}</span>}
+    </div>
+  )
+}
+
 function QuestionEditor({ t, editing, answered, onClose, onSave }: {
   t: Template; editing: Editing; answered: number; onClose: () => void; onSave: (q: Question, sectionId: string) => void
 }) {
@@ -213,6 +242,11 @@ function QuestionEditor({ t, editing, answered, onClose, onSave }: {
           </label>
         </div>
         <label className="check"><input type="checkbox" checked={q.required} onChange={(e) => set({ required: e.target.checked })} /> 필수 응답</label>
+        {/* 문항 배점(D-103): 영역 안 문항 비중(선택형), 서술형은 채점 범위(0~배점) */}
+        <label className="field q-pts">문항 배점 <span className="muted">(선택 · 영역 안 비중, 서술형은 채점 만점)</span>
+          <input type="number" inputMode="decimal" className="no-spin" value={q.points ?? ''} placeholder="—" onWheel={(e) => e.currentTarget.blur()}
+            onChange={(e) => set({ points: e.target.value === '' ? null : Number(e.target.value), ...(!isChoice(q.type) && e.target.value === '' ? { purpose: 'info' as const } : {}) })} />
+        </label>
 
         {isChoice(q.type) && (
           <fieldset className="sub-settings col">
@@ -241,7 +275,9 @@ function QuestionEditor({ t, editing, answered, onClose, onSave }: {
             )}
           </fieldset>
         )}
-        {!isChoice(q.type) && <p className="muted">주관식·서술형은 점수에 반영하지 않습니다.</p>}
+        {!isChoice(q.type) && (
+          <label className="check"><input type="checkbox" disabled={!(typeof q.points === 'number' && q.points > 0)} checked={q.purpose === 'score'} onChange={(e) => set({ purpose: e.target.checked ? 'score' : 'info' })} /> 점수에 반영 <span className="muted">(배점 입력 시 · 관리자 채점, 자동 점수화 없음)</span></label>
+        )}
 
         <RuEditor q={q} onChange={(ru) => set({ i18n: ru ? { ...(q.i18n ?? {}), ru } : undefined })} />
 

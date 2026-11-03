@@ -376,3 +376,51 @@ export function makeDraftTemplate(): Template {
 export const LEGACY_UPWARD_ID = 'tpl-upward'
 
 export const ORIGINAL_TEMPLATES: Template[] = [T22_OM, T22_OL, T22_LE, T22_PM, T22_PL, T25_O, T25_P]
+
+// ── D-103 배점 초기값(자문 기준, 모두 수정 가능) ─────────────
+/** 사원 평가표(공통 평가표의 5개 영역): 영역 → [이름, 배점, 설명] */
+export const MEMBER_POINTS: Record<string, [string, number, string]> = {
+  performance: ['업무성과', 35, '본인 서술형'],
+  ability: ['능력', 20, '직무·소통·판단능력 등'],
+  attitude: ['근무태도', 20, '근태·업무집중도 등'],
+  compliance: ['규정준수', 10, '회사규정·대외비·규칙 준수 등'],
+  culture: ['조직문화', 15, '협조·회사 방향성과의 적합도'],
+}
+/** 팀장 자기평가표 영역: [ID 꼬리, 이름, 배점, 설명] */
+export const LEAD_SELF_AREAS: [string, string, number, string][] = [
+  ['perf', '업무성과', 30, '부서 목표 달성도, 업무 추진실적, 성과 창출 및 개선실적'],
+  ['lead', '리더십 및 조직관리', 25, '업무분장, 구성원 지도·육성, 갈등 조정, 조직 운영능력'],
+  ['judge', '직무역량 및 의사결정', 20, '직무 전문성, 문제해결 능력, 상황 판단 및 의사결정의 적절성'],
+  ['resp', '책임감 및 규정준수', 15, '관리자로서의 책임 이행, 회사규정 준수, 리스크 예방 및 대응'],
+  ['collab', '협업 및 조직기여', 10, '타 부서 협력, 경영방침 이행, 조직 전체 목표 달성 기여'],
+]
+export const LEAD_SELF_NAME = '팀장 자기평가표'
+/** 공통 평가표의 5개 영역에 배점·설명·이름(사원 평가표 초기값). 이미 배점이 있는 평가표는 손대지 않음 */
+export function applyMemberPoints(t: Template): boolean {
+  if (t.sections.some((s) => typeof s.points === 'number')) return false
+  const areas = t.sections.filter((s) => s.area && MEMBER_POINTS[s.area])
+  if (areas.length !== 5) return false
+  for (const s of areas) { const [name, pts, desc] = MEMBER_POINTS[s.area!]; s.title = name; s.points = pts; s.desc = desc }
+  t.gradeScale = t.gradeScale ?? { A: 5, B: 4, C: 3, D: 2, E: 1 }
+  return true
+}
+/** 팀장 자기평가표(새 평가표): 본인 작성 서술 + 5개 영역(5점 척도, 자기평가) + 건의사항 */
+export function makeLeadSelfTemplate(id: string): Template {
+  const self = { directions: ['self'] as Direction[], rules: ['self' as const] }
+  return {
+    id, name: LEAD_SELF_NAME, origin: 'draft', jobType: 'common', targetRole: 'lead', locked: false, version: 1,
+    sourceNote: '자문 기준 팀장 자기평가표 초기값(D-103). 영역·내용·배점은 수정 가능',
+    gradeScale: { A: 5, B: 4, C: 3, D: 2, E: 1 },
+    sections: [
+      sec(`${id}-self`, '본인 작성', null, [
+        q(`${id}-s1`, 'long', '올해 부서와 본인의 주요 성과를 적어주세요', { ...self, help: '자세히 서술, 작성 어려울 시 임원면담 후 작성' }),
+        q(`${id}-s2`, 'long', '내년 목표를 적어주세요', { ...self, help: '부서 목표, 리더십 강화 계획 등' }),
+      ]),
+      ...LEAD_SELF_AREAS.map(([k, name, pts, desc]) => ({
+        ...sec(`${id}-${k}`, name, null, [q(`${id}-${k}-q`, 'scale5', `${name}: ${desc}`, { ...self, purpose: 'score', optionItems: S15 })]),
+        points: pts, desc,
+      })),
+      sec(`${id}-last`, '건의사항', null, [q(`${id}-s3`, 'long', '회사에 건의하고 싶은 내용이 있으면 자유롭게 적어주세요', { ...self, required: false })]),
+    ],
+  }
+}

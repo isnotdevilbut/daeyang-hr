@@ -106,7 +106,9 @@ export function validateQuestion(q: Question): string[] {
     if (q.purpose === 'score' && q.type !== 'grade' && q.options.some((o) => o.value === null || Number.isNaN(o.value)))
       e.push('점수에 반영하려면 모든 선택지에 점수를 입력하세요. (빈 점수를 0점으로 처리하지 않습니다)')
   }
-  if (!isChoice(q.type) && q.purpose === 'score') e.push('주관식·서술형은 점수에 반영할 수 없습니다.')
+  // D-103: 서술형은 배점을 입력했을 때만 점수 반영(관리자 채점). 자동 점수화하지 않음
+  if (!isChoice(q.type) && q.purpose === 'score' && !(typeof q.points === 'number' && q.points > 0)) e.push('서술형을 점수에 반영하려면 배점을 입력하세요(관리자가 채점).')
+  if (q.points !== undefined && q.points !== null && !(q.points >= 0 && Number.isFinite(q.points))) e.push('문항 배점은 0 이상 숫자로 입력하세요.')
   return e
 }
 
@@ -135,10 +137,8 @@ export function weightErrors(stages: { order: number; label: string }[], w: Reco
     if (v === null || v === undefined || Number.isNaN(v)) e.push(`${st.order}단계(${st.label}) 비율을 입력하세요.`)
     else if (v < 0 || v > 100) e.push(`${st.order}단계(${st.label}) 비율은 0~100 사이여야 합니다.`)
   }
-  if (e.length === 0 && stages.length > 0) {
-    const sum = stages.reduce((a, st) => a + (w[st.order] as number), 0)
-    if (Math.abs(sum - 100) > 0.001) e.push(`합계가 ${+sum.toFixed(2)}%입니다. 100%가 되어야 합니다.`)
-  }
+  // D-103: 적용되는 단계의 설정 비율을 합계 100%로 환산해 계산 — 입력 합계가 100이 아니어도 된다(예: 팀장 경로 20·40). 모두 0이면 계산할 수 없음
+  if (e.length === 0 && stages.length > 0 && stages.every((st) => (w[st.order] as number) === 0)) e.push('반영 비율이 모두 0%입니다. 하나 이상 입력하세요.')
   return e
 }
 

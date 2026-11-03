@@ -4,11 +4,16 @@ import { appliedStages, pathFor, stageAssignments } from './progress'
 import { applies, ctxFor, weightErrors, type QCtx } from './questions'
 import { applyBlend, deptKpi, type DeptKpi } from './kpi'
 import type { KpiBlend } from './types'
+import { pointsStageScore, usesPoints } from './points'
 
-/** 단계 점수 = 점수 문항(숫자 값이 있는 선택지)의 응답 합 ÷ 최고점 합 × 100 */
-export function stageScore(t: Template, r: Response | undefined, ctxOrDir: QCtx | Direction): number | null {
+/**
+ * 단계 점수. 영역 배점이 있는 평가표는 배점 방식(D-103, points.ts), 없으면 이전 방식:
+ * 점수 문항(숫자 값이 있는 선택지)의 응답 합 ÷ 최고점 합 × 100
+ */
+export function stageScore(t: Template, r: Response | undefined, ctxOrDir: QCtx | Direction, manual?: Record<string, number>): number | null {
   if (!r) return null
   const ctx: QCtx = typeof ctxOrDir === 'string' ? { direction: ctxOrDir } : ctxOrDir
+  if (usesPoints(t)) return pointsStageScore(t, r, ctx, manual).score
   let got = 0
   let max = 0
   for (const s of t.sections)
@@ -64,7 +69,7 @@ export function combine(i: CombineInput): CombineResult {
   let note = ''
   if (i.weightError || i.stages.some((s) => s.weight === null)) note = i.weightError || '단계 반영 비율이 입력되지 않아 계산하지 않음'
   else if (scored.length === 0) note = '점수 단계 없음'
-  else if (missing) note = '미제출 단계가 있어 계산하지 않음 (0점 처리·가중치 재분배 안 함)'
+  else if (missing) note = i.stages.some((s) => s.submitted && s.score === null) ? '미채점·점수 없는 단계가 있어 계산하지 않음 (0점 처리 안 함)' : '미제출 단계가 있어 계산하지 않음 (0점 처리·가중치 재분배 안 함)'
   else {
     const wsum = scored.reduce((a, s) => a + s.weight!, 0)
     base = scored.reduce((a, s) => a + s.score! * s.weight!, 0) / wsum
@@ -85,7 +90,7 @@ export function latestAdjustment(adjs: Adjustment[], cycleId: string, kind: Adju
 const num = (a: Adjustment | null) => (a && typeof a.value === 'number' ? a.value : null)
 
 export interface PersonResult {
-  stages: { order: number; label: string; evaluators: string[]; score: number | null; grade: string | null; submitted: boolean; weight: number | null }[]
+  stages: { order: number; label: string; evaluators: string[]; score: number | null; grade: string | null; submitted: boolean; weight: number | null; ungraded?: boolean }[]
   kpi: number | null // 부서 KPI 점수 (출처에 따라 직접 입력 또는 지표 계산, 미완료면 null)
   kpiDetail: DeptKpi
   kpiBlend: KpiBlend
@@ -106,11 +111,14 @@ export function personResult(state: AppState, cycle: Cycle, targetId: string): P
     const scores: number[] = []
     let grade: string | null = null
     let submitted = as.length > 0
+    let ungraded = false // 배점 있는 서술형 미채점(D-103) — 단계 점수 없음(미완료), 0점 아님
     for (const a of as) {
       const r = state.responses[a.id]
       if (!r || r.status !== 'submitted') { submitted = false; continue }
       const t = cycle.templates[a.templateId]
-      const sc = stageScore(t, r, ctxFor(cycle, a))
+      const manual = state.manualScores?.[a.id]
+      if (usesPoints(t) && pointsStageScore(t, r, ctxFor(cycle, a), manual).ungraded.length) ungraded = true
+      const sc = stageScore(t, r, ctxFor(cycle, a), manual)
       if (sc !== null) scores.push(sc)
       grade = gradeAnswer(t, r) ?? grade
     }
@@ -119,7 +127,8 @@ export function personResult(state: AppState, cycle: Cycle, targetId: string): P
       label: st.label,
       evaluators: as.map((a) => nameOf(a.evaluatorId)),
       // 같은 단계 평가자가 여럿(임원 4명 등, D-081)이면 평가자별 단계 점수를 같은 비중으로 평균. 모두 제출 전에는 점수 없음(부분 평균을 완료처럼 보이지 않게)
-      score: submitted && scores.length ? scores.reduce((x, y) => x + y, 0) / scores.length : null,
+      score: submitted && !ungraded && scores.length ? scores.reduce((x, y) => x + y, 0) / scores.length : null,
+      ungraded,
       grade,
       submitted,
       weight: weightsFor(cycle, target)[st.order] ?? null,

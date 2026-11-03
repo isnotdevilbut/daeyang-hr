@@ -1358,3 +1358,28 @@ label.field, fieldset.field legend { font-size: 16px; }
 .blend-row .blend-btn { height: 42px; min-height: 42px; box-sizing: border-box; padding-top: 0; padding-bottom: 0; } /* D-098 글씨 키움 후에도 입력란(42px)과 세로 가운데 일치 */
 .progress-tbl td .cell-in { vertical-align: middle; } /* D-098 글씨 키움 후 셀 세로 가운데 오차 방지 */
 .stats5 .stat .l { font-size: 17px; } /* D-101: 진행 현황 카드 제목(평가 참여자 등) 15→17px — 큰 숫자·배치 그대로 */
+/* ── D-103: 문항 관리 배점 — 영역 배점·설명, 평가표 배점 합계·등급 환산, 문항 배점 ── */
+.q-sec-head .sec-pts { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; color: var(--text-sub); font-size: 15px; }
+.q-sec-head .sec-pts input { width: 76px; min-height: 36px; text-align: center; padding: 4px 8px; }
+.sec-desc { padding: 8px 18px 0; }
+.sec-desc input { width: 100%; min-height: 38px; }
+.points-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; margin: 0 0 12px; font-size: 15.5px; }
+.points-bar .pb-sum b { font-size: 18px; color: var(--brand-navy); }
+.points-bar .pb-sum.bad b { color: var(--danger); }
+.points-bar .pb-grade { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-weight: 700; color: var(--text-sub); }
+.points-bar .pb-grade label { display: inline-flex; align-items: center; gap: 4px; font-weight: 800; color: var(--brand-navy); }
+.points-bar .pb-grade input { width: 58px; min-height: 36px; text-align: center; padding: 4px 6px; }
+.points-bar .pb-err { margin: 0; }
+.q-editor .q-pts input { width: 120px; text-align: center; }
+.manual-score { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 18px; border-top: 1px solid var(--line-soft); background: var(--surface-tint); }
+.manual-score label { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; }
+.manual-score input { width: 90px; min-height: 38px; text-align: center; }
+/* D-103: 직급별 최종 반영 비율(적용 보류) — 접힌 영역 */
+.final-plan { margin-top: 18px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); }
+.final-plan > summary { cursor: pointer; padding: 10px 16px; font-weight: 800; color: var(--brand-navy); }
+.final-plan-tbl th, .final-plan-tbl td { text-align: center; vertical-align: middle; }
+.fp-items { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 18px; }
+.fp-item { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; }
+.fp-item input[type=text] { width: 64px; min-height: 36px; text-align: center; padding: 4px 6px; }
+.fp-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 16px; border-top: 1px solid var(--line-soft); }
+@media (max-width: 640px) { .final-plan .table-wrap, .final-plan-tbl { min-width: 0; } .fp-items { justify-content: flex-start; } }

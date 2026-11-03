@@ -105,7 +105,7 @@ export default function EvalAssign({ cycle }: { cycle: Cycle }) {
                 <tfoot>
                   <tr>
                     <td colSpan={3} className="muted small">단계 번호는 고정 · 2단계는 사원만 해당</td>
-                    <td className="num"><b className={e.length ? 'bad' : 'good'}>합계 {sum === null ? '—' : `${sum}%`}</b></td>
+                    <td className="num"><b className={e.length ? 'bad' : 'good'}>합계 {sum === null ? '—' : `${sum}%`}</b>{sum !== null && !e.length && Math.abs(sum - 100) > 0.001 && <div className="muted small">적용 단계 기준 100%로 환산</div>}</td>
                   </tr>
                 </tfoot>
               </table>

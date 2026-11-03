@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
-import { useAppState } from '../../data/store'
+import { update, useAppState } from '../../data/store'
 import { useSelectedCycle } from '../../data/hooks'
 import { can, canFinalAdjust } from '../../domain/permissions'
 import { cycleLabel } from '../../domain/cycle'
@@ -12,6 +12,7 @@ import { optLabel, qTitle, t as tr } from '../../i18n'
 import { Forbidden } from '../../components/ui'
 import { addAdjustment } from './Results'
 import { applies, ctxFor, RULE_TEXT, type QCtx } from '../../domain/questions'
+import { manualQuestions } from '../../domain/points'
 import { jobName, positionName, targetPosition } from '../../domain/catalog'
 
 export function answerText(t: Template, qid: string, v: string | null | undefined) {
@@ -82,8 +83,9 @@ export default function PersonResultPage() {
   const history = s.adjustments.filter((a) => a.cycleId === cycle.id && (a.targetKey === t.employeeId || a.targetKey === t.departmentId || (!!t.legacyUnitId && a.targetKey === t.legacyUnitId)))
   const weights = weightsFor(cycle, t)
   const anyUnsubmitted = r.stages.some((x) => !x.submitted)
-  const baseText = r.combined.base !== null ? fmt(r.combined.base) : anyUnsubmitted ? '미완료' : '계산 안 됨'
-  const baseHint = r.combined.base !== null ? '' : anyUnsubmitted ? '제출 전 단계 있음' : '반영 비율 확인 필요'
+  const anyUngraded = r.stages.some((x) => x.ungraded) // 배점 있는 서술형 미채점(D-103) — 0점이 아닌 미완료
+  const baseText = r.combined.base !== null ? fmt(r.combined.base) : anyUnsubmitted || anyUngraded ? '미완료' : '계산 안 됨'
+  const baseHint = r.combined.base !== null ? '' : anyUnsubmitted ? '제출 전 단계 있음' : anyUngraded ? '서술형 채점 필요' : '반영 비율 확인 필요'
 
   return (
     <div className="page detail-page">
@@ -158,11 +160,13 @@ export default function PersonResultPage() {
               {st === 'submitted' && stage && (stage.score !== null || stage.grade) && (
                 <span className="stage-score">{stage.score !== null && <>점수 <b>{fmt(stage.score)}</b></>}{stage.grade && <> · 등급 <b>{stage.grade.slice(0, 1)}</b></>}</span>
               )}
+              {st === 'submitted' && stage?.ungraded && <span className="chip draft">미채점</span>}
               <span className={`chip ${st === 'submitted' ? 'stage done' : 'stage todo'}`}>{st === 'submitted' ? '✓ 제출' : st === 'draft' ? '작성 중' : '미제출'}</span>
             </div>
             {st === 'submitted'
               ? <AnswerList t={cycle.templates[a.templateId]} r={s.responses[a.id]} a={a} cycle={cycle} />
               : <p className="muted stage-empty">아직 제출되지 않았습니다.</p>}
+            {st === 'submitted' && <ManualScores cycle={cycle} aid={a.id} />}
           </section>
         )
       })}
@@ -276,6 +280,42 @@ function WriteList({ cycle, evaluatorId }: { cycle: Cycle; evaluatorId: string }
         </>}
       </section>
     </>
+  )
+}
+
+/**
+ * 서술형 점수 문항 채점(D-103): 배점이 있는 서술형만, 관리자가 0~배점 입력. 비우면 미채점(단계 점수 없음 — 0점 아님).
+ * 응답 원문은 바꾸지 않고 따로 저장(manualScores). 확정 회차는 바꾸지 않음
+ */
+function ManualScores({ cycle, aid }: { cycle: Cycle; aid: string }) {
+  const s = useAppState()
+  const a = cycle.assignments.find((x) => x.id === aid)!
+  const items = manualQuestions(cycle.templates[a.templateId], ctxFor(cycle, a))
+  const cur = s.manualScores?.[aid] ?? {}
+  const [d, setD] = useState<Record<string, string>>(() => Object.fromEntries(items.map(({ q }) => [q.id, typeof cur[q.id] === 'number' ? String(cur[q.id]) : ''])))
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  if (!items.length) return null
+  const editable = can(s.session.role, 'adjust') && cycle.status !== '확정'
+  const save = () => {
+    for (const { q } of items) {
+      const v = d[q.id].trim()
+      if (v !== '' && !(Number(v) >= 0 && Number(v) <= q.points!)) return setMsg({ ok: false, text: `'${q.title}' 채점은 0~${q.points}점으로 입력하세요.` })
+    }
+    update((x) => {
+      const m = { ...(x.manualScores?.[aid] ?? {}) }
+      for (const { q } of items) { const v = d[q.id].trim(); if (v === '') delete m[q.id]; else m[q.id] = Number(v) }
+      x.manualScores = { ...(x.manualScores ?? {}), [aid]: m }
+    })
+    setMsg({ ok: true, text: '채점을 저장했습니다.' })
+  }
+  return (
+    <div className="manual-score">
+      {items.map(({ q }) => (
+        <label key={q.id}>채점 · {q.title} <input type="text" inputMode="decimal" aria-label={`${q.title} 채점값`} disabled={!editable} value={d[q.id]} placeholder="미채점" onChange={(e) => { setD({ ...d, [q.id]: e.target.value }); setMsg(null) }} /> / {q.points}점</label>
+      ))}
+      {editable && <button className="btn small primary" onClick={save}>채점 저장</button>}
+      {msg && <span className={`feedback ${msg.ok ? 'ok' : 'fail'}`} role={msg.ok ? 'status' : 'alert'}>{msg.ok ? '✓' : '✕'} {msg.text}</span>}
+    </div>
   )
 }
 

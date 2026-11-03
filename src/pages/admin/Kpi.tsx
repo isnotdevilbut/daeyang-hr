@@ -6,7 +6,8 @@ import { cycleLabel } from '../../domain/cycle'
 import {
   blendErrors, BLEND_START, deptKpi, indicatorErrors, indicatorResult, kpiEntry, kpiLocked, orgUnits, UNIT_LABEL, withUnit, type DeptKpi,
 } from '../../domain/kpi'
-import type { Cycle, KpiIndicator, KpiUnit } from '../../domain/types'
+import type { Cycle, FinalBlendItem, FinalBlendPlan, FinalPart, KpiIndicator, KpiUnit } from '../../domain/types'
+import { FINAL_BLEND_EXAMPLE } from '../../domain/scoringV16'
 import { Forbidden, Modal } from '../../components/ui'
 
 const f1 = (n: number) => (Math.round(n * 10) / 10).toFixed(1)
@@ -70,6 +71,7 @@ function Body({ cycle }: { cycle: Cycle }) {
         </section>
         {dept && <DeptEditor key={dept.id} cycle={cycle} deptId={dept.id} deptName={dept.name} editable={editable} />}
       </div>
+      <FinalPlan cycle={cycle} editable={editable} />
     </>
   )
 }
@@ -339,5 +341,62 @@ function BlendPanel({ cycle, editable }: { cycle: Cycle; editable: boolean }) {
       {ok && <p className="bl-ok"><span className="feedback ok" role="status">✓ {ok}</span></p>}
       {errs.length > 0 && <div className="feedback fail" role="alert">{errs.map((x) => <div key={x}>✕ {x}</div>)}</div>}
     </section>
+  )
+}
+
+/**
+ * 직급별 최종 반영 비율(D-103, 자문 예시) — 요소별 켜기·비율 입력·활성 합계 100% 검증·저장만 한다.
+ * 점수에는 아직 적용하지 않음: 사원 '자기평가 80%'의 의미 미정(기존 계산 유지), 상향평가 미구현·작성자 미정(팀장·임원)
+ */
+const PART_TEXT: Record<FinalPart, string> = { personal: '자기평가(의미 미정)', self: '자기평가', kpi: '팀 KPI', upward: '상향평가(미구현)' }
+const TIER_TEXT = { member: '사원', lead: '팀장', exec: '임원' } as const
+function FinalPlan({ cycle, editable }: { cycle: Cycle; editable: boolean }) {
+  const saved = cycle.finalBlendPlan ?? FINAL_BLEND_EXAMPLE()
+  const [d, setD] = useState<FinalBlendPlan>(() => structuredClone(saved))
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const dirty = JSON.stringify(d) !== JSON.stringify(saved)
+  const sumOf = (items: FinalBlendItem[]) => +items.filter((x) => x.on).reduce((a, x) => a + (x.pct ?? 0), 0).toFixed(2)
+  const tierErr = (items: FinalBlendItem[]) => items.some((x) => x.on && (x.pct === null || !(x.pct >= 0 && x.pct <= 100))) ? '비율은 0~100으로 입력하세요' : !items.some((x) => x.on) ? '켜진 요소 없음' : Math.abs(sumOf(items) - 100) > 0.001 ? `활성 합계 ${sumOf(items)}% — 100%가 되어야 적용 가능` : ''
+  const setItem = (tier: keyof FinalBlendPlan, i: number, patch: Partial<FinalBlendItem>) => { setD((x) => ({ ...x, [tier]: x[tier].map((it, k) => (k === i ? { ...it, ...patch } : it)) })); setMsg(null) }
+  const save = () => {
+    if ((['member', 'lead', 'exec'] as const).some((t) => d[t].some((x) => x.pct !== null && !(x.pct >= 0 && x.pct <= 100)))) return setMsg({ ok: false, text: '비율은 0~100으로 입력하세요.' })
+    update((x) => { x.cycles.find((c) => c.id === cycle.id)!.finalBlendPlan = structuredClone(d) })
+    setMsg({ ok: true, text: '저장했습니다(점수에는 아직 적용하지 않음).' })
+  }
+  return (
+    <details className="final-plan">
+      <summary>직급별 최종 반영 비율 <span className="muted">자문 예시 · 적용 보류</span></summary>
+      <table className="tbl final-plan-tbl">
+        <thead><tr><th>직급</th><th>반영 요소</th><th>활성 합계</th></tr></thead>
+        <tbody>
+          {(['member', 'lead', 'exec'] as const).map((tier) => {
+            const err = tierErr(d[tier])
+            return (
+              <tr key={tier}>
+                <td><b>{TIER_TEXT[tier]}</b></td>
+                <td>
+                  <div className="fp-items">
+                    {d[tier].map((it, i) => (
+                      <label key={it.key} className="fp-item">
+                        <input type="checkbox" checked={it.on} disabled={!editable || it.key === 'upward'} onChange={(e) => setItem(tier, i, { on: e.target.checked })} />
+                        {PART_TEXT[it.key]}
+                        <input type="text" inputMode="decimal" aria-label={`${TIER_TEXT[tier]} ${PART_TEXT[it.key]} 비율`} disabled={!editable} value={it.pct ?? ''} onChange={(e) => setItem(tier, i, { pct: e.target.value === '' ? null : Number(e.target.value) })} />%
+                      </label>
+                    ))}
+                  </div>
+                </td>
+                <td><span className={err ? 'bad' : 'good'}>{sumOf(d[tier])}%</span>{err && <div className="muted small">{err}</div>}</td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+      <div className="fp-foot">
+        <span className="muted small">사원 ‘자기평가’ 의미·상향평가 작성자가 정해지기 전까지 점수 계산은 위 ‘개인평가 반영’(기존 방식)을 사용합니다.</span>
+        <span className="spacer" />
+        {msg && <span className={`feedback ${msg.ok ? 'ok' : 'fail'}`} role={msg.ok ? 'status' : 'alert'}>{msg.ok ? '✓' : '✕'} {msg.text}</span>}
+        <button className="btn small primary" disabled={!editable || !dirty} onClick={save}>저장</button>
+      </div>
+    </details>
   )
 }
