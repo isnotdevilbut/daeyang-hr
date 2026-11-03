@@ -107,10 +107,10 @@ export default function PersonResultPage() {
       {/* 이 직원이 다른 사람에게 평가받는 내용 — 위의 작성할 업무(미완료 평가)와 따로 (D-071) */}
       {/* D-129·D-130: 진행 현황에서 연 상세 = 평가 현황만, 결과·리포트에서 연 상세 = 점수 요약·최종 점수 보정·단계별 응답·변경 내역(평가 현황 없음) */}
       {from === 'progress' && <>
-        <h2 className="section-title">평가 현황</h2>
+        {/* D-131: 받는 평가 = '단계별 현황', 이 사람이 해야 할 평가 = '담당 평가 현황'(사원·팀장·임원 모두, 없으면 표시 안 함) */}
+        <h2 className="section-title">단계별 현황</h2>
         <RecvList cycle={cycle} targetId={t.employeeId} />
-        {/* D-127: 같은 '평가 현황' 아래 — 받는 평가(위) + 이 사람이 해야 할 평가(아래, 사원·팀장·임원 모두). 해야 할 평가가 없으면 표시 안 함 */}
-        <WriteList cycle={cycle} evaluatorId={t.employeeId} title={false} />
+        <WriteList cycle={cycle} evaluatorId={t.employeeId} hideEmpty />
       </>}
       {from === 'results' && <>
       {/* 제목은 상자 밖, 내용은 상자 안 — 평가 현황과 같은 구조 (D-087) */}
@@ -243,7 +243,7 @@ function RecvList({ cycle, targetId }: { cycle: Cycle; targetId: string }) {
  * 담당 평가 현황(D-089): 이 평가자가 작성할 대상자 평가(자기평가 제외). 진행 현황 표의 작성 건수와 같은 배정(activeWriteAssignments)을 쓴다.
  * 완료 = 제출, 미완료 = 미시작·작성 중·선행 단계 대기 — 상태 칸은 완료/미완료만(세부 상태 문구 없음, D-111). 보기만(대신 작성·제출 없음)
  */
-function WriteList({ cycle, evaluatorId, title = true }: { cycle: Cycle; evaluatorId: string; title?: boolean }) {
+function WriteList({ cycle, evaluatorId, hideEmpty = false }: { cycle: Cycle; evaluatorId: string; hideEmpty?: boolean }) {
   const s = useAppState()
   const rows = activeWriteAssignments(cycle, s.employees)
     .concat(upwardAssignments(cycle, s.employees)) // 사원의 팀원→팀장평가(D-114)
@@ -253,11 +253,11 @@ function WriteList({ cycle, evaluatorId, title = true }: { cycle: Cycle; evaluat
     // 미완료 먼저, 완료는 아래(D-093) — 같은 그룹 안에서는 팀·팀장 먼저·이름 순
     .sort((x, y) => Number(x.st === 'submitted') - Number(y.st === 'submitted') || x.t.teamName.localeCompare(y.t.teamName, 'ko') || Number(y.t.isTeamLead) - Number(x.t.isTeamLead) || x.t.name.localeCompare(y.t.name, 'ko'))
   const shown = rows // D-126: 전체·미완료·완료 개수 버튼 없이 모두 표시(미완료 먼저)
-  if (!title && rows.length === 0) return null
+  if (hideEmpty && rows.length === 0) return null
   return (
     <>
-      {title && <h2 id="write-title" className="section-title">평가 현황</h2>}
-      <section className="panel recv-panel write-panel" aria-label="해야 할 평가">
+      <h2 id="write-title" className="section-title">담당 평가 현황</h2>
+      <section className="panel recv-panel write-panel" aria-labelledby="write-title">
         {rows.length === 0 ? <p className="write-empty">배정된 평가 없음</p> : <>
           <div className="table-wrap">
             <table className="tbl write-tbl">
