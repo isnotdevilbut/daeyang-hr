@@ -19,7 +19,8 @@ function splitPeriod(p: string): [string, string] {
 
 type Form = { name: string; start: string; end: string; due: string; status: CycleStatus; join: string[]; self: Record<string, boolean> }
 
-export default function EvalSettings({ cycle, onCreate, onSelect }: { cycle: Cycle; onCreate: () => void; onSelect: (id: string) => void }) {
+/** D-164: part = 'info'(기본 정보 — 가중치·기간 설정 탭) / 'people'(평가 참여자 — 평가자 배정 탭 맨 위). 저장은 같은 폼(보이지 않는 부분은 그대로) */
+export default function EvalSettings({ cycle, onCreate, onSelect, part }: { cycle: Cycle; onCreate: () => void; onSelect: (id: string) => void; part: 'info' | 'people' }) {
   const s = useAppState()
   const [ps, pe] = splitPeriod(cycle.period)
   const emp = (id: string) => s.employees.find((e) => e.id === id)
@@ -101,8 +102,10 @@ export default function EvalSettings({ cycle, onCreate, onSelect }: { cycle: Cyc
     <>
       {/* 저장·되돌리기는 하위 탭 바로 아래 오른쪽, 스크롤해도 상단 내비게이션 아래에 붙어 보임 (D-080). 평가 복제·새 평가는 같은 줄 왼쪽 */}
       <div className="tab-actions settings-bar">
-        <button className="btn" onClick={() => confirmLeave() && setCloning(true)}>평가 복제</button>
-        <button className="btn" onClick={() => confirmLeave() && onCreate()}>+ 새 평가</button>
+        {part === 'info' && <>
+          <button className="btn" onClick={() => confirmLeave() && setCloning(true)}>평가 복제</button>
+          <button className="btn" onClick={() => confirmLeave() && onCreate()}>+ 새 평가</button>
+        </>}
         <span className="spacer" />
         {msg && <span className={`feedback ${msg.ok ? 'ok' : 'fail'}`} role={msg.ok ? 'status' : 'alert'}>{msg.ok ? '✓' : '✕'} {msg.text}</span>}
         <div className="row save-actions">
@@ -110,7 +113,7 @@ export default function EvalSettings({ cycle, onCreate, onSelect }: { cycle: Cyc
           <button className="btn primary" disabled={!dirty} onClick={save}>저장</button>
         </div>
       </div>
-      <section className="panel pad">
+      {part === 'info' && <section className="panel pad">
         <h2>기본 정보</h2>
         <div className="grid settings-grid">
           <label className="field wide">평가 이름<input type="text" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></label>
@@ -129,9 +132,9 @@ export default function EvalSettings({ cycle, onCreate, onSelect }: { cycle: Cyc
           </fieldset>
           <label className="field">응답 제출 마감일<input type="date" value={f.due} onChange={(e) => setF({ ...f, due: e.target.value })} /></label>
         </div>
-      </section>
+      </section>}
 
-      <section className="panel pad">
+      {part === 'people' && <section className="panel pad">
         <div className="row">
           <h2 style={{ margin: 0 }}>평가 참여자 <span className="muted">{f.join.filter((id) => people.some((e) => e.id === id)).length}명</span></h2>
           <span className="spacer" />
@@ -175,7 +178,7 @@ export default function EvalSettings({ cycle, onCreate, onSelect }: { cycle: Cyc
             </div>
           ))}
         </div>
-      </section>
+      </section>}
 
       {cloning && <CloneModal cycle={cycle} onClose={() => setCloning(false)} onDone={(id) => { setCloning(false); onSelect(id) }} />}
     </>

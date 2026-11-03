@@ -15,7 +15,8 @@ const PATH_TITLE: Record<PathKey, string> = { member: '사원이 받는 평가',
 /** 유형별로 둘 수 있는 단계 — 팀장에게는 2단계(팀장평가)가 없다 */
 const PATH_RULES: Record<PathKey, EvaluatorRule[]> = { member: ['self', 'teamLead', 'executive'], lead: ['self', 'executive'] }
 
-export default function EvalAssign({ cycle }: { cycle: Cycle }) {
+/** D-164: part = 'weights'(사원·팀장이 받는 평가·등급 인원 비율 — 가중치·기간 설정 탭) / 'exec'(임원 평가 배정 — 평가자 배정 탭) */
+export default function EvalAssign({ cycle, part }: { cycle: Cycle; part: 'weights' | 'exec' }) {
   const s = useAppState()
   const live = s.cycles.find((c) => c.id === cycle.id)!
   const hasResp = cycleHasResponses(s, live)
@@ -73,6 +74,7 @@ export default function EvalAssign({ cycle }: { cycle: Cycle }) {
     </div>
   )
 
+  if (part === 'exec') return <Assignments cycle={live} locked={rulesChanged('member') || rulesChanged('lead')} execDraft={execDraft} setExecDraft={(x) => { setExecDraft(x); setMsgFor('exec', null) }} onSave={saveExec} msg={msgs.exec} />
   return (
     <>
       <div className="grid path-grid">
@@ -129,9 +131,8 @@ export default function EvalAssign({ cycle }: { cycle: Cycle }) {
           )
         })}
       </div>
-      {/* 등급 인원 비율은 단계 설정 아래·임원 평가 배정 바로 위 (D-087). 단계·임원 배정은 아래 공통 저장 바로 함께 저장 */}
+      {/* 등급 인원 비율은 단계 설정 아래 (D-087). 임원 평가 배정은 평가자 배정 탭으로(D-164) */}
       <GradeRatios />
-      <Assignments cycle={live} locked={rulesChanged('member') || rulesChanged('lead')} execDraft={execDraft} setExecDraft={(x) => { setExecDraft(x); setMsgFor('exec', null) }} onSave={saveExec} msg={msgs.exec} />
     </>
   )
 }

@@ -12,8 +12,8 @@ import EvalQuestions from './EvalQuestions'
 import EvalAssign from './EvalAssign'
 
 export type EvalTab = 'settings' | 'questions' | 'assign'
-// 탭 순서(D-154): 문항 관리 → 평가자·가중치 설정 → 평가 설정. 처음 들어오면 첫 탭(문항 관리)
-const TABS: [EvalTab, string][] = [['questions', '문항 관리'], ['assign', '평가자·가중치 설정'], ['settings', '평가 설정']]
+// 탭(D-164): 문항 관리 → 평가자 배정(평가 참여자 + 임원 평가 배정) → 가중치·기간 설정(기본 정보 + 사원·팀장이 받는 평가 + 등급 인원 비율). 처음 들어오면 문항 관리
+const TABS: [EvalTab, string][] = [['questions', '문항 관리'], ['assign', '평가자 배정'], ['settings', '가중치·기간 설정']]
 
 export default function Evaluation() {
   const s = useAppState()
@@ -53,9 +53,15 @@ export default function Evaluation() {
               <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => goTab(k)}>{label}</button>
             ))}
           </div>
-          {tab === 'settings' && <EvalSettings key={cycle.id} cycle={cycle} onCreate={() => setCreating(true)} onSelect={selectCycle} />}
+          {tab === 'settings' && <>
+            <EvalSettings key={cycle.id} cycle={cycle} onCreate={() => setCreating(true)} onSelect={selectCycle} part="info" />
+            <EvalAssign key={`w-${cycle.id}`} cycle={cycle} part="weights" />
+          </>}
           {tab === 'questions' && <EvalQuestions key={cycle.id} cycle={cycle} />}
-          {tab === 'assign' && <EvalAssign key={cycle.id} cycle={cycle} />}
+          {tab === 'assign' && <>
+            <EvalSettings key={cycle.id} cycle={cycle} onCreate={() => setCreating(true)} onSelect={selectCycle} part="people" />
+            <EvalAssign key={`e-${cycle.id}`} cycle={cycle} part="exec" />
+          </>}
         </>
       )}
       {creating && <NewEvaluation onClose={() => setCreating(false)} onCreated={(id) => { setCreating(false); selectCycle(id); setParams({ tab: 'settings' }) }} />}
