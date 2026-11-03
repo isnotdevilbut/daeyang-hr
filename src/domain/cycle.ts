@@ -326,6 +326,22 @@ export function applyParticipation(d: AppState, cycleId: string, join: string[],
   return blocked
 }
 
+/**
+ * 새로 등록한 직원(직원 추가·명단 업로드)을 준비·진행 중인 회차의 평가 참여자로 (D-112) — 평가 설정의 '참여'가 체크된 상태로 시작.
+ *  - 사원·팀장: 회차 대상자로 넣고 현재 조직 기준 배정 생성(setTargets). 평가 제외 직원은 넣지 않음
+ *  - 임원: 참여 = execOff에 없음 → 새 임원은 따로 할 일 없이 참여(자기평가는 기본 끔)
+ *  - 마감·확정 회차는 바꾸지 않음. 관리자가 평가 설정에서 참여를 해제할 수 있음
+ */
+export function joinOpenCycles(d: AppState, empIds: string[]) {
+  const news = d.employees.filter((e) => empIds.includes(e.id) && e.active && !e.evalExcluded && !e.isExecutive && !e.isCeo)
+  if (!news.length) return
+  for (const c of d.cycles) {
+    if (c.status !== '준비' && c.status !== '진행') continue
+    const add = news.filter((e) => !c.targets.some((t) => t.employeeId === e.id))
+    if (add.length) setTargets(d, c, [...c.targets.map((t) => t.employeeId), ...add.map((e) => e.id)])
+  }
+}
+
 const tierNow = (d: AppState, id: string): '임원' | '팀장' | '사원' => {
   const e = d.employees.find((x) => x.id === id)
   return !e ? '사원' : e.isExecutive || e.isCeo ? '임원' : d.teams.some((t) => !t.archived && t.leadId === id) ? '팀장' : '사원'

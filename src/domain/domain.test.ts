@@ -2500,3 +2500,33 @@ describe('임원 팀마다 한 명 (D-110)', async () => {
     expect(s.employees).toEqual(before)
   })
 })
+
+describe('새 직원은 진행 중인 평가 참여자로 시작 (D-112)', async () => {
+  const { joinOpenCycles, participation } = await import('./cycle')
+  const { syncOpenCycles } = await import('./cycleSync')
+  it('사원 추가 → 준비·진행 회차 대상자 + 자기평가·팀장평가·임원평가 배정, 마감·확정 회차는 그대로', () => {
+    const s = createSeed()
+    const closed = structuredClone(s.cycles.filter((c) => c.status !== '진행' && c.status !== '준비'))
+    s.employees.push({ id: 'e-new', empNo: '0901', name: '가상신입', teamId: 'tm-design', position: '사원', positionId: 'pos-staff', jobType: 'office', isExecutive: false, isCeo: false, active: true, evalExcluded: false })
+    joinOpenCycles(s, ['e-new']); syncOpenCycles(s)
+    for (const c of s.cycles.filter((x) => x.status === '진행' || x.status === '준비')) {
+      expect(participation(s, c).has('e-new')).toBe(true)
+      const as = c.assignments.filter((a) => a.targetId === 'e-new')
+      expect(as.map((a) => a.stageOrder).sort()).toEqual([1, 2, 3])
+      expect(as.find((a) => a.stageOrder === 2)!.evaluatorId).toBe(s.teams.find((t) => t.id === 'tm-design')!.leadId)
+    }
+    expect(s.cycles.filter((c) => c.status !== '진행' && c.status !== '준비')).toEqual(closed)
+    // 반복 실행해도 중복 없음
+    const once = structuredClone(s.cycles)
+    joinOpenCycles(s, ['e-new']); syncOpenCycles(s)
+    expect(s.cycles).toEqual(once)
+  })
+  it('임원·평가 제외 직원은 대상자로 넣지 않음(임원은 execOff에 없어 평가자로 참여)', () => {
+    const s = createSeed()
+    s.employees.push({ id: 'e-x', empNo: '0902', name: '가상임원', teamId: 'tm-design', position: '임원', positionId: 'pos-exec', jobType: 'office', isExecutive: true, isCeo: false, active: true, evalExcluded: true })
+    joinOpenCycles(s, ['e-x'])
+    const c = s.cycles.find((x) => x.status === '진행')!
+    expect(c.targets.some((t) => t.employeeId === 'e-x')).toBe(false)
+    expect(participation(s, c).has('e-x')).toBe(true)
+  })
+})

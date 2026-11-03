@@ -3,6 +3,7 @@ import { update, useAppState } from '../../data/store'
 import { can } from '../../domain/permissions'
 import { activeTeams, applyTier, customFieldErrors, customFieldUsage, customValueText, deleteCustomField, deleteEmployee, deleteTeam, nameConflicts, otherLead, saveCustomField, syncTiers, teamMembers, teamNameError, tierOf, TIERS } from '../../domain/org'
 import { syncOpenCycles } from '../../domain/cycleSync'
+import { joinOpenCycles } from '../../domain/cycle'
 import { activeJobs, classDefault, deleteJob, deletePosition, jobName, jobUsage, positionById, positionName, positionsOf, positionUsage, saveJob, savePosition } from '../../domain/catalog'
 import { canRegister, checkRoster, readRosterFile, ROSTER_FIELDS, ROSTER_HEADER, rosterEmployees, rosterLeads, type ExistingMode, type RosterRow } from '../../domain/roster'
 import type { Sheet } from '../../domain/xlsx'
@@ -241,10 +242,12 @@ function EmployeeModal({ emp, onClose }: { emp: Employee; onClose: () => void })
     update((d) => {
       // 기존 직원: 같은 ID를 그대로 갱신(이전 저장 데이터의 다른 필드도 보존)
       let id = e.id
+      const isNewEmp = !id
       if (id) d.employees = d.employees.map((x) => (x.id === id ? { ...x, ...e, name: e.name.trim(), empNo } : x))
       else { id = `e-${Date.now().toString(36)}`; d.employees.push({ ...e, id, name: e.name.trim(), empNo }) }
       d.employees.find((x) => x.id === id)!.positionId = posId
       applyTier(d, id, tier)
+      if (isNewEmp) joinOpenCycles(d, [id]) // 새 직원은 준비·진행 회차 참여자로 시작 (D-112)
       syncOpenCycles(d) // 진행 중 회차의 팀·팀장·임원 배정을 현재 조직에 맞춤 (D-081, 응답 있는 배정은 그대로)
     })
     onClose()
@@ -629,8 +632,9 @@ function Upload() {
     const stamp = Date.now().toString(36)
     const add = rosterEmployees(res, (i) => `e-${stamp}-${i}`)
     if (!add.length) return
-    update((d) => { d.employees.push(...add); rosterLeads(d, add); syncTiers(d); syncOpenCycles(d) })
-    setDone(`${add.length}명을 등록했습니다.${res.skipped ? ` (기존 사번 ${res.skipped}행 건너뜀)` : ''}`)
+    update((d) => { d.employees.push(...add); rosterLeads(d, add); syncTiers(d); joinOpenCycles(d, add.map((e) => e.id)); syncOpenCycles(d) }) // 새 직원은 준비·진행 회차 참여자로 (D-112)
+    const open = s.cycles.filter((c) => c.status === '준비' || c.status === '진행').length
+    setDone(`${add.length}명을 등록했습니다.${res.skipped ? ` (기존 사번 ${res.skipped}행 건너뜀)` : ''}${open ? ' 진행 중인 평가의 참여자로 추가했습니다(평가 관리 → 평가 설정에서 해제 가능).' : ''}`)
     reset()
   }
   const cellErr = (r: RosterRow, label: string) => r.errors.some((e) => e.col === label)
