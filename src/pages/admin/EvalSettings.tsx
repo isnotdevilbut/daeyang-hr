@@ -148,7 +148,8 @@ export default function EvalSettings({ cycle, onCreate, onSelect }: { cycle: Cyc
           {groups.map((g) => (
             <div key={g.key} className={`target-team ${g.key === 'exec' ? 'exec-group' : ''}`} role="group" aria-label={g.title}>
               <div className="tt-head"><b>{g.title}</b></div>
-              <div className="tt-cols" aria-hidden><span>참여</span>{g.list.some(configurable) && <span>자기평가</span>}</div>
+              {/* D-156: 열 이름 '참여'는 표시하지 않음(빈 칸으로 자리만 유지 — 자기평가는 오른쪽 그대로) */}
+              <div className="tt-cols" aria-hidden><span />{g.list.some(configurable) && <span>자기평가</span>}</div>
               <ul className="target-list">
                 {g.list.map((e) => {
                   const on = joined(e.id)
