@@ -1394,3 +1394,11 @@ label.field, fieldset.field legend { font-size: 16px; }
 .stats5.stats3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 @media (max-width: 640px) { .stats5.stats3 { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; } .stats5.stats3 .stat { padding: 10px 10px; } }
 @media (max-width: 360px) { .stats5.stats3 { grid-template-columns: repeat(2, minmax(0, 1fr)); } .stats5.stats3 .stat:first-child { grid-column: 1 / -1; min-height: 72px; } } /* 아주 좁으면 전체 대상자 한 줄 + 완료자·미완료자 — 제목 꺾임 없이 */
+/* D-113: 카드 3개가 화면 폭을 꽉 채워 넓적하고 빈 공간이 컸음 → PC는 카드 폭 고정(왼쪽 정렬)·높이·안쪽 여백 축소. 제목 17px·숫자 크기는 그대로 */
+.stats5.stats3 { grid-template-columns: repeat(3, minmax(0, 210px)); justify-content: start; gap: 12px; }
+.stats5.stats3 .stat { min-height: 0; padding: 12px 16px 10px; gap: 4px; }
+@media (max-width: 640px) {
+  .stats5.stats3 { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .stats5.stats3 .stat { min-height: 0; padding: 10px 10px 8px; }
+}
+@media (max-width: 360px) { .stats5.stats3 { grid-template-columns: repeat(2, minmax(0, 1fr)); } .stats5.stats3 .stat:first-child { min-height: 0; } }
