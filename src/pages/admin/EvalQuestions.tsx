@@ -181,9 +181,7 @@ export default function EvalQuestions({ cycle }: { cycle: Cycle }) {
             <span className="spacer" />
             <button className="btn small danger" onClick={() => removeSection(si)}>영역 삭제</button>
           </div>
-          {(typeof sec.points === 'number' || sec.desc) && (
-            <div className="sec-desc"><input type="text" aria-label={`${sec.title} 영역 설명`} placeholder="영역 설명 (예: 근태·업무집중도 등)" value={sec.desc ?? ''} onChange={(e) => mut((x) => { x.sections[si].desc = e.target.value })} /></div>
-          )}
+          {/* D-161: 영역 설명(메모) 입력칸은 표시하지 않음 — 저장된 값은 지우지 않고 그대로 둠(평가 화면에는 원래 보이지 않음) */}
           {sec.questions.length === 0 ? <p className="empty-row">문항이 없습니다.</p> : (
             <ol className="q-list">
               {sec.questions.map((q, qi) => {
