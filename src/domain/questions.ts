@@ -152,7 +152,16 @@ export function weightSum(stages: { order: number }[], w: Record<number, number 
 // ── 문항 일괄 업로드 (엑셀 .xlsx / CSV, D-118 — 조직 관리 명단 업로드와 같은 흐름) ─────────────
 // 파일 → 표(첫 번째로 비어 있지 않은 행 = 머리글, 열 이름으로 찾아 순서 무관) → 행마다 검증 → 오류가 하나라도 있으면 아무것도 넣지 않음
 export const Q_COLUMNS = ['영역', '질문', '유형', '필수', '선택지', '선택지점수', '적용평가', '배점', '도움말'] as const
-export const Q_REQUIRED = ['영역', '질문', '유형'] as const
+/** 꼭 있어야 하는 열은 질문 하나(D-120). 영역이 없으면 '미분류', 유형이 없으면 선택지가 있으면 단일선택·없으면 긴 서술형 — 문항 관리에서 나중에 고침 */
+export const Q_REQUIRED = ['질문'] as const
+export const Q_DEFAULT_SECTION = '미분류'
+/** 열 이름 별칭(공백 무시) → 표준 열 이름 */
+const Q_HEADER_ALIAS: Record<string, string> = {
+  평가영역: '영역', 평가항목: '영역', 항목: '영역', 구분: '영역', 영역명: '영역',
+  문항: '질문', 문항내용: '질문', 질문내용: '질문', 평가내용: '질문', 내용: '질문',
+  문항유형: '유형', 응답유형: '유형', 형식: '유형', 응답방식: '유형',
+  필수여부: '필수', 보기: '선택지', 선택항목: '선택지', 점수: '선택지점수', 적용: '적용평가', 평가유형: '적용평가', 문항배점: '배점', 설명: '도움말', 안내: '도움말',
+}
 export const Q_MAX_ROWS = 500
 
 const TYPE_ALIAS: Record<string, QuestionType> = {
@@ -180,7 +189,7 @@ export function splitCsvLine(line: string): string[] {
   return out
 }
 
-export interface QRow { line: number; section: string; question: Question | null; errors: string[] }
+export interface QRow { line: number; section: string; question: Question | null; errors: string[]; /** 막지 않는 안내(기본값으로 채운 영역·유형) */ notes?: string[] }
 export interface QUploadResult { headerError: string | null; ignored: string[]; rows: QRow[] }
 
 /** CSV 글자(붙여넣기·이전 호환) → 표 → 검증 */
@@ -188,7 +197,7 @@ export function parseQuestionCsv(text: string, defaultRules?: EvaluatorRule[]): 
   return parseQuestionTable(text.replace(/^﻿/, '').split(/\r?\n/).map(splitCsvLine), defaultRules)
 }
 
-const hnorm = (h: string) => h.replace(/^﻿/, '').replace(/[\s*]/g, '')
+const hnorm = (h: string) => { const k = h.replace(/^﻿/, '').replace(/[\s*]/g, ''); return Q_HEADER_ALIAS[k] ?? k }
 /** 표(엑셀 시트·CSV) → 문항 행. defaultRules = 적용평가 칸이 비었을 때(없으면 자기평가) — 팀원→팀장 평가표면 팀원→팀장평가 */
 export function parseQuestionTable(table: string[][], defaultRules: EvaluatorRule[] = ['self']): QUploadResult {
   const hi = table.findIndex((r) => r.some((c) => (c ?? '').trim()))
@@ -204,12 +213,17 @@ export function parseQuestionTable(table: string[][], defaultRules: EvaluatorRul
   const col = (cells: string[], k: string) => (header.includes(k) ? (cells[header.indexOf(k)] ?? '').trim() : '')
   const rows = body.map(({ c, line }): QRow => {
     const errors: string[] = []
-    const section = col(c, '영역')
+    const notes: string[] = []
     const title = col(c, '질문')
-    const type = TYPE_ALIAS[col(c, '유형')]
-    if (!section) errors.push('영역: 비어 있음')
     if (!title) errors.push('질문: 비어 있음')
-    if (!type) errors.push(`유형: '${col(c, '유형')}'은(는) 지원하지 않는 유형`)
+    let section = col(c, '영역')
+    if (!section) { section = Q_DEFAULT_SECTION; notes.push(`영역 없음 → '${Q_DEFAULT_SECTION}'`) }
+    const typeRaw = col(c, '유형')
+    let type: QuestionType | undefined = TYPE_ALIAS[typeRaw.replace(/\s+/g, ' ')] ?? TYPE_ALIAS[typeRaw.replace(/\s/g, '')]
+    if (!type) {
+      type = col(c, '선택지').split('|').filter((x) => x.trim()).length >= 2 ? 'single' : 'long'
+      notes.push(typeRaw ? `유형 '${typeRaw}' 모름 → ${TYPE_TEXT[type]}` : `유형 없음 → ${TYPE_TEXT[type]}`)
+    }
     const reqRaw = col(c, '필수')
     const required = reqRaw === '' ? true : ['Y', 'y', '예', '필수', 'O'].includes(reqRaw) ? true : ['N', 'n', '아니오', '선택', 'X'].includes(reqRaw) ? false : null
     if (required === null) errors.push(`필수: '${reqRaw}'는 Y/N이 아님`)
@@ -219,7 +233,7 @@ export function parseQuestionTable(table: string[][], defaultRules: EvaluatorRul
     const ptsRaw = col(c, '배점')
     const pts = ptsRaw === '' ? null : Number(ptsRaw)
     if (pts !== null && !(Number.isFinite(pts) && pts >= 0)) errors.push(`배점: '${ptsRaw}'은(는) 0 이상 숫자가 아님`)
-    if (errors.length || !type) return { line, section, question: null, errors }
+    if (errors.length) return { line, section, question: null, errors, notes }
     const q = newQuestion(type)
     q.title = title
     q.help = col(c, '도움말')
@@ -251,7 +265,7 @@ export function parseQuestionTable(table: string[][], defaultRules: EvaluatorRul
     } else if (type !== 'scale5') {
       q.purpose = 'info'
     }
-    return { line, section, question: errors.length ? null : q, errors }
+    return { line, section, question: errors.length ? null : q, errors, notes }
   })
   return { headerError: null, ignored, rows }
 }

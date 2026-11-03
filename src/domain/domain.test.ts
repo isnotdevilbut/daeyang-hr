@@ -616,7 +616,8 @@ describe('평가 관리 통합 (v3)', () => {
     expect(r.rows[0].question?.rules).toEqual(['self', 'teamLead'])
     expect(r.rows[1].question?.options.map((o) => o.value)).toEqual([2, 1])
     expect(r.rows[1].question?.required).toBe(false)
-    expect(r.rows[2].errors[0]).toContain('유형')
+    expect(r.rows[2].question?.type).toBe('long') // D-120: 모르는 유형은 막지 않고 긴 서술형으로(안내 표시)
+    expect(r.rows[2].notes?.[0]).toContain("유형 '표'")
     expect(r.rows[3].errors[0]).toContain('선택지점수')
   })
   it('응답 수 계산은 회차 안에서만 센다', () => {
@@ -2749,10 +2750,25 @@ describe('문항 일괄 업로드 = 명단 업로드와 같은 흐름 (D-118)', 
   it('한 행이라도 오류면 아무것도 넣지 않음 · 필수 열 없음·중복 열은 파일 오류 · 팀원→팀장 평가표는 빈 적용평가 = 팀원→팀장평가', () => {
     const bad = Q.parseQuestionTable([HEAD, ROWS[0], ['업무성과', '', '모름', 'Y', '', '', '자기', 'x', '']])
     expect(Q.canImportQuestions(bad)).toBe(false)
-    expect(bad.rows[1].errors.join()).toMatch(/질문: 비어 있음.*유형.*배점/)
-    expect(Q.parseQuestionTable([['영역', '질문'], ['a', 'b']]).headerError).toContain('유형')
+    expect(bad.rows[1].errors.join()).toMatch(/질문: 비어 있음.*배점/)
+    expect(Q.parseQuestionTable([['영역', '유형'], ['a', '서술형']]).headerError).toContain('질문')
     expect(Q.parseQuestionTable([['영역', '질문', '유형', '유형'], ['a', 'b', '서술형', '서술형']]).headerError).toContain('두 번')
     const up = Q.parseQuestionTable([['영역', '질문', '유형'], ['소통', '의견을 경청한다', '5점 척도']], ['upward'])
     expect(up.rows[0].question).toMatchObject({ rules: ['upward'], directions: ['up'] })
+  })
+})
+
+describe('문항 업로드: 질문만 있어도 (D-120)', async () => {
+  const Q = await import('./questions')
+  it('질문 열 하나만 → 영역 미분류·유형 긴 서술형으로 모두 등록(안내 표시), 별칭 머리글(문항·평가항목·문항유형)도 인식', () => {
+    const only = Q.parseQuestionTable([['질문'], ['올해 성과'], ['내년 목표']])
+    expect(Q.canImportQuestions(only)).toBe(true)
+    expect(only.rows.map((r) => [r.section, r.question!.type, r.question!.title])).toEqual([['미분류', 'long', '올해 성과'], ['미분류', 'long', '내년 목표']])
+    expect(only.rows[0].notes).toEqual(["영역 없음 → '미분류'", '유형 없음 → 긴 서술형'])
+    const alias = Q.parseQuestionTable([['평가항목', '문항', '문항유형', '보기'], ['성과', '목표 달성', '', '상|중|하'], ['', '협업', '5점 척도', '']])
+    expect(alias.rows.map((r) => [r.section, r.question!.title, r.question!.type])).toEqual([['성과', '목표 달성', 'single'], ['미분류', '협업', 'scale5']])
+    const t: any = { sections: [] }
+    Q.appendImported(t, only.rows)
+    expect(t.sections.map((x: any) => [x.title, x.questions.length])).toEqual([['미분류', 2]])
   })
 })

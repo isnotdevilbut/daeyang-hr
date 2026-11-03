@@ -17,7 +17,7 @@ import { readRosterFile } from '../../domain/roster'
 import type { Sheet } from '../../domain/xlsx'
 import { jobName, positionName, positionsOf } from '../../domain/catalog'
 import { activeTeams } from '../../domain/org'
-import { GRADE_LETTERS, gradeScaleOf, pointsErrors, usesPoints } from '../../domain/points'
+import { pointsErrors, usesPoints } from '../../domain/points'
 import { activeVersions, liveVersions, addVersion, applyVersion, applyVersions, blankTemplate, cloneTemplate, deleteVersion, pickKey, resolveVersion, saveVersionDraft, scopeTargets, versionUsed, type VersionProblem } from '../../domain/versions'
 import type { TemplateVersion, VersionScope } from '../../domain/types'
 
@@ -100,7 +100,7 @@ export default function EvalQuestions({ cycle }: { cycle: Cycle }) {
         <button className="btn primary" disabled={t.sections.length === 0} onClick={() => setPicking({ sectionId: t.sections[t.sections.length - 1].id })}>+ 문항 추가</button>
       </div>
       {msg && <p className="feedback ok" role="status">✓ {msg}</p>}
-      <PointsBar t={t} disabled={closedCycle} onChange={(fn) => mut(fn)} />
+      <PointsBar t={t} />
       {t.sections.length === 0 && <div className="panel pad empty-start"><p>문항이 없습니다. 영역을 추가한 뒤 문항을 넣거나 엑셀·CSV로 가져오세요.</p></div>}
 
       {t.sections.map((sec, si) => (
@@ -187,20 +187,15 @@ export default function EvalQuestions({ cycle }: { cycle: Cycle }) {
 }
 
 /** 평가표 배점 요약(D-103): 영역 배점 합계·등급 환산(A~E)·오류. 배점이 하나도 없으면 이전 방식이라 합계 대신 안내 없이 등급 환산만 */
-function PointsBar({ t, disabled, onChange }: { t: Template; disabled: boolean; onChange: (fn: (t: Template) => void) => void }) {
+/** 영역 배점 합계·검증 문구. 등급 환산 입력은 화면에서 뺐다(D-120) — 저장된 환산값(없으면 A=5…E=1)은 점수 계산에 그대로 쓰인다 */
+function PointsBar({ t }: { t: Template }) {
   const on = usesPoints(t)
   const sum = t.sections.reduce((a, x) => a + (typeof x.points === 'number' ? x.points : 0), 0)
   const errs = pointsErrors(t)
-  const scale = gradeScaleOf(t)
+  if (!on && !errs.length) return null
   return (
     <div className="points-bar">
       {on && <span className={`pb-sum ${errs.some((e) => e.includes('합계')) ? 'bad' : 'good'}`}>영역 배점 합계 <b>{+sum.toFixed(2)}</b>점</span>}
-      <span className="pb-grade" role="group" aria-label="등급 환산 점수">등급 환산
-        {GRADE_LETTERS.map((g) => (
-          <label key={g}>{g}<input type="number" inputMode="decimal" className="no-spin" aria-label={`${g} 등급 점수`} disabled={disabled} value={scale[g] ?? ''}
-            onWheel={(e) => e.currentTarget.blur()} onChange={(e) => onChange((x) => { x.gradeScale = { ...gradeScaleOf(x), [g]: e.target.value === '' ? NaN : Number(e.target.value) } })} /></label>
-        ))}
-      </span>
       {errs.length > 0 && <span className="feedback fail pb-err" role="alert">✕ {errs[0]}{errs.length > 1 ? ` 외 ${errs.length - 1}건` : ''}</span>}
     </div>
   )
@@ -554,7 +549,7 @@ function Import({ cycle, t, onClose, onDone, mut }: { cycle: Cycle; t: Template;
                       <td>{r.question?.title ?? <span className="muted">—</span>}</td>
                       <td>{r.question ? TYPE_TEXT[r.question.type] : '—'}</td>
                       <td>{r.question ? rulesOf(r.question).map((x) => RULE_TEXT[x]).join('·') : '—'}</td>
-                      <td>{r.errors.length ? r.errors.map((e, i) => <div key={i} className="err-msg">{e}</div>) : <span className="chip submitted">✓</span>}</td>
+                      <td>{r.errors.length ? r.errors.map((e, i) => <div key={i} className="err-msg">{e}</div>) : <><span className="chip submitted">✓</span>{r.notes?.map((n, i) => <div key={i} className="muted small">{n}</div>)}</>}</td>
                     </tr>
                   ))}
                 </tbody>
