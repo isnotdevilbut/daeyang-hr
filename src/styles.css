@@ -1568,3 +1568,4 @@ body.drag-sorting, body.drag-sorting * { cursor: grabbing !important; user-selec
 .q-section.drop-before { box-shadow: 0 -4px 0 var(--brand-blue); }
 .q-section.drop-after { box-shadow: 0 4px 0 var(--brand-blue); }
 .q-section.drop-into { box-shadow: 0 0 0 2px var(--brand-blue); } /* D-159: 문항이 없는 영역에 놓을 때 */
+.target-team .tt-cols { margin-bottom: -9px; } /* D-160: '자기평가' 열 이름을 아래 스위치에 더 붙게 */

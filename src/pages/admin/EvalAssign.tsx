@@ -270,12 +270,12 @@ function Assignments({ cycle, locked, execDraft, setExecDraft, onSave, msg }: { 
 function GradeRatios() {
   const s = useAppState()
   const saved = s.policy.gradeRatios
-  const G = ['A', 'B', 'C', 'D'] as const
-  const [d, setD] = useState<Record<string, string>>(() => Object.fromEntries(G.map((g) => [g, String(saved[g])])))
+  const G = ['A', 'B', 'C', 'D', 'E'] as const // E 등급(D-160)
+  const [d, setD] = useState<Record<string, string>>(() => Object.fromEntries(G.map((g) => [g, String(saved[g] ?? 0)])))
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const vals = G.map((g) => Number(d[g]))
   const sum = vals.reduce((a, v) => a + (Number.isFinite(v) ? v : 0), 0)
-  const dirty = G.some((g) => d[g] !== String(saved[g]))
+  const dirty = G.some((g) => d[g] !== String(saved[g] ?? 0))
   const save = () => {
     if (G.some((g) => d[g].trim() === '' || !Number.isFinite(Number(d[g])) || Number(d[g]) < 0 || Number(d[g]) > 100)) return setMsg({ ok: false, text: '각 비율은 0~100 사이 숫자로 입력하세요.' })
     if (Math.abs(sum - 100) > 0.001) return setMsg({ ok: false, text: `합계가 ${+sum.toFixed(2)}%입니다. 100%가 되어야 합니다.` })

@@ -234,7 +234,14 @@ export function migrate(raw: any): MigrationResult | null {
     s.schemaVersion = 23
   }
 
-  if (s.schemaVersion !== 23) return null
+  if (s.schemaVersion === 23) {
+    // v23 → v24 (D-160): 등급 인원 비율에 E 등급 — 없을 때만 0%로 추가(A~D 값·합계 그대로)
+    const gr = s.policy?.gradeRatios
+    if (gr && typeof gr.E !== 'number') { gr.E = 0; notes.push('등급 인원 비율: E 등급 추가(0%)') }
+    s.schemaVersion = 24
+  }
+
+  if (s.schemaVersion !== 24) return null
   return { state: s as AppState, notes }
 }
 

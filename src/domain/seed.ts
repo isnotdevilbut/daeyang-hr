@@ -21,7 +21,7 @@ import { createCycle, DEFAULT_TEMPLATE_BY_JOB, eligibleTargets } from './cycle'
 import { isUnlocked } from './progress'
 
 // v2: 상향평가 제외 / v3: 단계 반영 비율 회차별 / v4: KPI 지표·개인평가 반영. 이전 저장본은 data/migrate.ts에서 변환
-export const SCHEMA_VERSION = 23
+export const SCHEMA_VERSION = 24
 
 function rng(seed: number) {
   return () => {
@@ -129,7 +129,7 @@ export function createSeed(opts: { legacy?: boolean; until?: number } = {}): App
       name: '개발용 가정 v0',
       isAssumption: true,
       adjustMode: 'additive',
-      gradeRatios: { A: 25, B: 25, C: 35, D: 15 },
+      gradeRatios: { A: 25, B: 25, C: 35, D: 15, E: 0 },
     },
     adjustments: [],
     session: { role: 'admin', personaId: null },
@@ -218,5 +218,6 @@ export function createSeed(opts: { legacy?: boolean; until?: number } = {}): App
   leadUpwardOpen(state) // 장현우 팀원→팀장평가 5/6 (D-121) — 저장 데이터 변환과 같은 함수
   if ((opts.until ?? SCHEMA_VERSION) < 23) { state.schemaVersion = opts.until!; return state }
   demoKpiV23(state) // 경영기획팀 가상 KPI 지표 (D-151) — 저장 데이터 변환과 같은 함수
+  if ((opts.until ?? SCHEMA_VERSION) < 24) { delete (state.policy.gradeRatios as Partial<AppState['policy']['gradeRatios']>).E; state.schemaVersion = opts.until!; return state } // v24 이전: E 등급 없음 (D-160)
   return state
 }

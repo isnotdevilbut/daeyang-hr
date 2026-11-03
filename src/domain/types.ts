@@ -291,7 +291,7 @@ export interface CalcPolicy {
   /** v3까지의 표시값. v4부터 회차별 Cycle.kpiBlend 사용 */
   kpiMode?: string
   adjustMode: 'additive'
-  gradeRatios: { A: number; B: number; C: number; D: number } // 참고값
+  gradeRatios: { A: number; B: number; C: number; D: number; E: number } // 참고값
 }
 
 export type AdjustKind = 'dept' | 'person' | 'ceoScore' | 'ceoGrade'
