@@ -91,7 +91,7 @@ export default function PersonResultPage() {
     <div className="page detail-page">
       <div className="detail-top no-print">
         <Link to={back.to} className="back-link">← {back.label}</Link>
-        {can(role, 'reportPreview') && <Link className="btn primary" to={`/admin/report/${t.employeeId}?from=${from}`}>개인 리포트 미리보기</Link>}
+        {from === 'results' && can(role, 'reportPreview') && <Link className="btn primary" to={`/admin/report/${t.employeeId}?from=${from}`}>개인 리포트 미리보기</Link>}
       </div>
       <header className="person-head">
         <h1>{t.name}{t.isTeamLead && <span className="chip info tag">팀장</span>}</h1>
@@ -109,6 +109,8 @@ export default function PersonResultPage() {
       <RecvList cycle={cycle} targetId={t.employeeId} />
       {/* D-127: 같은 '평가 현황' 아래 — 받는 평가(위) + 이 사람이 해야 할 평가(아래, 사원·팀장·임원 모두: 팀장평가·임원평가·팀원→팀장평가). 해야 할 평가가 없으면 표시 안 함 */}
       <WriteList cycle={cycle} evaluatorId={t.employeeId} title={false} />
+      {/* D-129: 진행 현황에서 연 상세는 평가 현황까지만 — 점수 요약·보정·단계별 응답·변경 내역·리포트는 결과·리포트에서 연 상세에만 */}
+      {from === 'results' && <>
       {/* 제목은 상자 밖, 내용은 상자 안 — 평가 현황과 같은 구조 (D-087) */}
       <div className="detail-grid">
         <div className="detail-col">
@@ -191,6 +193,7 @@ export default function PersonResultPage() {
           </div>
         </details>
       )}
+      </>}
     </div>
   )
 }
