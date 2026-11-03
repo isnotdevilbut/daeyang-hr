@@ -1502,3 +1502,20 @@ details[open] > summary > .toggle-ic { transform: rotate(180deg); }
 .upload-guide li { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
 .upload-guide b { min-width: 9.5em; color: var(--brand-navy); font-weight: 800; }
 @media (max-width: 640px) { .upload-guide b { min-width: 0; width: 100%; } }
+/* D-146: KPI 지표 카드형 — 지표마다 이름·수정/삭제, 목표·실적·달성률·가중치 네 칸, 평가 방향·환산점수 */
+.kpi-inds { padding: 4px 22px 18px; }
+.kpi-ind { padding: 18px 0 14px; border-top: 1px solid var(--line-soft, #e7ebf2); }
+.kpi-ind:first-child { border-top: 0; }
+.ki-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.ki-head h3 { margin: 0; font-size: 19px; font-weight: 800; color: var(--brand-navy); }
+.ki-btn { display: inline-flex; align-items: center; gap: 6px; background: #fff; }
+.ki-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.ki-tile { padding: 12px 16px; border-radius: 12px; background: #f3f5f9; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.ki-tile .l { font-size: 14px; color: var(--text-sub); }
+.ki-tile b { font-size: 21px; font-weight: 800; color: #1c2033; overflow-wrap: anywhere; }
+.ki-tile.rate b { color: #2a8a9e; }
+.ki-cap { margin: 10px 0 0; font-size: 13.5px; color: #8a93a8; display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.ki-score { color: var(--text-sub); } .ki-score b { color: var(--brand-navy); }
+.ki-sum { margin: 6px 0 0; padding-top: 12px; border-top: 1px solid var(--line-soft, #e7ebf2); text-align: right; font-size: 14.5px; color: var(--text-sub); }
+.kpi-inds.kpi-kept { opacity: 0.6; }
+@media (max-width: 640px) { .kpi-inds { padding: 0 14px 14px; } .ki-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } .ki-tile b { font-size: 18px; } .ki-head { flex-wrap: wrap; } }

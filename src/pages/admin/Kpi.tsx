@@ -150,35 +150,28 @@ function DeptEditor({ cycle, deptId, deptName, editable }: { cycle: Cycle; deptI
               {editable && <button className="btn small" onClick={() => use('indicators')}>지표 계산 적용</button>}
             </div>
           )}
-          <div className={`table-wrap ${manualOn ? 'kpi-kept' : ''}`} tabIndex={0}>
-            <table className="tbl kpi-tbl">
-              <thead><tr><th>지표</th><th className="num">목표</th><th className="num">실적</th><th className="num">달성률</th><th className="num">환산점수</th><th className="num">가중치</th><th><span className="sr-only">관리</span></th></tr></thead>
-              <tbody>
-                {k.indicators.map(({ ind, r }) => (
-                  <tr key={ind.id}>
-                    <td><b>{ind.name}</b><div className="muted">{ind.direction === 'higher' ? '높을수록 좋음' : '낮을수록 좋음'}</div></td>
-                    <td className="num">{withUnit(ind.target, ind.unit)}</td>
-                    <td className="num">{withUnit(ind.actual, ind.unit)}</td>
-                    <td className="num">{r.status === 'targetMet' ? '목표 달성' : r.rate !== null ? `${f1(r.rate)}%` : <span className="bad">{r.message}</span>}</td>
-                    <td className="num"><b>{r.score !== null ? f1(r.score) : '—'}</b></td>
-                    <td className="num">{ind.weight === null ? <span className="bad">미입력</span> : `${ind.weight}%`}</td>
-                    <td>{editable && (
-                      <div className="actions" style={{ flexWrap: 'nowrap' }}>
-                        <button className="btn small" onClick={() => { setMsg(''); setDialog({ kind: 'indicator', ind }) }}>수정</button>
-                        <button className="btn small danger" onClick={() => { if (confirm(`'${ind.name}' 지표를 삭제할까요?`)) update((d) => { d.kpiIndicators = d.kpiIndicators.filter((x) => x.id !== ind.id) }) }}>삭제</button>
-                      </div>
-                    )}</td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr>
-                  <td colSpan={5} className="num">가중치 합계</td>
-                  <td className="num"><b className={k.weightSum !== null && Math.abs(k.weightSum - 100) < 0.001 ? 'good' : 'bad'}>{k.weightSum === null ? '미입력 있음' : `${+k.weightSum.toFixed(2)}%`}</b></td>
-                  <td />
-                </tr>
-              </tfoot>
-            </table>
+          {/* D-146: 지표 = 카드형(이름·수정/삭제 / 목표·실적·달성률·가중치 네 칸 / 평가 방향·환산점수) — 차장님이 좋다고 하신 방식. 계산·기능은 그대로 */}
+          <div className={`kpi-inds ${manualOn ? 'kpi-kept' : ''}`}>
+            {k.indicators.map(({ ind, r }) => (
+              <article className="kpi-ind" key={ind.id} aria-label={ind.name}>
+                <div className="ki-head">
+                  <h3>{ind.name}</h3>
+                  <span className="spacer" />
+                  {editable && <>
+                    <button className="btn small ki-btn" onClick={() => { setMsg(''); setDialog({ kind: 'indicator', ind }) }}><EditIc /> 수정</button>
+                    <button className="btn small ki-btn" onClick={() => { if (confirm(`'${ind.name}' 지표를 삭제할까요?`)) update((d) => { d.kpiIndicators = d.kpiIndicators.filter((x) => x.id !== ind.id) }) }}><DelIc /> 삭제</button>
+                  </>}
+                </div>
+                <div className="ki-stats">
+                  <div className="ki-tile"><span className="l">목표</span><b>{withUnit(ind.target, ind.unit)}</b></div>
+                  <div className="ki-tile"><span className="l">실적</span><b>{withUnit(ind.actual, ind.unit)}</b></div>
+                  <div className="ki-tile rate"><span className="l">달성률</span><b>{r.status === 'targetMet' ? '목표 달성' : r.rate !== null ? `${f1(r.rate)}%` : <span className="bad">{r.message}</span>}</b></div>
+                  <div className="ki-tile"><span className="l">가중치</span><b>{ind.weight === null ? <span className="bad">미입력</span> : `${ind.weight}%`}</b></div>
+                </div>
+                <p className="ki-cap">{ind.direction === 'higher' ? '높을수록 좋음 (실적 ÷ 목표)' : '낮을수록 좋음 (목표 ÷ 실적)'}<span className="ki-score">환산점수 <b>{r.score !== null ? f1(r.score) : '—'}</b></span></p>
+              </article>
+            ))}
+            <p className="ki-sum">가중치 합계 <b className={k.weightSum !== null && Math.abs(k.weightSum - 100) < 0.001 ? 'good' : 'bad'}>{k.weightSum === null ? '미입력 있음' : `${+k.weightSum.toFixed(2)}%`}</b></p>
           </div>
         </>
       )}
@@ -399,3 +392,10 @@ function FinalPlan({ cycle, editable }: { cycle: Cycle; editable: boolean }) {
     </details>
   )
 }
+
+const EditIc = () => (
+  <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden focusable="false"><path d="M10.9 2.2a1.6 1.6 0 0 1 2.3 0l.6.6a1.6 1.6 0 0 1 0 2.3l-7.6 7.6-3.3.8.8-3.3 7.2-8z" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" /><path d="M9.6 3.6l2.8 2.8" stroke="currentColor" strokeWidth="1.5" /></svg>
+)
+const DelIc = () => (
+  <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden focusable="false"><path d="M4 4l8 8M12 4l-8 8" stroke="#d8343b" strokeWidth="1.8" strokeLinecap="round" /></svg>
+)
