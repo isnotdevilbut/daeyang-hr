@@ -729,6 +729,15 @@ function ScopeEditor({ cycle, v, onDup, onRemove, msg, setMsg }: { cycle: Cycle;
     groups.set(k, g)
   }
   const toggle = <T,>(arr: T[], x: T, on: boolean) => (on ? [...new Set([...arr, x])] : arr.filter((y) => y !== x))
+  // D-125: 적용 전에 미리 — 지금 고른 조건대로 적용하면 평가표가 없어지는(또는 겹치는) 평가. 지금 상태에 이미 있는 문제는 빼고 새로 생기는 것만
+  const before = applyVersions(s, structuredClone(cycle)).map((p) => `${p.kind}|${p.a.id}`)
+  const preview = (() => {
+    if (!dirty || !scope.rules.length) return [] as VersionProblem[]
+    const trial = structuredClone(cycle)
+    trial.versions = (trial.versions ?? []).map((x) => (x.templateId === v.templateId ? { templateId: x.templateId, name: name.trim() || x.name, scope } : x))
+    trial.versionPicks = picks
+    return applyVersions(s, trial).filter((p) => (p.kind === 'none' || p.kind === 'conflict') && !before.includes(`${p.kind}|${p.a.id}`))
+  })()
   const saveDraft = (quiet = false) => {
     update((d) => saveVersionDraft(d.cycles.find((x) => x.id === cycle.id)!, v.templateId, name.trim() || v.name, scope))
     if (!quiet) { setErr([]); setConf([]); setMsg('초안을 저장했습니다.') }
@@ -777,6 +786,12 @@ function ScopeEditor({ cycle, v, onDup, onRemove, msg, setMsg }: { cycle: Cycle;
       })()}
       {/* D-122: 팀·직급·사람 조건은 평가받는 사람 기준 — 팀원→팀장평가는 평가받는 사람이 팀장(평가하는 팀원이 아님) */}
       {scope.mode === 'custom' && scope.rules.includes('upward') && <p className="muted small scope-hint">팀·직급·사람은 <b>평가받는 사람</b> 기준이에요. 팀원→팀장평가는 평가받는 사람이 <b>팀장</b>이라, 직급을 고를 때 '팀장'을 넣어야 해요.</p>}
+      {preview.length > 0 && (
+        <div className="feedback fail scope-preview" role="status">
+          ⚠ 이대로 적용하면 — {problemText(cycle, preview)}
+          <div className="muted small">팀·직급은 평가받는 사람 기준이라, 이 평가표가 맡던 평가 중 위 사람이 받는 평가에 쓸 평가표가 없어집니다. 그 사람(예: 팀장)도 직급에 넣으세요 — 팀장 자기평가는 더 좁게 지정한 '팀장 자기평가표'가 먼저 적용됩니다.</div>
+        </div>
+      )}
       {scope.mode === 'custom' && (
         <p className="scope-summary" role="status">
           <b>적용 대상(평가받는 사람) {scopeTargets(cycle, scope).length}명</b>
@@ -878,16 +893,24 @@ function PeoplePicker({ scope, setScope }: { scope: VersionScope; setScope: (x: 
 }
 
 /** 지금 회차에서 평가표를 연결할 수 없는 배정 — 충돌·평가표 없음·표시 문항 0개 (빈 평가는 제출 완료로 처리되지 않음) */
+// D-122: 어떤 평가(자기·팀원→팀장·팀장·임원)에서 생겼는지와 평가받는 사람을 함께 — 고칠 평가표를 바로 알 수 있게
+function problemPart(cycle: Cycle, ps: VersionProblem[]) {
+  const names = (list: VersionProblem[]) => [...new Set(list.map((p) => cycle.targets.find((t) => t.employeeId === p.a.targetId)?.name ?? '?'))]
+  return RULES.map((r) => ({ r, list: ps.filter((p) => ctxFor(cycle, p.a).rule === r) })).filter((x) => x.list.length)
+    .map(({ r, list }) => `${RULE_TEXT[r]} ${list.length}건 — 평가받는 사람 ${names(list).slice(0, 3).join(', ')}${names(list).length > 3 ? ' 등' : ''}`).join(' / ')
+}
+function problemText(cycle: Cycle, ps: VersionProblem[]) {
+  const none = ps.filter((p) => p.kind === 'none'), conf = ps.filter((p) => p.kind === 'conflict')
+  return [none.length ? `적용할 평가표 없음: ${problemPart(cycle, none)}` : '', conf.length ? `평가표 겹침: ${problemPart(cycle, conf)}` : ''].filter(Boolean).join(' · ')
+}
+
 function Problems({ cycle }: { cycle: Cycle }) {
   const s = useAppState()
   const probs: VersionProblem[] = applyVersions(s, structuredClone(cycle))
   if (!probs.length) return null
   const label = { conflict: '평가표 겹침(버전 선택 필요)', none: '적용할 평가표 없음', empty: '표시할 문항 0개' }
   const by = (k: VersionProblem['kind']) => probs.filter((p) => p.kind === k)
-  const names = (ps: VersionProblem[]) => [...new Set(ps.map((p) => cycle.targets.find((t) => t.employeeId === p.a.targetId)?.name ?? '?'))]
-  // D-122: 어떤 평가(자기·팀원→팀장·팀장·임원)에서 생겼는지와 평가받는 사람을 함께 — 고칠 평가표를 바로 알 수 있게
-  const part = (ps: VersionProblem[]) => RULES.map((r) => ({ r, list: ps.filter((p) => ctxFor(cycle, p.a).rule === r) })).filter((x) => x.list.length)
-    .map(({ r, list }) => `${RULE_TEXT[r]} ${list.length}건 — 평가받는 사람 ${names(list).slice(0, 3).join(', ')}${names(list).length > 3 ? ' 등' : ''}`).join(' / ')
+  const part = (ps: VersionProblem[]) => problemPart(cycle, ps)
   return (
     <div className="feedback fail version-problems" role="alert">
       <div>⚠ 평가표 확인 필요 — {(['conflict', 'none', 'empty'] as const).filter((k) => by(k).length).map((k) => `${label[k]}: ${part(by(k))}`).join(' · ')}</div>

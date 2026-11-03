@@ -26,6 +26,15 @@ export const whoInScope = (sc: VersionScope, x: Omit<VersionCtx, 'rule'>) =>
   && (sc.positions === 'all' || (!!x.positionId && sc.positions.includes(x.positionId)))
 const inScope = (v: TemplateVersion, x: VersionCtx) => v.scope.rules.includes(x.rule) && whoInScope(v.scope, x)
 
+/** a의 평가받는 사람 조건이 b에 포함되는가(직급·팀·직접 선택한 사람). 판단할 수 없으면 false */
+export function narrower(a: VersionScope, b: VersionScope): boolean {
+  const sub = (x: 'all' | ID[], y: 'all' | ID[]) => y === 'all' || (x !== 'all' && x.every((v) => y.includes(v)))
+  if (!sub(a.positions, b.positions)) return false
+  if (b.employees) return !!a.employees && a.employees.every((e) => b.employees!.includes(e))
+  if (a.employees) return b.teams === 'all'
+  return sub(a.teams, b.teams)
+}
+
 /** 이 상황(평가 유형·대상 팀·대상 직급)에 쓰는 평가표 — 실제 평가·미리보기 공통 */
 export function resolveVersion(c: Pick<Cycle, 'versions' | 'versionPicks' | 'templateByJob'>, x: VersionCtx & { jobType?: string }): Resolution {
   if (!c.versions?.length) return { templateId: x.jobType ? templateFor(c, x.jobType) : templateFor(c, 'office'), candidates: [], conflict: false }
@@ -34,7 +43,12 @@ export function resolveVersion(c: Pick<Cycle, 'versions' | 'versionPicks' | 'tem
   if (custom.length === 1) return { templateId: custom[0], candidates: custom, conflict: false }
   if (custom.length > 1) {
     const pick = c.versionPicks?.[pickKey(custom)]
-    return pick && custom.includes(pick) ? { templateId: pick, candidates: custom, conflict: false } : { templateId: null, candidates: custom, conflict: true }
+    if (pick && custom.includes(pick)) return { templateId: pick, candidates: custom, conflict: false }
+    // D-125: 관리자가 고르지 않았으면 '더 좁게 지정한' 평가표 하나가 다른 모든 후보보다 좁을 때 그 평가표(예: 공통 = 사원·팀장, 팀장 자기평가표 = 팀장 → 팀장 자기평가는 팀장 자기평가표)
+    const vs = custom.map((id) => act.find((v) => v.templateId === id)!)
+    const narrowest = vs.filter((a) => vs.every((b) => a === b || (narrower(a.scope, b.scope) && !narrower(b.scope, a.scope))))
+    if (narrowest.length === 1) return { templateId: narrowest[0].templateId, candidates: custom, conflict: false }
+    return { templateId: null, candidates: custom, conflict: true }
   }
   const common = act.filter((v) => v.scope.mode === 'all' && v.scope.rules.includes(x.rule)).map((v) => v.templateId)
   return { templateId: common[0] ?? null, candidates: common, conflict: common.length > 1 }

@@ -2886,3 +2886,30 @@ describe('팀원→팀장 평가표 = 회사 상향평가 예시 (D-124)', async
     expect(U.upwardFormV22(s2)).toEqual([])
   })
 })
+
+describe('더 좁게 지정한 평가표 우선 (D-125)', async () => {
+  const V = await import('./versions')
+  const { ctxFor } = await import('./questions')
+  it('공통 평가표를 직접 선택(사원·팀장, 자기·팀장·임원평가)으로 바꿔도 겹침 없음 — 팀장 자기평가 = 팀장 자기평가표, 팀장이 받는 임원평가·사원 평가 = 공통', () => {
+    const s = createSeed(); const c = s.cycles.find((x) => x.status === '진행')!
+    const common = c.versions!.find((v) => v.scope.mode === 'all' && v.scope.rules.includes('self'))!
+    const leadSelf = c.versions!.find((v) => v.name === '팀장 자기평가표')!
+    common.scope = { mode: 'custom', rules: ['self', 'teamLead', 'executive'], teams: 'all', positions: ['pos-staff', 'pos-lead'] }
+    expect(V.applyVersions(s, c)).toEqual([])
+    const lead = c.targets.find((t) => t.isTeamLead)!, staff = c.targets.find((t) => !t.isTeamLead && !t.isExecutive)!
+    // 평가표 선택 규칙(응답 있는 배정은 원래 평가표를 그대로 두므로 규칙 자체를 확인)
+    const of = (tid: string, rule: any) => { const t = c.targets.find((x) => x.employeeId === tid)!; return V.resolveVersion(c, { rule, teamId: t.departmentId, positionId: t.positionId, employeeId: tid }).templateId }
+    expect(of(lead.employeeId, 'self')).toBe(leadSelf.templateId)
+    expect(of(lead.employeeId, 'executive')).toBe(common.templateId)
+    expect(of(staff.employeeId, 'self')).toBe(common.templateId)
+    // 직급을 사원만으로 하면 팀장이 받는 임원평가 4건에 평가표 없음
+    common.scope = { ...common.scope, positions: ['pos-staff'] }
+    const probs = V.applyVersions(s, c)
+    expect(probs.filter((p) => p.kind === 'none').map((p) => ctxFor(c, p.a).rule)).toEqual(['executive', 'executive', 'executive', 'executive'])
+  })
+  it('조건이 같은 두 평가표는 여전히 겹침(관리자가 고름)', () => {
+    expect(V.narrower({ mode: 'custom', rules: ['self'], teams: 'all', positions: ['a'] }, { mode: 'custom', rules: ['self'], teams: 'all', positions: ['a'] })).toBe(true)
+    expect(V.narrower({ mode: 'custom', rules: ['self'], teams: 'all', positions: ['a'] }, { mode: 'custom', rules: ['self'], teams: 'all', positions: ['a', 'b'] })).toBe(true)
+    expect(V.narrower({ mode: 'custom', rules: ['self'], teams: 'all', positions: ['a', 'b'] }, { mode: 'custom', rules: ['self'], teams: 'all', positions: ['a'] })).toBe(false)
+  })
+})
