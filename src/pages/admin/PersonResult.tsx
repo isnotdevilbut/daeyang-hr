@@ -10,10 +10,11 @@ import { displayAnswer } from '../../domain/seed'
 import { type AdjustKind, type Assignment, type Cycle, type Lang, type Response, type Template } from '../../domain/types'
 import { optLabel, qTitle, t as tr } from '../../i18n'
 import { Forbidden } from '../../components/ui'
+import { sortRows, SortTh, useSort } from '../../components/sort'
 import { addAdjustment } from './Results'
 import { applies, ctxFor, RULE_TEXT, type QCtx } from '../../domain/questions'
 import { manualQuestions } from '../../domain/points'
-import { jobName, positionName, targetPosition } from '../../domain/catalog'
+import { jobName, positionName, positionsOf, targetPosition } from '../../domain/catalog'
 
 export function answerText(t: Template, qid: string, v: string | null | undefined) {
   if (v === null || v === undefined || v === '') return '—'
@@ -237,6 +238,7 @@ const WRITE_DETAIL: Partial<Record<CellStatus, string>> = { notStarted: '미시�
 function WriteList({ cycle, evaluatorId }: { cycle: Cycle; evaluatorId: string }) {
   const s = useAppState()
   const [view, setView] = useState<'all' | 'open' | 'done'>('all')
+  const [sort, onSort] = useSort()
   const rows = activeWriteAssignments(cycle, s.employees)
     .filter((a) => a.evaluatorId === evaluatorId && a.direction !== 'self')
     .map((a) => ({ a, t: cycle.targets.find((x) => x.employeeId === a.targetId)!, st: assignmentCell(cycle, s.responses, a) }))
@@ -244,7 +246,10 @@ function WriteList({ cycle, evaluatorId }: { cycle: Cycle; evaluatorId: string }
     // 미완료 먼저, 완료는 아래(D-093) — 같은 그룹 안에서는 팀·팀장 먼저·이름 순
     .sort((x, y) => Number(x.st === 'submitted') - Number(y.st === 'submitted') || x.t.teamName.localeCompare(y.t.teamName, 'ko') || Number(y.t.isTeamLead) - Number(x.t.isTeamLead) || x.t.name.localeCompare(y.t.name, 'ko'))
   const done = rows.filter((r) => r.st === 'submitted').length
-  const shown = rows.filter((r) => view === 'all' || (view === 'done') === (r.st === 'submitted'))
+  const posRank = (name: string) => { const i = positionsOf(s).findIndex((p) => p.name === name); return i < 0 ? 99 : i }
+  // 머리글 정렬(기본 = 미완료 먼저). 상태는 미완료 < 완료
+  const shown = sortRows(rows.filter((r) => view === 'all' || (view === 'done') === (r.st === 'submitted')), sort, (r, k) =>
+    k === 'team' ? r.t.teamName : k === 'pos' ? posRank(targetPosition(s, cycle, r.t)) : k === 'name' ? r.t.name : Number(r.st === 'submitted'))
   const tabs = [['all', '전체', rows.length], ['open', '미완료', rows.length - done], ['done', '완료', done]] as const
   return (
     <>
@@ -258,13 +263,13 @@ function WriteList({ cycle, evaluatorId }: { cycle: Cycle; evaluatorId: string }
           </div>
           <div className="table-wrap">
             <table className="tbl write-tbl">
-              <thead><tr><th>팀</th><th>평가 대상자</th><th>직급</th><th>상태</th></tr></thead>
+              <thead><tr>{([['team', '팀'], ['pos', '직급'], ['name', '평가 대상자'], ['st', '상태']] as const).map(([k, l]) => <SortTh key={k} k={k} sort={sort} onSort={onSort}>{l}</SortTh>)}</tr></thead>
               <tbody>
                 {shown.length === 0 ? <tr><td colSpan={4} className="empty-row">{view === 'done' ? '완료한 평가 없음' : '남은 평가 없음'}</td></tr> : shown.map((r) => (
                   <tr key={r.a.id}>
                     <td>{r.t.teamName}</td>
-                    <td><b>{r.t.name}</b></td>
                     <td>{targetPosition(s, cycle, r.t)}</td>
+                    <td><b>{r.t.name}</b></td>
                     <td>
                       <span className="write-st">
                         {/* 배지는 상태 열 중앙축(가운데 칸), 안내는 오른쪽 칸 — 안내 유무·길이와 무관하게 배지 위치 고정 (D-093) */}

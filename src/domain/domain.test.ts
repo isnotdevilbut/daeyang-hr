@@ -431,8 +431,9 @@ describe('조직 관리 (회사 구분·언어 제거)', () => {
     expect(sheets[0].name).toBe('직원 명단')
     expect(sheets[0].rows).toEqual([['사번', '이름', '팀', '직급', '직무'], ['0007', '김 & <가상>', '설계팀', '사원', '관리직']])
     const t = await readXlsx(templateXlsxBytes())
-    expect(t[0].rows).toEqual([['사번', '이름', '팀', '직급', '직무']])
-    expect(templateCsvText()).toBe('\uFEFF사번,이름,팀,직급,직무\r\n')
+    expect(t[0].rows).toEqual([['팀', '직급', '이름', '직무', '사번']]) // D-104: 직원 목록과 같은 순서
+    expect(templateCsvText()).toBe('\uFEFF팀,직급,이름,직무,사번\r\n')
+    expect(templateCsvText({ customFields: [{ id: 'cf1', name: '근무지, 본사', type: 'text', options: [] }] })).toBe('\uFEFF팀,직급,이름,직무,사번,"근무지, 본사"\r\n')
   })
   it('평가 대상 여부는 재직 여부와 별개', () => {
     const s = createSeed()
@@ -2418,5 +2419,42 @@ describe('평가표 배점·점수 산식 (D-103)', async () => {
     const again = structuredClone(m.state)
     expect(scoringV16(again)).toEqual([])
     expect(JSON.stringify(again)).toBe(JSON.stringify(m.state))
+  })
+})
+
+describe('명단 업로드 양식·추가 열 (D-104)', () => {
+  const csv = (t: string) => parseCsv(t)
+  const cats = (s: ReturnType<typeof createSeed>) => ({ ...s, customFields: [
+    { id: 'cf-loc', name: '근무지', type: 'text' as const, options: [] },
+    { id: 'cf-shift', name: '근무 형태', type: 'select' as const, options: [{ id: 'o-day', label: '주간' }, { id: 'o-night', label: '야간' }] },
+  ] })
+  it('양식 순서(팀·직급·이름·직무·사번) 그대로 올리면 등록, 열 순서가 달라도 머리글 이름으로 읽음', () => {
+    const s = createSeed()
+    const a = checkRoster(csv('팀,직급,이름,직무,사번\n설계팀,사원,가상하나,관리직,0901'), s.employees, s.teams, 'error', s)
+    const b = checkRoster(csv('사번,직무,이름,직급,팀\n0901,관리직,가상하나,사원,설계팀'), s.employees, s.teams, 'error', s)
+    for (const r of [a, b]) { expect(r.error).toBeNull(); expect(canRegister(r)).toBe(true) }
+    expect(rosterEmployees(a, () => 'x')[0]).toMatchObject({ empNo: '0901', name: '가상하나', position: '사원' })
+    expect(rosterEmployees(b, () => 'x')[0]).toEqual(rosterEmployees(a, () => 'x')[0])
+  })
+  it('새 열: 분류 기준 이름과 같으면 함께 등록(선택형은 선택지 이름), 다르면 쓰지 않는 열로 표시만', () => {
+    const s = cats(createSeed())
+    const r = checkRoster(csv('팀,직급,이름,직무,사번,근무지,근무 형태,비고\n설계팀,사원,가상하나,관리직,0901,본사 3층,야간,메모\n설계팀,사원,가상둘,관리직,0902,,,'), s.employees, s.teams, 'error', s)
+    expect(r.error).toBeNull()
+    expect(r.extra.map((f) => f.id)).toEqual(['cf-loc', 'cf-shift'])
+    expect(r.ignored).toEqual(['비고'])
+    const add = rosterEmployees(r, (i) => `n${i}`)
+    expect(add[0].custom).toEqual({ 'cf-loc': '본사 3층', 'cf-shift': 'o-night' })
+    expect(add[1].custom).toBeUndefined() // 빈 칸 = 값 없음(오류 아님)
+  })
+  it('선택형 분류 기준에 없는 값은 그 행 오류 → 아무것도 등록하지 않음', () => {
+    const s = cats(createSeed())
+    const r = checkRoster(csv('팀,직급,이름,직무,사번,근무 형태\n설계팀,사원,가상하나,관리직,0901,교대'), s.employees, s.teams, 'error', s)
+    expect(r.rows[0].errors).toEqual([{ col: '근무 형태', msg: '주간·야간 중 하나' }])
+    expect(canRegister(r)).toBe(false)
+  })
+  it('필수 열이 빠지거나 같은 열이 두 번이면 파일 오류', () => {
+    const s = cats(createSeed())
+    expect(checkRoster(csv('팀,직급,이름,사번\n설계팀,사원,가,0901'), s.employees, s.teams, 'error', s).error).toBe('필수 열이 없습니다: 직무')
+    expect(checkRoster(csv('팀,직급,이름,직무,사번,근무지,근무지\n설계팀,사원,가,관리직,0901,a,b'), s.employees, s.teams, 'error', s).error).toContain("'근무지' 열이 두 번")
   })
 })

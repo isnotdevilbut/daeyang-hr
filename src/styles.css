@@ -1383,3 +1383,17 @@ label.field, fieldset.field legend { font-size: 16px; }
 .fp-item input[type=text] { width: 64px; min-height: 36px; text-align: center; padding: 4px 6px; }
 .fp-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 16px; border-top: 1px solid var(--line-soft); }
 @media (max-width: 640px) { .final-plan .table-wrap, .final-plan-tbl { min-width: 0; } .fp-items { justify-content: flex-start; } }
+
+/* ── 팀원 피드백(D-104): 목록 머리글 정렬 · 모달 닫기 ✕ ── */
+.sort-btn { position: relative; font: inherit; font-weight: inherit; color: inherit; background: none; border: 0; padding: 2px 0; margin: 0; cursor: pointer; text-align: inherit; line-height: inherit; }
+.sort-btn:hover { color: var(--brand-navy); }
+/* 화살표는 글자 바로 오른쪽에 떠 있어 가운데 정렬된 제목 위치가 바뀌지 않음. 정렬 전에는 옅게, 정렬 중인 열만 진하게 */
+.sort-ic { position: absolute; left: 100%; top: 50%; transform: translateY(-50%); margin-left: 3px; font-size: 0.62em; line-height: 1; opacity: 0.22; transition: opacity 0.12s; }
+.sort-btn:hover .sort-ic { opacity: 0.55; }
+th.sorted .sort-ic { opacity: 1; color: #0a6fb5; }
+th.sorted .sort-btn { color: var(--brand-navy); }
+.sort-btn:focus-visible { outline: 2px solid #20b8ca; outline-offset: 2px; border-radius: 4px; }
+th.cf-th .cf-head { margin-left: 14px; padding: 2px 5px; }
+.modal-x { flex: none; width: 36px; height: 36px; display: inline-grid; place-items: center; border: 0; border-radius: 50%; background: transparent; color: var(--text-sub); font-size: 19px; line-height: 1; cursor: pointer; margin: -4px -6px -4px 0; }
+.modal-x:hover { background: rgba(9, 82, 158, 0.08); color: var(--brand-navy); }
+.modal-x:focus-visible { outline: 2px solid #20b8ca; outline-offset: 1px; }

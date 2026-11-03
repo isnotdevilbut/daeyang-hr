@@ -9,6 +9,7 @@ import type { AppState, Cycle } from '../../domain/types'
 import { TIERS } from '../../domain/org'
 import { positionById, positionName, positionsOf } from '../../domain/catalog'
 import { Empty, Forbidden } from '../../components/ui'
+import { nextSort, sortRows, SortTh, type Sort } from '../../components/sort'
 
 const FILTER_KEY = 'daeyang-hr-progress-filters'
 const SCROLL_KEY = 'daeyang-hr-progress-scroll'
@@ -39,7 +40,7 @@ export default function Progress() {
 }
 
 // 직무 필터는 D-074에서 제거 — 이전에 저장된 job 값은 읽지 않는다(숨은 필터로 남지 않게)
-type Saved = { cycleId?: string; q?: string; tier?: string; onlyOpen?: boolean; pick?: CardPick }
+type Saved = { cycleId?: string; q?: string; tier?: string; onlyOpen?: boolean; pick?: CardPick; sort?: Sort }
 
 function Body({ s, cycle }: { s: AppState; cycle: Cycle }) {
   const max = 3 // 작성 단계는 1 자기·2 팀장·3 임원으로 고정
@@ -54,7 +55,10 @@ function Body({ s, cycle }: { s: AppState; cycle: Cycle }) {
   const [onlyOpen, setOnlyOpen] = useState<boolean>(!!saved.onlyOpen)
   // 처음 들어오면(이 탭에 저장된 카드 선택 없음) '평가 참여자' 카드가 선택된 상태 — 카드를 눌러 명단을 바꿀 수 있다는 점이 보이게(D-096). 명단은 선택 없음과 같음
   const [pick, setPick] = useState<CardPick>(saved.pick === undefined ? { kind: 'all' } : validPick(saved.pick))
-  useEffect(() => { try { sessionStorage.setItem(FILTER_KEY, JSON.stringify({ cycleId: cycle.id, q, tier, onlyOpen, pick })) } catch { /* 무시 */ } }, [cycle.id, q, tier, onlyOpen, pick])
+  // 머리글 정렬(오름↔내림) — 상세에서 돌아와도 유지
+  const [sort, setSort] = useState<Sort>(saved.sort?.key ? saved.sort : null)
+  const onSort = (k: string) => setSort((c) => nextSort(c, k))
+  useEffect(() => { try { sessionStorage.setItem(FILTER_KEY, JSON.stringify({ cycleId: cycle.id, q, tier, onlyOpen, pick, sort })) } catch { /* 무시 */ } }, [cycle.id, q, tier, onlyOpen, pick, sort])
   // 상세에서 돌아오면 그때의 스크롤 위치로
   useEffect(() => {
     try {
@@ -74,12 +78,13 @@ function Body({ s, cycle }: { s: AppState; cycle: Cycle }) {
   const needle = q.trim()
   const counts = useMemo(() => progressCounts(rows), [rows])
   const scope = rows.filter((r) => progressFilter(r, pick, false)) // 카드가 정한 범위
-  const filtered = scope.filter(
+  const posRank = (id: string) => { const i = positionsOf(s).findIndex((p) => p.id === empPos(id)); return i < 0 ? TIERS.length + 99 : i }
+  const filtered = sortRows(scope.filter(
     (r) =>
       (!needle || r.t.name.includes(needle) || r.t.teamName.includes(needle) || r.t.empNo.includes(needle)) &&
       (!tier || empPos(r.t.employeeId) === tier) &&
       progressFilter(r, pick, onlyOpen),
-  )
+  ), sort, (r, k) => (k === 'team' ? r.t.teamName : k === 'pos' ? posRank(r.t.employeeId) : k === 'name' ? r.t.name : cellRate(r.cells[Number(k) - 1])))
   const stageOn = pick?.kind === 'stage' ? pick.order : null
   const wrapRef = useRef<HTMLDivElement>(null)
   const [glow, setGlow] = useState<{ left: number; width: number; height: number } | null>(null)
@@ -141,8 +146,8 @@ function Body({ s, cycle }: { s: AppState; cycle: Cycle }) {
           <table className="tbl progress-tbl">
             <thead>
               <tr>
-                <th className="c-team">팀</th><th className="c-name">이름</th><th className="c-tier">직급</th>
-                {STAGE_COLS.map((h, i) => <th key={i} data-col={i + 1} className={`c-eval ${stageOn === i + 1 ? 'col-on' : ''}`}>{h}</th>)}
+                <SortTh k="team" sort={sort} onSort={onSort} className="c-team">팀</SortTh><SortTh k="pos" sort={sort} onSort={onSort} className="c-tier">직급</SortTh><SortTh k="name" sort={sort} onSort={onSort} className="c-name">이름</SortTh>
+                {STAGE_COLS.map((h, i) => <SortTh key={i} k={String(i + 1)} sort={sort} onSort={onSort} className={`c-eval ${stageOn === i + 1 ? 'col-on' : ''}`} col={i + 1}>{h}</SortTh>)}
                 <th className="c-act"><span className="sr-only">상세</span></th>
               </tr>
             </thead>
@@ -152,6 +157,7 @@ function Body({ s, cycle }: { s: AppState; cycle: Cycle }) {
               ) : filtered.map((r) => (
                 <tr key={r.t.employeeId}>
                   <td className="c-team"><span className="cell-in">{r.t.teamName}</span></td>
+                  <td className="c-tier"><span className="cell-in">{posText(r.t.employeeId) || r.tier}</span></td>
                   <td className="c-name" title={`사번 ${r.t.empNo}`}>
                     {/* 이름 + 배지를 한 묶음으로 가운데 정렬 (D-087) */}
                     <span className="cell-in name-grp">
@@ -160,7 +166,6 @@ function Body({ s, cycle }: { s: AppState; cycle: Cycle }) {
                       {r.mismatch && <span className="chip draft tag">배정 확인</span>}
                     </span>
                   </td>
-                  <td className="c-tier"><span className="cell-in">{posText(r.t.employeeId) || r.tier}</span></td>
                   {r.cells.map((cell, i) => <td key={i} className={`writes c-eval ${stageOn === i + 1 ? 'col-on' : ''}`}><span className="cell-in"><Cell c={cell} /></span></td>)}
                   <td className="c-act">{can(s.session.role, 'viewResults') && <Link className="btn small" to={`/admin/results/${r.t.employeeId}?from=progress`} onClick={() => { try { sessionStorage.setItem(SCROLL_KEY, String(window.scrollY)) } catch { /* 무시 */ } }}>상세</Link>}</td>
                 </tr>
@@ -181,6 +186,13 @@ function cardGlow(e: React.PointerEvent) {
   const r = b.getBoundingClientRect()
   b.style.setProperty('--cx', `${e.clientX - r.left}px`)
   b.style.setProperty('--cy', `${e.clientY - r.top}px`)
+}
+
+/** 단계 열 정렬값 = 완료 비율(0~1). 해당 없음·배정 없음은 빈 값(맨 아래) */
+function cellRate(c: ProgressCell | undefined): number | null {
+  if (!c || c.kind === 'na') return null
+  if (c.kind === 'write') return c.w.total ? c.w.done / c.w.total : null
+  return c.status === 'submitted' ? 1 : 0
 }
 
 /** 열 이름(D-076) — 내부 단계 번호 1·2·3은 그대로 */

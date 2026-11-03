@@ -41,7 +41,7 @@ export function Modal({ title, onClose, children }: { title: string; onClose: ()
         <div className="row">
           <h2 style={{ margin: 0 }}>{title}</h2>
           <span className="spacer" />
-          <button className="btn small" onClick={onClose}>닫기</button>
+          <button type="button" className="modal-x" aria-label="닫기" title="닫기" onClick={onClose}>✕</button>
         </div>
         <div style={{ marginTop: 14 }}>{children}</div>
       </div>

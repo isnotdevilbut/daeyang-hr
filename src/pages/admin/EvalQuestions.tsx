@@ -375,7 +375,7 @@ function Preview({ t: current, cycle, onClose }: { t: Template; cycle: Cycle; on
         <div className="row">
           <h2 style={{ margin: 0 }}>미리보기</h2>
           <span className="spacer" />
-          <button className="btn small" onClick={onClose}>닫기</button>
+          <button type="button" className="modal-x" aria-label="닫기" title="닫기" onClick={onClose}>✕</button>
         </div>
         <div className="filters preview-controls">
           <select aria-label="평가 유형" value={rule} onChange={(e) => setRule(e.target.value as EvaluatorRule)}>

@@ -1,6 +1,8 @@
 // 직원 명단 업로드: 파일 읽기(.xlsx/.csv) → 표 → 검증. 등록은 화면에서 사용자가 확인한 뒤에만 한다.
 // 회사·언어·재직 상태·평가 제외 여부는 받지 않는다(D-051). 사번은 글자로 다뤄 앞자리 0을 보존한다.
-import type { AppState, Employee, EvalClass, JobType, Team } from './types'
+// 열 순서는 직원 목록과 같게 팀·직급·이름·직무·사번(D-104) — 읽을 때는 머리글 이름으로 찾으므로 순서가 달라도 된다.
+// 그 밖의 열: 머리글이 조직 관리의 분류 기준 이름과 같으면 그 값으로 함께 등록(선택형은 선택지 이름만), 아니면 쓰지 않는 열로 표시만.
+import type { AppState, CustomField, Employee, EvalClass, JobType, Team } from './types'
 import { activeJobs, positionById, positionsOf } from './catalog'
 import { readXlsx, templateXlsx, type Sheet } from './xlsx'
 
@@ -9,11 +11,11 @@ export const MAX_ROWS = 2000
 
 export type RosterKey = 'empNo' | 'name' | 'team' | 'position' | 'job'
 export const ROSTER_FIELDS: { key: RosterKey; label: string; aliases: string[] }[] = [
-  { key: 'empNo', label: '사번', aliases: ['사번', '사원번호', '직원번호', 'empno', 'emp_no', 'employeeno'] },
-  { key: 'name', label: '이름', aliases: ['이름', '성명', '직원명', 'name'] },
   { key: 'team', label: '팀', aliases: ['팀', '팀명', '소속팀', 'team'] },
   { key: 'position', label: '직급', aliases: ['직급', 'position'] },
+  { key: 'name', label: '이름', aliases: ['이름', '성명', '직원명', 'name'] },
   { key: 'job', label: '직무', aliases: ['직무', '직군', 'job'] },
+  { key: 'empNo', label: '사번', aliases: ['사번', '사원번호', '직원번호', 'empno', 'emp_no', 'employeeno'] },
 ]
 export const ROSTER_HEADER = ROSTER_FIELDS.map((f) => f.label)
 const LABEL = Object.fromEntries(ROSTER_FIELDS.map((f) => [f.key, f.label])) as Record<RosterKey, string>
@@ -73,6 +75,8 @@ export interface RosterRow {
   errors: CellError[]
   skip: boolean // 기존 사번과 겹쳐 건너뜀 (사용자가 "건너뛰기"를 고른 경우)
   existing?: string // 겹친 기존 직원 이름
+  custom: Record<string, string> // 분류 기준 ID → 파일의 글자 그대로(화면 표시용)
+  customIds: Record<string, string> // 분류 기준 ID → 저장할 값(텍스트 = 글자, 선택형 = 선택지 ID). 빈 칸은 넣지 않음
   teamId?: string
   jobType?: JobType
   positionId?: string
@@ -81,6 +85,7 @@ export interface RosterRow {
 export interface RosterCheck {
   error: string | null // 파일 전체 오류 (머리글 등)
   ignored: string[] // 쓰지 않는 열
+  extra: CustomField[] // 분류 기준과 이름이 같아 함께 등록할 열(파일 순서)
   rows: RosterRow[]
   addable: number
   skipped: number
@@ -93,9 +98,9 @@ const norm = (h: string) => h.replace(/^﻿/, '').replace(/[\s*]/g, '').toLowerC
 export type ExistingMode = 'error' | 'skip'
 
 /** cat: 직무·직급 목록 (D-080, 없으면 기본 관리직·생산직 / 임원·팀장·사원) */
-export function checkRoster(table: string[][], employees: Employee[], teams: Team[], mode: ExistingMode, cat: Pick<AppState, 'jobs' | 'positions'> = {}): RosterCheck {
+export function checkRoster(table: string[][], employees: Employee[], teams: Team[], mode: ExistingMode, cat: Pick<AppState, 'jobs' | 'positions' | 'customFields'> = {}): RosterCheck {
   const jobs = activeJobs(cat), positions = positionsOf(cat)
-  const empty: RosterCheck = { error: null, ignored: [], rows: [], addable: 0, skipped: 0, errorRows: 0, existingDup: 0 }
+  const empty: RosterCheck = { error: null, ignored: [], extra: [], rows: [], addable: 0, skipped: 0, errorRows: 0, existingDup: 0 }
   const hi = table.findIndex((r) => r.some((c) => c.trim()))
   if (hi < 0) return { ...empty, error: '빈 파일입니다.' }
   const header = table[hi].map((h) => h.trim())
@@ -108,20 +113,39 @@ export function checkRoster(table: string[][], employees: Employee[], teams: Tea
   const missing = ROSTER_FIELDS.filter((f) => idx[f.key] < 0).map((f) => f.label)
   if (missing.length) return { ...empty, error: `필수 열이 없습니다: ${missing.join(', ')}` }
   const used = new Set(Object.values(idx))
+  // 추가 열 → 분류 기준(이름 일치, 공백 무시)
+  const cfIdx = new Map<CustomField, number>()
+  for (const f of cat.customFields ?? []) {
+    const hits = header.map((h, i) => (!used.has(i) && norm(h) === norm(f.name) ? i : -1)).filter((i) => i >= 0)
+    if (hits.length > 1) return { ...empty, error: `'${f.name}' 열이 두 번 이상 있습니다.` }
+    if (hits.length) cfIdx.set(f, hits[0])
+  }
+  cfIdx.forEach((i) => used.add(i))
+  const extra = [...cfIdx.entries()].sort((a, b) => a[1] - b[1]).map(([f]) => f)
   const ignored = header.filter((h, i) => h && !used.has(i))
 
   const body = table.slice(hi + 1).map((r, i) => ({ r, line: hi + i + 2 })).filter(({ r }) => r.some((c) => (c ?? '').trim()))
-  if (body.length > MAX_ROWS) return { ...empty, ignored, error: `한 번에 ${MAX_ROWS.toLocaleString()}행까지 올릴 수 있습니다.` }
+  if (body.length > MAX_ROWS) return { ...empty, ignored, extra, error: `한 번에 ${MAX_ROWS.toLocaleString()}행까지 올릴 수 있습니다.` }
 
   const byNo = new Map<string, number[]>()
   const rows: RosterRow[] = body.map(({ r, line }) => {
     const v = Object.fromEntries(ROSTER_FIELDS.map((f) => [f.key, (r[idx[f.key]] ?? '').trim()])) as Record<RosterKey, string>
     if (v.empNo) byNo.set(v.empNo, [...(byNo.get(v.empNo) ?? []), line])
-    return { line, v, errors: [], skip: false }
+    const custom = Object.fromEntries(extra.map((f) => [f.id, (r[cfIdx.get(f)!] ?? '').trim()]))
+    return { line, v, errors: [], skip: false, custom, customIds: {} }
   })
   for (const row of rows) {
     const err = (k: RosterKey, msg: string) => row.errors.push({ col: LABEL[k], msg })
     for (const f of ROSTER_FIELDS) if (!row.v[f.key]) err(f.key, '비어 있음')
+    // 분류 기준 값은 선택 입력(빈 칸 = 값 없음). 선택형은 선택지 이름과 같아야 함
+    for (const f of extra) {
+      const text = row.custom[f.id]
+      if (!text) continue
+      if (f.type === 'text') { row.customIds[f.id] = text; continue }
+      const o = f.options.find((x) => x.label.trim() === text)
+      if (o) row.customIds[f.id] = o.id
+      else row.errors.push({ col: f.name, msg: f.options.length ? `${f.options.map((x) => x.label).join('·')} 중 하나` : '선택지가 없는 항목' })
+    }
     if (row.v.empNo) {
       const lines = byNo.get(row.v.empNo)!
       if (lines.length > 1) err('empNo', `파일 안에서 중복 (${lines.filter((l) => l !== row.line).join(', ')}행)`)
@@ -163,7 +187,7 @@ export function checkRoster(table: string[][], employees: Employee[], teams: Tea
   const errorRows = rows.filter((r) => r.errors.length > 0).length
   const skipped = rows.filter((r) => r.skip && r.errors.length === 0).length
   return {
-    error: null, ignored, rows, errorRows, skipped,
+    error: null, ignored, extra, rows, errorRows, skipped,
     addable: rows.filter((r) => !r.skip && r.errors.length === 0).length,
     existingDup: rows.filter((r) => r.existing).length,
   }
@@ -180,6 +204,7 @@ export function rosterEmployees(c: RosterCheck, newId: (i: number) => string): E
     .map((r, i) => ({
       id: newId(i), empNo: r.v.empNo, name: r.v.name, teamId: r.teamId!, position: r.v.position, positionId: r.positionId, jobType: r.jobType!,
       isExecutive: r.evalClass === '임원', isCeo: false, active: true, evalExcluded: r.evalClass === '임원',
+      ...(Object.keys(r.customIds).length ? { custom: { ...r.customIds } } : {}),
     }))
 }
 
@@ -189,6 +214,9 @@ export function rosterLeads(d: Pick<AppState, 'teams' | 'positions'>, added: Emp
 }
 
 // ── 템플릿 ───────────────────────────────────────────
-export const templateXlsxBytes = () => templateXlsx('직원 명단', ROSTER_HEADER)
+/** 양식 머리글 = 필수 5열 + 현재 분류 기준(선택 입력) */
+export const templateHeader = (cat: Pick<AppState, 'customFields'> = {}) => [...ROSTER_HEADER, ...(cat.customFields ?? []).map((f) => f.name)]
+export const templateXlsxBytes = (cat: Pick<AppState, 'customFields'> = {}) => templateXlsx('직원 명단', templateHeader(cat))
 /** 엑셀에서 한글이 깨지지 않도록 UTF-8 BOM을 붙인다 */
-export const templateCsvText = () => `﻿${ROSTER_HEADER.join(',')}\r\n`
+export const templateCsvText = (cat: Pick<AppState, 'customFields'> = {}) => `﻿${templateHeader(cat).map(csvCell).join(',')}\r\n`
+const csvCell = (v: string) => (/[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v)
