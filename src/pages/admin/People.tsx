@@ -5,7 +5,7 @@ import { activeTeams, applyTier, customFieldErrors, customFieldUsage, customValu
 import { syncOpenCycles } from '../../domain/cycleSync'
 import { joinOpenCycles } from '../../domain/cycle'
 import { activeJobs, classDefault, deleteJob, deletePosition, jobName, jobUsage, positionById, positionName, positionsOf, positionUsage, saveJob, savePosition } from '../../domain/catalog'
-import { canRegister, checkRoster, readRosterFile, ROSTER_FIELDS, ROSTER_HEADER, rosterEmployees, rosterLeads, type ExistingMode, type RosterRow } from '../../domain/roster'
+import { applyRosterFill, canFill, canRegister, checkRoster, checkRosterFill, readRosterFile, ROSTER_FIELDS, ROSTER_HEADER, rosterEmployees, rosterLeads, type ExistingMode, type RosterRow } from '../../domain/roster'
 import type { Sheet } from '../../domain/xlsx'
 import type { CustomField, Employee, EvalClass, JobDef, PositionDef } from '../../domain/types'
 import { Forbidden, Modal, Notice } from '../../components/ui'
@@ -608,7 +608,105 @@ function PositionEditor() {
 type Loaded = { file: string; sheets: Sheet[]; sheet: number }
 
 /** 직원 명단 업로드: 파일 선택 → 표 미리보기·검증 → 등록 (검증 전 자동 등록 없음, 차단 오류가 있으면 등록 안 함) */
+/** 일괄 업로드(D-136): 새 직원 등록 / 기존 직원 칼럼 값 채우기 — 칼럼은 CSV로 만들지 않음(직원 목록의 '+ 칼럼 추가'로만) */
 function Upload() {
+  const [kind, setKind] = useState<'add' | 'fill'>('add')
+  return (
+    <>
+      <fieldset className="row upload-kind" aria-label="업로드 방식">
+        <label className="check"><input type="radio" name="upload-kind" checked={kind === 'add'} onChange={() => setKind('add')} /> 새 직원 등록</label>
+        <label className="check"><input type="radio" name="upload-kind" checked={kind === 'fill'} onChange={() => setKind('fill')} /> 기존 직원 칼럼 값 채우기</label>
+      </fieldset>
+      {kind === 'add' ? <AddUpload /> : <FillUpload />}
+    </>
+  )
+}
+
+/** 기존 직원 칼럼 값 채우기(D-136): 사번으로 찾아 만든 칼럼의 값만 — 미리보기(이전 → 새 값) 확인 후 저장, 오류가 있으면 아무것도 바꾸지 않음 */
+function FillUpload() {
+  const s = useAppState()
+  const [loaded, setLoaded] = useState<Loaded | null>(null)
+  const [readErr, setReadErr] = useState('')
+  const [done, setDone] = useState('')
+  const [inputKey, setInputKey] = useState(0)
+  const cfs = s.customFields ?? []
+  const table = loaded?.sheets[loaded.sheet]?.rows ?? null
+  const res = useMemo(() => (table ? checkRosterFill(table, s.employees, s) : null), [table, s.employees, s.customFields])
+  const pick = async (f: File | undefined) => {
+    setDone(''); setReadErr(''); setLoaded(null)
+    if (!f) return
+    const r = await readRosterFile(f.name, new Uint8Array(await f.arrayBuffer()))
+    if (!r.ok) return setReadErr(r.error)
+    setLoaded({ file: f.name, sheets: r.sheets, sheet: 0 })
+  }
+  const reset = () => { setLoaded(null); setReadErr(''); setInputKey((k) => k + 1) }
+  const apply = () => {
+    if (!res || !canFill(res)) return
+    let n = 0
+    update((d) => { n = applyRosterFill(d, res) })
+    setDone(`${n}명의 칼럼 값을 저장했습니다.`)
+    reset()
+  }
+  return (
+    <section className="panel pad upload">
+      <div className="row"><h2 style={{ margin: 0 }}>기존 직원 칼럼 값 채우기</h2></div>
+      <p className="muted upload-cols">필수 열: 사번 · 채울 칼럼: {cfs.length ? cfs.map((f) => f.name).join(' · ') : '없음(직원 목록에서 + 칼럼 추가)'} · 빈 칸은 그대로 · 칼럼은 새로 만들지 않음 · 팀·직급·이름·직무는 바꾸지 않음(직원 수정 창에서)</p>
+      <div className="row upload-pick">
+        <label className="btn primary file-btn">
+          파일 선택
+          <input key={inputKey} type="file" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" onChange={(e) => pick(e.target.files?.[0])} />
+        </label>
+        <span className="muted">{loaded ? loaded.file : '엑셀(.xlsx) 또는 CSV(.csv)'}</span>
+        {loaded && loaded.sheets.length > 1 && (
+          <label className="row sheet-pick">시트
+            <select value={loaded.sheet} onChange={(e) => setLoaded({ ...loaded, sheet: Number(e.target.value) })}>
+              {loaded.sheets.map((sh, i) => <option key={i} value={i}>{sh.name}</option>)}
+            </select>
+          </label>
+        )}
+      </div>
+      {readErr && <p className="feedback fail" role="alert">✕ {readErr}</p>}
+      {done && <p className="feedback ok" role="status">✓ {done}</p>}
+      {res?.error && <p className="feedback fail" role="alert">✕ {res.error}</p>}
+      {res && !res.error && (
+        <>
+          <div className="row upload-sum" aria-live="polite">
+            <span>전체 <b>{res.rows.length}</b>행</span>
+            <span>값 바뀌는 직원 <b>{res.changed}</b>명</span>
+            <span className={res.errorRows ? 'err' : ''}>오류 <b>{res.errorRows}</b>행</span>
+            <span className="muted">채울 칼럼: {res.fields.map((f) => f.name).join(', ')}</span>
+            {res.fixed.length > 0 && <span className="muted">바꾸지 않는 열: {res.fixed.join(', ')}</span>}
+            {res.ignored.length > 0 && <span className="muted">쓰지 않는 열(칼럼 없음 — 만들지 않음): {res.ignored.join(', ')}</span>}
+          </div>
+          <div className="table-wrap upload-preview" tabIndex={0}>
+            <table className="tbl">
+              <thead><tr><th className="num">행</th><th>사번</th><th>이름</th>{res.fields.map((f) => <th key={f.id}>{f.name}</th>)}<th>확인</th></tr></thead>
+              <tbody>
+                {res.rows.map((r) => (
+                  <tr key={r.line} className={r.errors.length ? 'row-err' : !r.changes.length ? 'row-skip' : ''}>
+                    <td className="num">{r.line}</td>
+                    <td className={r.errors.some((e) => e.col === '사번') ? 'cell-err' : ''}>{r.empNo || <span className="muted">(빈 칸)</span>}</td>
+                    <td>{r.name || '—'}</td>
+                    {res.fields.map((f) => { const ch = r.changes.find((x) => x.fieldId === f.id); const bad = r.errors.some((e) => e.col === f.name); return <td key={f.id} className={bad ? 'cell-err' : ''}>{ch ? <><span className="muted">{ch.before || '(빈 칸)'}</span> → <b>{ch.after}</b></> : <span className="muted">그대로</span>}</td> })}
+                    <td>{r.errors.length ? r.errors.map((e, i) => <div key={i} className="err-msg">{e.col}: {e.msg}</div>) : r.changes.length ? <span className="chip submitted">✓</span> : <span className="chip na">바뀌는 값 없음</span>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="row" style={{ marginTop: 12 }}>
+            <button className="btn primary" disabled={!canFill(res)} onClick={apply}>{res.changed}명 값 저장</button>
+            <button className="btn" onClick={reset}>취소</button>
+            {res.errorRows > 0 && <span className="feedback fail">오류가 있어 저장할 수 없습니다.</span>}
+          </div>
+        </>
+      )}
+    </section>
+  )
+}
+
+/** 새 직원 등록 */
+function AddUpload() {
   const s = useAppState()
   const [loaded, setLoaded] = useState<Loaded | null>(null)
   const [readErr, setReadErr] = useState('')

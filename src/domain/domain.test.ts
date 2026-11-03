@@ -2913,3 +2913,32 @@ describe('더 좁게 지정한 평가표 우선 (D-125)', async () => {
     expect(V.narrower({ mode: 'custom', rules: ['self'], teams: 'all', positions: ['a', 'b'] }, { mode: 'custom', rules: ['self'], teams: 'all', positions: ['a'] })).toBe(false)
   })
 })
+
+describe('기존 직원 칼럼 값 채우기 (D-136)', async () => {
+  const R = await import('./roster')
+  const withCols = () => { const s = createSeed(); s.customFields = [{ id: 'cf-loc', name: '근무지', type: 'text', options: [] }, { id: 'cf-shift', name: '근무 형태', type: 'select', options: [{ id: 'o-d', label: '주간' }, { id: 'o-n', label: '야간' }] }]; return s }
+  it('사번으로 찾아 만든 칼럼 값만 채움 — 빈 칸 그대로, 팀·이름 열은 바꾸지 않음, 모르는 열로 칼럼을 만들지 않음', () => {
+    const s = withCols()
+    const before = structuredClone(s.employees)
+    const r = R.checkRosterFill([['사번', '이름', '팀', '근무지', '근무 형태', '비고'], ['0005', '다른이름', '없는팀', '본사', '야간', 'x'], ['0006', '', '', '', '주간', '']], s.employees, s)
+    expect(r.error).toBeNull()
+    expect(r.fixed).toEqual(['이름', '팀']); expect(r.ignored).toEqual(['비고'])
+    expect(R.canFill(r)).toBe(true)
+    expect(r.rows[0].changes.map((c) => [c.field, c.before, c.after])).toEqual([['근무지', '', '본사'], ['근무 형태', '', '야간']])
+    expect(R.applyRosterFill(s, r)).toBe(2)
+    const e5 = s.employees.find((e) => e.empNo === '0005')!, e6 = s.employees.find((e) => e.empNo === '0006')!
+    expect(e5.custom).toEqual({ 'cf-loc': '본사', 'cf-shift': 'o-n' })
+    expect(e6.custom).toEqual({ 'cf-shift': 'o-d' })
+    expect(s.customFields!.map((f) => f.name)).toEqual(['근무지', '근무 형태']) // 칼럼 새로 안 생김
+    const strip = (x: any[]) => x.map(({ custom: _c, ...rest }) => rest)
+    expect(strip(s.employees)).toEqual(strip(before)) // 이름·팀 등 그대로
+  })
+  it('없는 사번·파일 안 중복·선택지 밖 값이면 아무것도 바꾸지 않음, 칼럼이 없으면 안내', () => {
+    const s = withCols()
+    const r = R.checkRosterFill([['사번', '근무 형태'], ['9999', '주간'], ['0005', '교대'], ['0006', '주간'], ['0006', '야간']], s.employees, s)
+    expect(R.canFill(r)).toBe(false)
+    expect(r.errorRows).toBe(4)
+    expect(R.checkRosterFill([['사번', '근무지'], ['0005', 'a']], createSeed().employees, {}).error).toContain('+ 칼럼 추가')
+    expect(R.checkRosterFill([['사번', '비고'], ['0005', 'a']], s.employees, s).error).toContain('채울 칼럼 열이 없습니다')
+  })
+})

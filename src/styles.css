@@ -1458,3 +1458,5 @@ details[open] > summary > .toggle-ic { transform: rotate(180deg); }
 .report-opts[open] > summary.report-opts-head { margin-bottom: 14px; }
 .report-opts-grid { gap: 14px; }
 .report-opts { padding: 12px 18px 16px; }
+/* D-136: 일괄 업로드 방식 선택 */
+.upload-kind { gap: 18px; margin: 0 0 12px; padding: 10px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-tint); }

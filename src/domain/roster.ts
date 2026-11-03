@@ -220,3 +220,80 @@ export const templateXlsxBytes = (cat: Pick<AppState, 'customFields'> = {}) => t
 /** 엑셀에서 한글이 깨지지 않도록 UTF-8 BOM을 붙인다 */
 export const templateCsvText = (cat: Pick<AppState, 'customFields'> = {}) => `﻿${templateHeader(cat).map(csvCell).join(',')}\r\n`
 const csvCell = (v: string) => (/[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v)
+
+// ── 기존 직원 칼럼 값 채우기 (D-136) ───────────────────
+// 사번으로 재직 중인 직원을 찾아 '이미 만든 칼럼'(조직 관리 → + 칼럼 추가)의 값만 채우거나 바꾼다.
+// - 칼럼은 만들지 않는다: 칼럼 이름과 다른 열은 쓰지 않는 열로 표시만
+// - 팀·직급·이름·직무는 바꾸지 않는다(팀장 연결·평가 배정이 함께 바뀌므로 직원 수정 창에서) — 그 열이 있으면 '바꾸지 않는 열'로 표시
+// - 빈 칸 = 그대로(지우지 않음). 선택형은 선택지 이름만. 오류가 하나라도 있으면 아무것도 바꾸지 않음
+export interface FillChange { fieldId: string; field: string; before: string; after: string; value: string }
+export interface FillRow { line: number; empNo: string; name: string; employeeId?: string; changes: FillChange[]; errors: CellError[] }
+export interface FillCheck { error: string | null; ignored: string[]; fixed: string[]; fields: CustomField[]; rows: FillRow[]; errorRows: number; changed: number }
+
+export function checkRosterFill(table: string[][], employees: Employee[], cat: Pick<AppState, 'customFields'>): FillCheck {
+  const empty: FillCheck = { error: null, ignored: [], fixed: [], fields: [], rows: [], errorRows: 0, changed: 0 }
+  const cfs = cat.customFields ?? []
+  if (!cfs.length) return { ...empty, error: "만든 칼럼이 없습니다. 직원 목록에서 '+ 칼럼 추가'로 칼럼을 먼저 만드세요." }
+  const hi = table.findIndex((r) => r.some((c) => (c ?? '').trim()))
+  if (hi < 0) return { ...empty, error: '빈 파일입니다.' }
+  const header = table[hi].map((h) => (h ?? '').trim())
+  const noIdx = header.findIndex((h) => ROSTER_FIELDS.find((f) => f.key === 'empNo')!.aliases.includes(norm(h)))
+  if (noIdx < 0) return { ...empty, error: '사번 열이 없습니다(사번으로 직원을 찾습니다).' }
+  const fixedKeys = ROSTER_FIELDS.filter((f) => f.key !== 'empNo')
+  const fixed = header.filter((h, i) => h && i !== noIdx && fixedKeys.some((f) => f.aliases.includes(norm(h))))
+  const cfIdx = new Map<CustomField, number>()
+  for (const f of cfs) {
+    const hits = header.map((h, i) => (i !== noIdx && norm(h) === norm(f.name) ? i : -1)).filter((i) => i >= 0)
+    if (hits.length > 1) return { ...empty, error: `'${f.name}' 열이 두 번 이상 있습니다.` }
+    if (hits.length) cfIdx.set(f, hits[0])
+  }
+  const fields = [...cfIdx.entries()].sort((a, b) => a[1] - b[1]).map(([f]) => f)
+  const used = new Set([noIdx, ...cfIdx.values()])
+  const ignored = header.filter((h, i) => h && !used.has(i) && !fixed.includes(h))
+  if (!fields.length) return { ...empty, ignored, fixed, error: `채울 칼럼 열이 없습니다. 열 이름을 만든 칼럼 이름(${cfs.map((f) => f.name).join(', ')})과 같게 쓰세요.` }
+  const body = table.slice(hi + 1).map((r, i) => ({ r, line: hi + i + 2 })).filter(({ r }) => r.some((c) => (c ?? '').trim()))
+  if (body.length > MAX_ROWS) return { ...empty, ignored, fixed, fields, error: `한 번에 ${MAX_ROWS.toLocaleString()}행까지 올릴 수 있습니다.` }
+  const seen = new Map<string, number[]>()
+  body.forEach(({ r, line }) => { const no = (r[noIdx] ?? '').trim(); if (no) seen.set(no, [...(seen.get(no) ?? []), line]) })
+  const rows: FillRow[] = body.map(({ r, line }) => {
+    const empNo = (r[noIdx] ?? '').trim()
+    const errors: CellError[] = []
+    const e = empNo ? employees.find((x) => x.active && x.empNo === empNo) : undefined
+    if (!empNo) errors.push({ col: '사번', msg: '비어 있음' })
+    else if (!e) errors.push({ col: '사번', msg: '재직 중인 직원 중 이 사번이 없음' })
+    if (empNo && seen.get(empNo)!.length > 1) errors.push({ col: '사번', msg: `파일 안에서 중복 (${seen.get(empNo)!.filter((l) => l !== line).join(', ')}행)` })
+    const changes: FillChange[] = []
+    for (const f of fields) {
+      const text = (r[cfIdx.get(f)!] ?? '').trim()
+      if (!text) continue // 빈 칸 = 그대로
+      let value = text
+      if (f.type === 'select') {
+        const o = f.options.find((x) => x.label.trim() === text)
+        if (!o) { errors.push({ col: f.name, msg: f.options.length ? `${f.options.map((x) => x.label).join('·')} 중 하나` : '선택지가 없는 칼럼' }); continue }
+        value = o.id
+      }
+      const cur = e?.custom?.[f.id] ?? ''
+      if (cur === value) continue
+      const label = (v: string) => (f.type === 'select' ? f.options.find((x) => x.id === v)?.label ?? '' : v)
+      changes.push({ fieldId: f.id, field: f.name, before: label(cur), after: text, value })
+    }
+    return { line, empNo, name: e?.name ?? '', employeeId: e?.id, changes, errors }
+  })
+  return { error: null, ignored, fixed, fields, rows, errorRows: rows.filter((x) => x.errors.length).length, changed: rows.filter((x) => !x.errors.length && x.changes.length).length }
+}
+
+export const canFill = (c: FillCheck) => !c.error && c.errorRows === 0 && c.changed > 0
+
+/** 칼럼 값만 바꾼다(다른 직원 정보·평가 배정은 그대로) */
+export function applyRosterFill(d: Pick<AppState, 'employees'>, c: FillCheck) {
+  if (!canFill(c)) return 0
+  let n = 0
+  for (const r of c.rows) {
+    const e = d.employees.find((x) => x.id === r.employeeId)
+    if (!e || !r.changes.length) continue
+    e.custom = { ...(e.custom ?? {}) }
+    for (const ch of r.changes) e.custom[ch.fieldId] = ch.value
+    n++
+  }
+  return n
+}
