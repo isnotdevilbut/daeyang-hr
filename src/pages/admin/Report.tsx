@@ -9,7 +9,7 @@ import { ctxFor } from '../../domain/questions'
 import { isActiveAssignment, pathFor } from '../../domain/progress'
 import type { AppState, Assignment, Cycle, Question, TargetSnapshot } from '../../domain/types'
 import { visibleSections } from '../../components/QuestionView'
-import { Forbidden, Notice, NotBuilt } from '../../components/ui'
+import { Forbidden, NotBuilt } from '../../components/ui'
 import { answerText, KIND_TEXT } from './PersonResult'
 import logoKo from '../../assets/logo-ko.png'
 
@@ -59,9 +59,8 @@ function ReportBody({ s, cycle, t, from }: { s: AppState; cycle: Cycle; t: Targe
   const parts = useMemo(() => evalParts(s, cycle, t), [s, cycle, t])
   const emp = s.employees.find((e) => e.id === t.employeeId)
   const qItems = (prefix: string, qs: Question[]): Item[] => qs.map((q) => ({ key: `${prefix}:q:${q.id}`, label: q.title }))
+  // 포함 항목 = 평가 답변(자기·팀장·임원평가)만 고름(D-128). 기본 정보·평가 회차·점수는 항상, 추가 기록은 저장한 경우 항상 리포트에 들어감
   const groups: Group[] = [
-    { key: 'info', label: '기본 정보', items: [{ key: 'info.name', label: '이름' }, { key: 'info.empNo', label: '사번' }, { key: 'info.team', label: '팀' }, { key: 'info.position', label: '직급' }, { key: 'info.job', label: '직무' }] },
-    { key: 'cycle', label: '평가 회차·기간', items: [{ key: 'cycle.name', label: '평가 회차' }, { key: 'cycle.period', label: '평가 기간' }] },
     ...(parts.self.length ? [{ key: 'self', label: '자기평가 답변', items: qItems('self', parts.selfQ) }] : []),
     ...(parts.lead.length ? [{ key: 'lead', label: '팀장평가 답변·의견', items: qItems('lead', parts.leadQ) }] : []),
     ...(parts.exec.length ? [{
@@ -71,8 +70,6 @@ function ReportBody({ s, cycle, t, from }: { s: AppState; cycle: Cycle; t: Targe
         { label: '문항', items: qItems('exec', parts.execQ) },
       ],
     }] : []),
-    { key: 'scores', label: '점수', items: [{ key: 'scores.stage', label: '단계별 점수' }, { key: 'scores.base', label: '개인 평가 점수' }, { key: 'scores.kpi', label: '팀 KPI·KPI 반영 후 점수' }, { key: 'scores.final', label: '최종 점수·보정 내역·사유' }] },
-    { key: 'note', label: '추가 기록', items: [{ key: 'note', label: '추가 기록' }] },
   ]
   const itemsOf = (g: Group) => [...g.items, ...(g.sub ?? []).flatMap((x) => x.items)]
   const allKeys = groups.flatMap(itemsOf).map((i) => i.key)
@@ -123,7 +120,6 @@ function ReportBody({ s, cycle, t, from }: { s: AppState; cycle: Cycle; t: Targe
           <button className="btn" disabled title="실서비스 단계에서 서버가 권한 확인 후 생성">PDF 다운로드</button>
           <NotBuilt>파일 다운로드</NotBuilt>
         </div>
-        <Notice kind="demo" title="리포트 미리보기(시연)">화면 미리보기와 브라우저 인쇄(PDF로 저장)만 됩니다. 엑셀·PDF 파일 생성은 실서비스 단계에서 구현합니다.</Notice>
 
         <details className="panel report-opts" open>
           <summary><b>포함 항목</b> <span className="muted">{allKeys.filter(on).length}/{allKeys.length}</span></summary>
@@ -164,7 +160,8 @@ function ReportBody({ s, cycle, t, from }: { s: AppState; cycle: Cycle; t: Targe
           )}
         </section>
       </div>
-      <div className="report-shell">
+      {/* 리포트 본문은 화면에서 숨기고 인쇄(브라우저 인쇄 미리보기·PDF로 저장)에서만 나옴(D-128) */}
+      <div className="report-shell print-only">
         <div className="a4">
           <div className="watermark">{complete ? '검토용 초안 · 가상 데이터' : '미완료 초안 · 가상 데이터'}</div>
           <div className="row" style={{ marginBottom: 6 }}>

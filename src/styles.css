@@ -1433,3 +1433,5 @@ label.field, fieldset.field legend { font-size: 16px; }
   .write-tbl { min-width: 520px; }
   .write-tbl th:nth-child(n), .write-tbl td:nth-child(n) { width: 20%; }
 }
+/* D-128: 개인 리포트 본문은 화면에서 숨기고 인쇄에서만 */
+@media screen { .print-only { display: none !important; } }
