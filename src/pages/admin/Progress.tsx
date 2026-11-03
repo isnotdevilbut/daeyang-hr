@@ -39,7 +39,8 @@ export default function Progress() {
 }
 
 // 직무 필터는 D-074에서 제거 — 이전에 저장된 job 값은 읽지 않는다(숨은 필터로 남지 않게)
-type Saved = { cycleId?: string; q?: string; tier?: string; onlyOpen?: boolean; pick?: CardPick }
+// '미완료만' 체크는 D-135에서 제거 — 미완료자 카드로 대신. 이전에 저장된 onlyOpen 값은 읽지 않음(숨은 필터 방지)
+type Saved = { cycleId?: string; q?: string; tier?: string; pick?: CardPick }
 
 function Body({ s, cycle }: { s: AppState; cycle: Cycle }) {
   const max = 3 // 작성 단계는 1 자기·2 팀장·3 임원으로 고정
@@ -52,10 +53,9 @@ function Body({ s, cycle }: { s: AppState; cycle: Cycle }) {
   const [q, setQ] = useState<string>(saved.q ?? '')
   // 직급 필터 = 직급 ID (D-080). 이전에 저장된 값이 직급 ID가 아니면 읽지 않음(숨은 필터 방지)
   const [tier, setTier] = useState<string>(positionById(s, saved.tier) ? saved.tier! : '')
-  const [onlyOpen, setOnlyOpen] = useState<boolean>(!!saved.onlyOpen)
   // 처음 들어오면(이 탭에 저장된 카드 선택 없음) '평가 참여자' 카드가 선택된 상태 — 카드를 눌러 명단을 바꿀 수 있다는 점이 보이게(D-096). 명단은 선택 없음과 같음
   const [pick, setPick] = useState<CardPick>(saved.pick === undefined ? { kind: 'all' } : validPick(saved.pick))
-  useEffect(() => { try { sessionStorage.setItem(FILTER_KEY, JSON.stringify({ cycleId: cycle.id, q, tier, onlyOpen, pick })) } catch { /* 무시 */ } }, [cycle.id, q, tier, onlyOpen, pick])
+  useEffect(() => { try { sessionStorage.setItem(FILTER_KEY, JSON.stringify({ cycleId: cycle.id, q, tier, pick })) } catch { /* 무시 */ } }, [cycle.id, q, tier, pick])
   // 상세에서 돌아오면 그때의 스크롤 위치로
   useEffect(() => {
     try {
@@ -79,7 +79,7 @@ function Body({ s, cycle }: { s: AppState; cycle: Cycle }) {
     (r) =>
       (!needle || r.t.name.includes(needle) || r.t.teamName.includes(needle) || r.t.empNo.includes(needle)) &&
       (!tier || empPos(r.t.employeeId) === tier) &&
-      progressFilter(r, pick, onlyOpen),
+      progressFilter(r, pick, false),
   )
   const openOn = pick?.kind === 'open'
   const wrapRef = useRef<HTMLDivElement>(null)
@@ -101,16 +101,15 @@ function Body({ s, cycle }: { s: AppState; cycle: Cycle }) {
     return () => ro.disconnect()
   }, [openOn, colOn, filtered.length])
   // 미완료자 카드는 이미 미완료만 보여 주므로 "미완료만"은 적용된 것으로 표시(충돌 없음)
-  const filtering = !!needle || !!tier || (onlyOpen && !openOn)
+  const filtering = !!needle || !!tier
   const nameCount = new Map<string, number>()
   rows.forEach((r) => nameCount.set(r.t.name, (nameCount.get(r.t.name) ?? 0) + 1))
   const frac = (a: number, b: number) => (b === 0 ? <span className="n-na">배정 없음</span> : <><span className="nv">{a}</span><span className="of"> / {b}</span></>)
 
   // 카드 선택(한 번에 하나): 범위가 바로 보이도록 검색·직급·미완료만은 초기화(그 뒤 함께 쓸 수 있음). 같은 카드를 다시 누르면 해제
-  const clearFilters = () => { setQ(''); setTier(''); setOnlyOpen(false) }
+  const clearFilters = () => { setQ(''); setTier('') }
   const same = (p: CardPick) => JSON.stringify(p) === JSON.stringify(pick)
   const choose = (p: CardPick) => { clearFilters(); setPick(same(p) ? null : p) }
-  const changeOnlyOpen = (v: boolean) => { setOnlyOpen(v); if (v && pick?.kind === 'complete') setPick(null) } // 완료 카드와 모순 → 해제
   const scopeLabel = pick?.kind === 'open' ? '미완료자' : pick?.kind === 'complete' ? '완료자' : '전체'
 
   return (
@@ -130,7 +129,6 @@ function Body({ s, cycle }: { s: AppState; cycle: Cycle }) {
             <option value="">전체 직급</option>
             {positionsOf(s).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
-          <label className={`check ${openOn ? 'is-implied' : ''}`} title={openOn ? '미완료자 카드를 고르면 미완료자만 보입니다' : undefined}><input type="checkbox" checked={onlyOpen || openOn} disabled={openOn} onChange={(e) => changeOnlyOpen(e.target.checked)} /> 미완료만</label>
           <span className="spacer" />
           {filtering && <span className="muted" aria-live="polite">표시 <b>{filtered.length}</b>명 / {scopeLabel} {scope.length}명</span>}
           {filtering && <button className="btn small" onClick={clearFilters}>필터 초기화</button>}

@@ -87,7 +87,7 @@ function EmployeeList() {
           <span className="spacer" />
           <div className="row people-actions">
             <button className="btn primary" onClick={() => setEdit(blank(activeTeams(s)[0]?.id ?? ''))}>+ 직원 추가</button>
-            <button className="btn soft" onClick={() => setFieldEdit({ id: '', name: '', type: 'text', options: [] })}>+ 분류 기준 추가</button>
+            <button className="btn soft" onClick={() => setFieldEdit({ id: '', name: '', type: 'text', options: [] })}>+ 칼럼 추가</button>
           </div>
         </div>
         <div className="table-wrap" tabIndex={0}>
@@ -171,7 +171,7 @@ function FieldModal({ field, onClose }: { field: CustomField; onClose: () => voi
   }
   const setOpt = (i: number, label: string) => setF({ ...f, options: f.options.map((o, k) => (k === i ? { ...o, label } : o)) })
   return (
-    <Modal title={isNew ? '분류 기준 추가' : '분류 기준 편집'} onClose={onClose}>
+    <Modal title={isNew ? '칼럼 추가' : '칼럼 편집'} onClose={onClose}>
       <label className="field">항목 이름<input type="text" value={f.name} autoFocus onChange={(e) => setF({ ...f, name: e.target.value })} /></label>
       <fieldset className="field cf-type">
         <legend>입력 방식</legend>
@@ -644,7 +644,7 @@ function Upload() {
       <div className="row">
         <h2 style={{ margin: 0 }}>직원 명단 업로드</h2>
       </div>
-      <p className="muted upload-cols">필수 열: {ROSTER_HEADER.join(' · ')}{cfs.length > 0 && <> · 선택 열(분류 기준): {cfs.map((f) => f.name).join(' · ')}</>}</p>
+      <p className="muted upload-cols">필수 열: {ROSTER_HEADER.join(' · ')}{cfs.length > 0 && <> · 선택 열(추가한 칼럼): {cfs.map((f) => f.name).join(' · ')}</>}</p>
       <div className="row upload-pick">
         <label className="btn primary file-btn">
           파일 선택
@@ -669,7 +669,7 @@ function Upload() {
             <span>등록 가능 <b>{res.addable}</b></span>
             {res.skipped > 0 && <span>건너뜀 <b>{res.skipped}</b></span>}
             <span className={res.errorRows ? 'err' : ''}>오류 <b>{res.errorRows}</b>행</span>
-            {res.extra.length > 0 && <span className="muted">함께 등록할 분류 기준: {res.extra.map((f) => f.name).join(', ')}</span>}
+            {res.extra.length > 0 && <span className="muted">함께 등록할 칼럼: {res.extra.map((f) => f.name).join(', ')}</span>}
             {res.ignored.length > 0 && <span className="muted">쓰지 않는 열(등록 안 함): {res.ignored.join(', ')}</span>}
           </div>
           {res.existingDup > 0 && (
