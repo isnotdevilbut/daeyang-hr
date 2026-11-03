@@ -12,3 +12,6 @@ tsconfig.tsbuildinfo
 *.log
 # 원본 회사 자료(전달자료·회의 메모·양식)를 상세 분석한 문서 — 로컬에만 둔다
 docs/analysis.md
+
+# 로컬 전용(이전 세션 점검 스크립트·Claude 메모 사본)
+_local/
