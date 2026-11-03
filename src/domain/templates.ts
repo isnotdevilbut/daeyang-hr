@@ -427,15 +427,18 @@ export function makeLeadSelfTemplate(id: string): Template {
 
 // ── 팀원 → 팀장평가 (D-114) ─────────────────────────
 export const UPWARD_NAME = '팀원→팀장 평가표'
-const AGREE: [string, number | null][] = [['매우 그렇다', 5], ['그렇다', 4], ['보통이다', 3], ['그렇지 않다', 2], ['전혀 그렇지 않다', 1]]
-const AGREE_RU = ['Полностью согласен', 'Согласен', 'Затрудняюсь ответить', 'Не согласен', 'Совершенно не согласен']
-const UPWARD_ITEMS: [key: string, area: string, areaRu: string, title: string, titleRu: string][] = [
-  ['lead', '리더십', 'Лидерство', '팀의 목표와 방향을 명확하게 제시한다', 'Чётко ставит цели и направление работы группы'],
-  ['talk', '소통', 'Коммуникация', '팀원의 의견을 경청하고 필요한 정보를 공유한다', 'Выслушивает мнение сотрудников и делится нужной информацией'],
-  ['help', '업무 지원', 'Поддержка в работе', '업무에 필요한 지원과 피드백을 제때 제공한다', 'Своевременно оказывает поддержку и даёт обратную связь'],
-  ['fair', '공정성', 'Справедливость', '업무 배분과 평가를 공정하게 한다', 'Справедливо распределяет задачи и оценивает работу'],
+/** 상향평가 예시(회사 자료 '임원 및 팀장 상향평가 예시', D-124): 구분·배점·평가내용 — 영역 배점 합 100, 영역마다 5점 척도 문항 하나 */
+export const UPWARD_AREAS: [key: string, area: string, pts: number, desc: string, areaRu: string, descRu: string][] = [
+  ['order', '업무지시 및 관리능력', 25, '업무지시의 명확성, 업무분장의 적정성, 업무 진행상황 관리', 'Постановка задач и управление', 'Чёткость поручений, разумное распределение задач, контроль хода работы'],
+  ['decide', '리더십 및 의사결정', 25, '문제해결 능력, 합리적인 의사결정, 책임 있는 업무처리', 'Лидерство и принятие решений', 'Умение решать проблемы, обоснованные решения, ответственное выполнение работы'],
+  ['comm', '소통 및 피드백', 20, '구성원 의견 경청, 원활한 의사소통, 적절한 업무지도 및 피드백', 'Коммуникация и обратная связь', 'Выслушивает сотрудников, открытое общение, своевременные указания и обратная связь'],
+  ['trust', '공정성 및 신뢰성', 20, '구성원에 대한 공정한 대우, 객관적인 업무평가, 일관된 원칙 적용', 'Справедливость и надёжность', 'Справедливое отношение к сотрудникам, объективная оценка работы, единые принципы'],
+  ['culture', '조직문화 및 협업', 10, '상호존중, 갈등관리, 협력적인 근무환경 조성', 'Корпоративная культура и сотрудничество', 'Взаимное уважение, управление конфликтами, атмосфера сотрудничества'],
 ]
-/** 팀원이 소속 팀 팀장을 평가하는 평가표 초기값(목업 — 문항·영역은 문항 관리에서 수정). 러시아어 번역 초안 포함, 점수 반영 없음 */
+const S15_RU = ['5 Отлично', '4 Хорошо', '3 Удовлетворительно', '2 Ниже ожиданий', '1 Неудовлетворительно']
+/** D-114 첫 초기값의 영역 ID(D-124 변환에서 '손대지 않은 첫 초기값'인지 확인용) */
+export const UPWARD_V1_KEYS = ['lead', 'talk', 'help', 'fair', 'free']
+/** 팀원이 소속 팀 팀장을 평가하는 평가표 초기값(목업 — 회사 상향평가 예시의 영역·배점, D-124). 문항·영역은 문항 관리에서 수정. 러시아어 번역 초안 포함 */
 export function makeUpwardTemplate(id: string): Template {
   const up = { directions: ['up'] as Direction[], rules: ['upward' as const] }
   const ru = (x: Question, title: string, opts?: string[]): Question => ({
@@ -445,9 +448,13 @@ export function makeUpwardTemplate(id: string): Template {
   const secRu = (x: Section, title: string): Section => ({ ...x, i18n: { ru: { title, basis: x.title } } })
   return {
     id, name: UPWARD_NAME, origin: 'draft', jobType: 'common', targetRole: 'lead', locked: false, version: 1,
-    sourceNote: '팀원 → 팀장평가 초기값(D-114, 목업). 문항은 수정 가능, 점수에는 반영하지 않음',
+    sourceNote: '상향평가 예시(회사 자료) 기준 초기값(D-124, 목업). 영역·배점·문항은 수정 가능',
+    gradeScale: { A: 5, B: 4, C: 3, D: 2, E: 1 },
     sections: [
-      ...UPWARD_ITEMS.map(([k, area, areaRu, title, titleRu]) => secRu(sec(`${id}-${k}`, area, null, [ru(q(`${id}-${k}-q`, 'scale5', title, { ...up, purpose: 'score', optionItems: AGREE }), titleRu, AGREE_RU)]), areaRu)),
+      ...UPWARD_AREAS.map(([k, area, pts, desc, areaRu, descRu]) => ({
+        ...secRu(sec(`${id}-${k}`, area, null, [ru(q(`${id}-${k}-q`, 'scale5', `${area}: ${desc}`, { ...up, purpose: 'score', optionItems: S15 }), `${areaRu}: ${descRu}`, S15_RU)]), areaRu),
+        points: pts, desc,
+      })),
       secRu(sec(`${id}-free`, '의견', null, [ru(q(`${id}-free-q`, 'long', '팀장에게 바라는 점이나 하고 싶은 말을 자유롭게 적어주세요', { ...up, required: false }), 'Свободно напишите, чего вы ждёте от руководителя или что хотели бы ему сказать')]), 'Комментарий'),
     ],
   }

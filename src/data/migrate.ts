@@ -13,7 +13,7 @@ import { syncCycle } from '../domain/cycleSync'
 import { v15 } from '../domain/demoV15'
 import { scoringV16 } from '../domain/scoringV16'
 import { execPerTeam } from '../domain/execTeamsV17'
-import { upwardV18 } from '../domain/upward'
+import { upwardFormV22, upwardV18 } from '../domain/upward'
 import { joinAllStaff } from '../domain/joinAllV19'
 import { leadUpwardOpen, moreDemo } from '../domain/demoV20'
 import { tierOf } from '../domain/org'
@@ -221,7 +221,13 @@ export function migrate(raw: any): MigrationResult | null {
     s.schemaVersion = 21
   }
 
-  if (s.schemaVersion !== 21) return null
+  if (s.schemaVersion === 21) {
+    // v21 → v22 (D-124): 팀원→팀장 평가표 = 회사 상향평가 예시(영역 5개·배점 100) — 첫 초기값 그대로·시연 응답만일 때, 시연 답은 새 문항에 맞춤
+    notes.push(...upwardFormV22(s))
+    s.schemaVersion = 22
+  }
+
+  if (s.schemaVersion !== 22) return null
   return { state: s as AppState, notes }
 }
 

@@ -6,7 +6,7 @@
 // - 평가표: 평가표 버전 '팀원→팀장 평가표'(공통 기본, 적용 평가 = 팀원→팀장평가). 이 평가표가 있는 회차에서만 배정을 만든다
 //   (저장 데이터 v18 변환·새 평가 만들기·복제에서 만든다 — 그 이전 변환 단계의 배정 맞추기에서는 만들지 않음)
 import type { AppState, Assignment, Cycle } from './types'
-import { makeUpwardTemplate, UPWARD_NAME } from './templates'
+import { makeUpwardTemplate, UPWARD_NAME, UPWARD_V1_KEYS } from './templates'
 import { liveVersions, resolveVersion } from './versions'
 import { demoAnswers } from './demoV15'
 
@@ -107,6 +107,41 @@ export function upwardV18(s: AppState): string[] {
     if (!ups) continue
     const n = upwardDemo(s, c)
     notes.push(`${c.name}: 팀원→팀장평가 ${ups}건 배정(시연 제출 ${n}건)`)
+  }
+  return notes
+}
+
+/**
+ * v21 → v22 (D-124): 팀원→팀장 평가표 내용을 회사 상향평가 예시(영역 5개·배점 25·25·20·20·10·5점 척도 + 의견)로.
+ * 준비·진행 회차에서 평가표가 D-114 첫 초기값 그대로(영역 구성)일 때 — 시연 제출은 새 문항으로 시연 답을 다시 만들고(제출·임시저장 상태 그대로).
+ * 사용자 응답이 있으면 지우지 않는다: 이전 문항은 사용 중지(숨김)로 남겨 그 응답과 함께 보존하고 새 영역을 뒤에 붙인다. 평가표를 고쳐 썼으면 그대로
+ */
+export function upwardFormV22(s: AppState): string[] {
+  const notes: string[] = []
+  for (const c of s.cycles) {
+    if (!open(c)) continue
+    const id = upwardTemplateOf(c)
+    const t = id ? c.templates[id] : undefined
+    if (!id || !t) continue
+    const fresh = makeUpwardTemplate(id)
+    if (t.sections.some((x) => x.id === `${id}-order` || x.id === `${id}-order-v2`)) continue // 이미 새 내용
+    if (t.sections.map((x) => x.id.slice(id.length + 1)).join() !== UPWARD_V1_KEYS.join()) { notes.push(`${c.name}: ${UPWARD_NAME}을(를) 고쳐 써서 내용을 바꾸지 않음`); continue }
+    const as = c.assignments.filter((a) => a.templateId === id)
+    const userAnswered = as.some((a) => s.responses[a.id] && !s.responses[a.id].demo)
+    if (userAnswered) {
+      // 이전 문항·영역 ID는 그대로(사용 중지) — 사용자 응답 보존. 영역 배점이 없는 이전 영역은 점수 계산·배점 합계에 들어가지 않음
+      for (const sec of t.sections) for (const q of sec.questions) q.active = false
+      t.sections = [...fresh.sections.map((x) => ({ ...x, id: `${x.id}-v2`, questions: x.questions.map((q) => ({ ...q, id: `${q.id}-v2`, options: q.options.map((o) => ({ ...o, id: o.id.replace(q.id, `${q.id}-v2`) })), ...(q.i18n?.ru ? { i18n: { ru: { ...q.i18n.ru, options: Object.fromEntries(Object.entries(q.i18n.ru.options ?? {}).map(([k, v]) => [k.replace(q.id, `${q.id}-v2`), v])), ...(q.i18n.ru.basis ? { basis: { ...q.i18n.ru.basis, options: Object.fromEntries(Object.entries(q.i18n.ru.basis.options).map(([k, v]) => [k.replace(q.id, `${q.id}-v2`), v])) } } : {}) } } } : {}) })) })), ...t.sections]
+    } else t.sections = fresh.sections
+    t.gradeScale = fresh.gradeScale; t.sourceNote = fresh.sourceNote; t.version += 1
+    let n = 0
+    for (const a of as) {
+      const r = s.responses[a.id]
+      if (!r || !r.demo) continue
+      r.answers = r.status === 'submitted' ? demoAnswers(c, a) : {}
+      n++
+    }
+    notes.push(`${c.name}: ${UPWARD_NAME}을(를) 상향평가 예시(영역 5개·배점 100)로 — 시연 응답 ${n}건 새 문항에 맞춤${userAnswered ? ', 사용자 응답이 있던 이전 문항은 사용 중지로 보존' : ''}`)
   }
   return notes
 }

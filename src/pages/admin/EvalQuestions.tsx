@@ -768,6 +768,13 @@ function ScopeEditor({ cycle, v, onDup, onRemove, msg, setMsg }: { cycle: Cycle;
           </fieldset>
         </>}
       </div>
+      {/* D-124: 공통 기본(모두에게 동일 적용) = 직접 선택 버전이 맡는 경우를 뺀 나머지 — 어떤 경우가 빠지는지 보여 줌 */}
+      {scope.mode === 'all' && (() => {
+        const others = liveVersions(cycle).filter((x) => x.templateId !== v.templateId && x.scope.mode === 'custom' && x.scope.rules.some((r) => scope.rules.includes(r)))
+        if (!others.length) return null
+        const who = (x: TemplateVersion) => [x.scope.rules.filter((r) => scope.rules.includes(r)).map((r) => RULE_TEXT[r]).join('·'), x.scope.positions === 'all' ? '' : x.scope.positions.map((id) => positionsOf(s).find((p) => p.id === id)?.name ?? id).join('·'), x.scope.employees ? `직접 선택 ${x.scope.employees.length}명` : x.scope.teams === 'all' ? '' : `팀 ${x.scope.teams.length}개`].filter(Boolean).join(' · ')
+        return <p className="muted small scope-hint">이 평가표는 적용 평가 중 아래 경우를 뺀 나머지 모두에 쓰여요(직접 선택한 평가표가 먼저 적용): {others.map((x) => `'${x.name}' — ${who(x)}`).join(' / ')}</p>
+      })()}
       {/* D-122: 팀·직급·사람 조건은 평가받는 사람 기준 — 팀원→팀장평가는 평가받는 사람이 팀장(평가하는 팀원이 아님) */}
       {scope.mode === 'custom' && scope.rules.includes('upward') && <p className="muted small scope-hint">팀·직급·사람은 <b>평가받는 사람</b> 기준이에요. 팀원→팀장평가는 평가받는 사람이 <b>팀장</b>이라, 직급을 고를 때 '팀장'을 넣어야 해요.</p>}
       {scope.mode === 'custom' && (

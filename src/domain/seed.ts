@@ -20,7 +20,7 @@ import { createCycle, DEFAULT_TEMPLATE_BY_JOB, eligibleTargets } from './cycle'
 import { isUnlocked } from './progress'
 
 // v2: 상향평가 제외 / v3: 단계 반영 비율 회차별 / v4: KPI 지표·개인평가 반영. 이전 저장본은 data/migrate.ts에서 변환
-export const SCHEMA_VERSION = 21
+export const SCHEMA_VERSION = 22
 
 function rng(seed: number) {
   return () => {
