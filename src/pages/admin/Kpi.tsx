@@ -362,6 +362,8 @@ function BlendPanel({ cycle, editable }: { cycle: Cycle; editable: boolean }) {
 const PART_TEXT: Record<FinalPart, string> = { personal: '자기평가', self: '자기평가', kpi: '팀 KPI', upward: '상향평가' }
 /** D-153: 팀장(팀원→팀장평가)·임원(팀장→임원) 모두 '상향평가'로 표시. 임원 상향평가는 아직 없어 켤 수 없음(마우스를 올리면 안내) */
 const partLabel = (_tier: keyof FinalBlendPlan, key: FinalPart) => PART_TEXT[key]
+/** 같은 요소는 직급이 달라도 같은 칸(세로 한 줄)에 — D-155 */
+const FP_COL: Record<FinalPart, number> = { personal: 1, self: 1, kpi: 2, upward: 3 }
 const TIER_TEXT = { member: '사원', lead: '팀장', exec: '임원' } as const
 function FinalPlan({ cycle, editable }: { cycle: Cycle; editable: boolean }) {
   const saved = cycle.finalBlendPlan ?? FINAL_BLEND_EXAMPLE()
@@ -369,7 +371,7 @@ function FinalPlan({ cycle, editable }: { cycle: Cycle; editable: boolean }) {
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const dirty = JSON.stringify(d) !== JSON.stringify(saved)
   const sumOf = (items: FinalBlendItem[]) => +items.filter((x) => x.on).reduce((a, x) => a + (x.pct ?? 0), 0).toFixed(2)
-  const tierErr = (items: FinalBlendItem[]) => items.some((x) => x.on && (x.pct === null || !(x.pct >= 0 && x.pct <= 100))) ? '비율은 0~100으로 입력하세요' : !items.some((x) => x.on) ? '켜진 요소 없음' : Math.abs(sumOf(items) - 100) > 0.001 ? `활성 합계 ${sumOf(items)}% — 100%가 되어야 적용 가능` : ''
+  const tierErr = (items: FinalBlendItem[]) => items.some((x) => x.on && (x.pct === null || !(x.pct >= 0 && x.pct <= 100))) ? '비율은 0~100으로 입력하세요' : !items.some((x) => x.on) ? '켜진 요소 없음' : Math.abs(sumOf(items) - 100) > 0.001 ? '100% 미충족' : ''
   const setItem = (tier: keyof FinalBlendPlan, i: number, patch: Partial<FinalBlendItem>) => { setD((x) => ({ ...x, [tier]: x[tier].map((it, k) => (k === i ? { ...it, ...patch } : it)) })); setMsg(null) }
   const save = () => {
     if ((['member', 'lead', 'exec'] as const).some((t) => d[t].some((x) => x.pct !== null && !(x.pct >= 0 && x.pct <= 100)))) return setMsg({ ok: false, text: '비율은 0~100으로 입력하세요.' })
@@ -391,7 +393,7 @@ function FinalPlan({ cycle, editable }: { cycle: Cycle; editable: boolean }) {
                 <td>
                   <div className="fp-items">
                     {d[tier].map((it, i) => (
-                      <label key={it.key} className="fp-item" title={it.key === 'upward' && tier === 'exec' ? '팀장이 임원을 평가하는 상향평가는 아직 없어요' : undefined}>
+                      <label key={it.key} className="fp-item" style={{ gridColumn: FP_COL[it.key] }} title={it.key === 'upward' && tier === 'exec' ? '팀장이 임원을 평가하는 상향평가는 아직 없어요' : undefined}>
                         <input type="checkbox" checked={it.on} disabled={!editable || (it.key === 'upward' && tier === 'exec')} onChange={(e) => setItem(tier, i, { on: e.target.checked })} />
                         {partLabel(tier, it.key)}
                         <input type="text" inputMode="decimal" aria-label={`${TIER_TEXT[tier]} ${PART_TEXT[it.key]} 비율`} disabled={!editable} value={it.pct ?? ''} onChange={(e) => setItem(tier, i, { pct: e.target.value === '' ? null : Number(e.target.value) })} />%
