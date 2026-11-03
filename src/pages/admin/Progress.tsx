@@ -9,7 +9,6 @@ import type { AppState, Cycle } from '../../domain/types'
 import { TIERS } from '../../domain/org'
 import { positionById, positionName, positionsOf } from '../../domain/catalog'
 import { Empty, Forbidden } from '../../components/ui'
-import { nextSort, sortRows, SortTh, type Sort } from '../../components/sort'
 
 const FILTER_KEY = 'daeyang-hr-progress-filters'
 const SCROLL_KEY = 'daeyang-hr-progress-scroll'
@@ -40,7 +39,7 @@ export default function Progress() {
 }
 
 // 직무 필터는 D-074에서 제거 — 이전에 저장된 job 값은 읽지 않는다(숨은 필터로 남지 않게)
-type Saved = { cycleId?: string; q?: string; tier?: string; onlyOpen?: boolean; pick?: CardPick; sort?: Sort }
+type Saved = { cycleId?: string; q?: string; tier?: string; onlyOpen?: boolean; pick?: CardPick }
 
 function Body({ s, cycle }: { s: AppState; cycle: Cycle }) {
   const max = 3 // 작성 단계는 1 자기·2 팀장·3 임원으로 고정
@@ -55,10 +54,7 @@ function Body({ s, cycle }: { s: AppState; cycle: Cycle }) {
   const [onlyOpen, setOnlyOpen] = useState<boolean>(!!saved.onlyOpen)
   // 처음 들어오면(이 탭에 저장된 카드 선택 없음) '평가 참여자' 카드가 선택된 상태 — 카드를 눌러 명단을 바꿀 수 있다는 점이 보이게(D-096). 명단은 선택 없음과 같음
   const [pick, setPick] = useState<CardPick>(saved.pick === undefined ? { kind: 'all' } : validPick(saved.pick))
-  // 머리글 정렬(오름↔내림)은 팀·이름 열만(D-106) — 상세에서 돌아와도 유지. 이전에 저장된 다른 열 정렬은 읽지 않음
-  const [sort, setSort] = useState<Sort>(saved.sort?.key === 'team' || saved.sort?.key === 'name' ? saved.sort : null)
-  const onSort = (k: string) => setSort((c) => nextSort(c, k))
-  useEffect(() => { try { sessionStorage.setItem(FILTER_KEY, JSON.stringify({ cycleId: cycle.id, q, tier, onlyOpen, pick, sort })) } catch { /* 무시 */ } }, [cycle.id, q, tier, onlyOpen, pick, sort])
+  useEffect(() => { try { sessionStorage.setItem(FILTER_KEY, JSON.stringify({ cycleId: cycle.id, q, tier, onlyOpen, pick })) } catch { /* 무시 */ } }, [cycle.id, q, tier, onlyOpen, pick])
   // 상세에서 돌아오면 그때의 스크롤 위치로
   useEffect(() => {
     try {
@@ -66,7 +62,7 @@ function Body({ s, cycle }: { s: AppState; cycle: Cycle }) {
       if (y !== null) { sessionStorage.removeItem(SCROLL_KEY); requestAnimationFrame(() => window.scrollTo(0, Number(y))) }
     } catch { /* 무시 */ }
   }, [])
-  // 진행 현황(D-076): 행 = 평가 참여자(받는 평가 또는 작성 업무가 있는 직원), 칸 = 직급에 따라 받는 평가 상태 또는 작성 업무 건수.
+  // 진행 현황(D-076). 순서는 고정(D-107): 팀 가나다순 → 팀 안에서 임원·팀장·사원 → 같은 직급은 이름순. 머리글 정렬 없음: 행 = 평가 참여자(받는 평가 또는 작성 업무가 있는 직원), 칸 = 직급에 따라 받는 평가 상태 또는 작성 업무 건수.
   // 카드 숫자는 모두 사람 수이며 아래 검색·필터와 무관하게 회차 전체 기준
   const rows = useMemo(
     () => progressRows(s, cycle)
@@ -78,12 +74,12 @@ function Body({ s, cycle }: { s: AppState; cycle: Cycle }) {
   const needle = q.trim()
   const counts = useMemo(() => progressCounts(rows), [rows])
   const scope = rows.filter((r) => progressFilter(r, pick, false)) // 카드가 정한 범위
-  const filtered = sortRows(scope.filter(
+  const filtered = scope.filter(
     (r) =>
       (!needle || r.t.name.includes(needle) || r.t.teamName.includes(needle) || r.t.empNo.includes(needle)) &&
       (!tier || empPos(r.t.employeeId) === tier) &&
       progressFilter(r, pick, onlyOpen),
-  ), sort, (r, k) => (k === 'team' ? r.t.teamName : r.t.name))
+  )
   const stageOn = pick?.kind === 'stage' ? pick.order : null
   const wrapRef = useRef<HTMLDivElement>(null)
   const [glow, setGlow] = useState<{ left: number; width: number; height: number } | null>(null)
@@ -145,7 +141,7 @@ function Body({ s, cycle }: { s: AppState; cycle: Cycle }) {
           <table className="tbl progress-tbl">
             <thead>
               <tr>
-                <SortTh k="team" sort={sort} onSort={onSort} className="c-team">팀</SortTh><th className="c-tier">직급</th><SortTh k="name" sort={sort} onSort={onSort} className="c-name">이름</SortTh>
+                <th className="c-team">팀</th><th className="c-tier">직급</th><th className="c-name">이름</th>
                 {STAGE_COLS.map((h, i) => <th key={i} data-col={i + 1} className={`c-eval ${stageOn === i + 1 ? 'col-on' : ''}`}>{h}</th>)}
                 <th className="c-act"><span className="sr-only">상세</span></th>
               </tr>
