@@ -1551,3 +1551,7 @@ details[open] > summary > .toggle-ic { transform: rotate(180deg); }
 .fp-item { display: grid; grid-template-columns: 18px 4.4em 64px auto; gap: 6px; align-items: center; }
 .fp-item input[type=checkbox] { margin: 0; }
 @media (max-width: 1100px) { .fp-items { grid-template-columns: max-content; } .fp-item { grid-column: auto !important; } }
+/* D-157: 평가 참여자 '자기평가' 열 이름 — 조금 크게, 아래 스위치(40px) 가운데에 맞춤 */
+.target-team .tt-cols span:last-child:not(:first-child) { width: 40px; display: flex; justify-content: center; white-space: nowrap; font-size: 14px; }
+.target-team .tt-cols { padding-right: 8px; }
+.target-team .p-switch { margin-right: 8px; } /* 가운데 맞춘 열 이름이 상자 오른쪽 선을 넘지 않게 */
