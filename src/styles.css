@@ -1418,3 +1418,8 @@ label.field, fieldset.field legend { font-size: 16px; }
 /* D-118: 문항 일괄 업로드 창 — 명단 업로드와 같은 미리보기 표가 들어가도록 넓게 */
 .modal.wide { width: min(920px, 100%); }
 .q-upload .upload-preview { max-height: 46vh; overflow: auto; }
+/* D-119: 미완료자 카드 선택 중 평가 열 머리글 = 누를 수 있는 글자(모양은 머리글 그대로) */
+.col-pick { font: inherit; font-weight: inherit; color: inherit; background: none; border: 0; padding: 4px 8px; margin: -4px -8px; border-radius: 8px; cursor: pointer; }
+.col-pick:hover { background: rgba(9, 82, 158, 0.08); color: var(--brand-navy); }
+.col-pick[aria-pressed='true'] { color: var(--brand-navy); }
+.col-pick:focus-visible { outline: 2px solid #20b8ca; outline-offset: 2px; }

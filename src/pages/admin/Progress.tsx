@@ -84,20 +84,22 @@ function Body({ s, cycle }: { s: AppState; cycle: Cycle }) {
   const openOn = pick?.kind === 'open'
   const wrapRef = useRef<HTMLDivElement>(null)
   const [glow, setGlow] = useState<{ left: number; width: number; height: number } | null>(null)
-  // 테두리 = 첫 평가 열(자기평가) 왼쪽 ~ 마지막 평가 열(임원평가) 오른쪽, 높이 = 표 전체. 표·창 크기·필터가 바뀌면 다시 잼
+  // 미완료자 카드 선택 중 평가 열 머리글을 누르면 그 열 하나만 테두리(D-119, 다시 누르면 해제). 다른 카드로 바꾸면 해제
+  const [colOn, setColOn] = useState<number | null>(null)
+  useEffect(() => { if (!openOn) setColOn(null) }, [openOn])
+  // 테두리 = 선택 열 머리글의 위치·폭, 높이 = 표 전체. 표·창 크기·필터가 바뀌면 다시 잼
   useLayoutEffect(() => {
     const wrap = wrapRef.current
     if (!wrap) return
     const measure = () => {
-      const a = openOn ? wrap.querySelector<HTMLElement>('th[data-col="1"]') : null
-      const z = openOn ? wrap.querySelector<HTMLElement>(`th[data-col="${STAGE_COLS.length}"]`) : null
+      const th = openOn && colOn ? wrap.querySelector<HTMLElement>(`th[data-col="${colOn}"]`) : null
       const tbl = wrap.querySelector<HTMLElement>('table')
-      setGlow(a && z && tbl ? { left: a.offsetLeft + 1, width: z.offsetLeft + z.offsetWidth - a.offsetLeft - 2, height: tbl.offsetHeight } : null)
+      setGlow(th && tbl ? { left: th.offsetLeft + 1, width: th.offsetWidth - 2, height: tbl.offsetHeight } : null)
     }
     measure()
     const ro = new ResizeObserver(measure); ro.observe(wrap); const tbl = wrap.querySelector('table'); if (tbl) ro.observe(tbl)
     return () => ro.disconnect()
-  }, [openOn, filtered.length])
+  }, [openOn, colOn, filtered.length])
   // 미완료자 카드는 이미 미완료만 보여 주므로 "미완료만"은 적용된 것으로 표시(충돌 없음)
   const filtering = !!needle || !!tier || (onlyOpen && !openOn)
   const nameCount = new Map<string, number>()
@@ -134,13 +136,17 @@ function Body({ s, cycle }: { s: AppState; cycle: Cycle }) {
           {filtering && <button className="btn small" onClick={clearFilters}>필터 초기화</button>}
         </div>
         <div className="table-wrap" ref={wrapRef} tabIndex={0} aria-label="표가 넓으면 옆으로 밀어 보세요">
-          {/* 미완료자 카드 선택 시 평가 네 열(자기평가~임원평가)을 감싸는 글라스 그라데이션 테두리 한 장(D-117, D-086 방식) — 클릭 방해 없음 */}
+          {/* 미완료자 카드 선택 중 고른 평가 열 하나를 감싸는 글라스 그라데이션 테두리(D-119, D-086 방식) — 클릭 방해 없음 */}
           <div className={`col-frame ${glow ? 'on' : ''}`} aria-hidden style={glow ? { transform: `translateX(${glow.left}px)`, width: glow.width, height: glow.height } : undefined} />
           <table className="tbl progress-tbl">
             <thead>
               <tr>
                 <th className="c-team">팀</th><th className="c-tier">직급</th><th className="c-name">이름</th>
-                {STAGE_COLS.map((h, i) => <th key={i} data-col={i + 1} className="c-eval">{h}</th>)}
+                {STAGE_COLS.map((h, i) => (
+                  <th key={i} data-col={i + 1} className={`c-eval ${colOn === i + 1 ? 'col-on' : ''}`}>
+                    {openOn ? <button type="button" className="col-pick" aria-pressed={colOn === i + 1} title={`${h} 열 표시`} onClick={() => setColOn(colOn === i + 1 ? null : i + 1)}>{h}</button> : h}
+                  </th>
+                ))}
                 <th className="c-act"><span className="sr-only">상세</span></th>
               </tr>
             </thead>
