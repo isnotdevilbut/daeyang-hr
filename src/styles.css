@@ -1589,3 +1589,8 @@ body.drag-sorting, body.drag-sorting * { cursor: grabbing !important; user-selec
 /* D-171: 결과·리포트 윗줄 — 전체 선택 / 선택 항목 다운로드 / 평가 회차 각자 상자(평가 회차 상자와 같은 모양·높이) */
 .head-box { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow-1); padding: 8px 10px; display: flex; align-items: center; }
 .result-head-actions { gap: 10px; align-items: stretch; }
+/* D-176: 개인 리포트 미리보기 창 — A4 그대로, 좁으면 창 안에서 옆으로 */
+.report-preview { overflow-x: auto; background: var(--bg-blue); border-radius: 12px; padding: 16px; }
+.report-preview .a4 { margin: 0 auto; }
+.modal.wide:has(.report-preview) { width: min(900px, 100%); }
+@media print { .modal-bg:has(.report-preview) { display: none !important; } }

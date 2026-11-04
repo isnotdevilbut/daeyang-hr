@@ -91,7 +91,6 @@ export default function PersonResultPage() {
     <div className="page detail-page">
       <div className="detail-top no-print">
         <Link to={back.to} className="back-link">← {back.label}</Link>
-        {from === 'results' && can(role, 'reportPreview') && <Link className="btn primary" to={`/admin/report/${t.employeeId}?from=${from}`}>개인 리포트 미리보기</Link>}
       </div>
       <header className="person-head">
         <h1>{t.name}{t.isTeamLead && <span className="chip info tag">팀장</span>}</h1>

@@ -9,7 +9,7 @@ import { ctxFor } from '../../domain/questions'
 import { isActiveAssignment, pathFor } from '../../domain/progress'
 import type { AppState, Assignment, Cycle, Question, TargetSnapshot } from '../../domain/types'
 import { visibleSections } from '../../components/QuestionView'
-import { Forbidden } from '../../components/ui'
+import { Forbidden, Modal } from '../../components/ui'
 import { templateXlsx } from '../../domain/xlsx'
 import { cycleLabel } from '../../domain/cycle'
 import { answerText, KIND_TEXT } from './PersonResult'
@@ -81,6 +81,7 @@ function ReportBody({ s, cycle, t, from }: { s: AppState; cycle: Cycle; t: Targe
   const key = noteKey(cycle.id, t.employeeId)
   const saved = s.reportNotes?.[key] ?? ''
   const [draft, setDraft] = useState(saved)
+  const [preview, setPreview] = useState(false)
   const [noteMsg, setNoteMsg] = useState('')
   const dirty = draft !== saved
   const editable = s.session.role === 'admin'
@@ -109,6 +110,8 @@ function ReportBody({ s, cycle, t, from }: { s: AppState; cycle: Cycle; t: Targe
           <span className="spacer" />
           {/* D-134: 파일 저장 — 화면에서 고른 포함 항목 그대로. 브라우저 안에서 만들어 내려받기(외부 전송 없음). PDF는 인쇄 창의 'PDF로 저장' */}
           <button className="btn" disabled={empty} title={empty ? '포함한 항목이 없습니다' : '인쇄하거나 인쇄 창에서 PDF로 저장'} onClick={() => window.print()}>인쇄·PDF 저장</button>
+          {/* D-176: 화면에서 리포트 본문 보기(인쇄 전 확인) — 포함 항목 선택 그대로 */}
+          <button className="btn" disabled={empty} onClick={() => setPreview(true)}>미리보기</button>
           <button className="btn" disabled={empty} onClick={() => download('xlsx')}>엑셀(.xlsx)</button>
           <button className="btn" disabled={empty} onClick={() => download('doc')}>워드(.doc)</button>
           <button className="btn" disabled={empty} onClick={() => download('csv')}>CSV</button>
@@ -158,6 +161,11 @@ function ReportBody({ s, cycle, t, from }: { s: AppState; cycle: Cycle; t: Targe
         </section>
       </div>
       {/* 리포트 본문은 화면에서 숨기고 인쇄(브라우저 인쇄 미리보기·PDF로 저장)에서만 나옴(D-128) */}
+      {preview && (
+        <Modal title="미리보기" onClose={() => setPreview(false)} wide>
+          <div className="report-preview"><ReportSheet s={s} cycle={cycle} t={t} parts={parts} m={m} /></div>
+        </Modal>
+      )}
       <div className="report-shell print-only">
         <ReportSheet s={s} cycle={cycle} t={t} parts={parts} m={m} />
       </div>
