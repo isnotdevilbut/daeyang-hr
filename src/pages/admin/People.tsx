@@ -602,10 +602,10 @@ type Loaded = { file: string; sheets: Sheet[]; sheet: number }
 /** 일괄 업로드(D-136·D-137): 직원 명단 업로드(새 직원 등록) 아래에 칼럼 값 채우기 — 칼럼은 CSV로 만들지 않음(직원 목록의 '+ 칼럼 추가'로만) */
 function Upload() {
   return (
-    <>
+    <div className="upload-grid">
       <AddUpload />
       <FillUpload />
-    </>
+    </div>
   )
 }
 

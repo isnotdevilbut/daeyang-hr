@@ -1594,3 +1594,15 @@ body.drag-sorting, body.drag-sorting * { cursor: grabbing !important; user-selec
 .report-preview .a4 { margin: 0 auto; }
 .modal.wide:has(.report-preview) { width: min(900px, 100%); }
 @media print { .modal-bg:has(.report-preview) { display: none !important; } }
+/* D-179: 일괄 업로드 두 상자를 나란히(내용만큼) — 파일을 고르면(미리보기·오류) 그 상자만 전체 너비, 좁은 화면은 세로 */
+.upload-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+.upload-grid .upload + .upload { margin-top: 0; }
+.upload-grid .upload { display: flex; flex-direction: column; gap: 12px; padding: 20px 22px; height: 100%; }
+.upload-grid .upload > .row:first-child { flex-wrap: wrap; gap: 4px 10px; }
+.upload-grid .upload > .row:first-child .muted { font-size: 14px; }
+.upload-grid .upload-guide { margin: 0; }
+.upload-grid .upload-guide b { min-width: 0; margin-right: 6px; }
+.upload-grid .upload-pick { margin-top: auto; flex-wrap: wrap; }
+.upload-grid .upload:has(.upload-sum, .feedback) { grid-column: 1 / -1; height: auto; }
+.upload-grid .dup-check { flex-wrap: wrap; }
+@media (max-width: 860px) { .upload-grid { grid-template-columns: minmax(0, 1fr); } }
