@@ -157,7 +157,7 @@ export default function App() {
           <Route path="evaluation" element={<Evaluation />} />
           {/* 이전 주소 → 평가 관리의 해당 탭 */}
           <Route path="templates/*" element={<Navigate to="/admin/evaluation?tab=questions" replace />} />
-          <Route path="cycles" element={<Navigate to="/admin/evaluation?tab=settings" replace />} />
+          <Route path="cycles" element={<Navigate to="/admin/evaluation?tab=setup" replace />} />
           <Route path="cycles/:id" element={<CycleRedirect />} />
           <Route path="open-questions" element={<Navigate to="/admin/evaluation" replace />} />
           <Route path="kpi" element={<Kpi />} />

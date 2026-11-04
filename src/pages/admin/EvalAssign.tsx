@@ -16,7 +16,7 @@ const PATH_TITLE: Record<PathKey, string> = { member: '사원이 받는 평가',
 /** 유형별로 둘 수 있는 단계 — 팀장에게는 2단계(팀장평가)가 없다 */
 const PATH_RULES: Record<PathKey, EvaluatorRule[]> = { member: ['self', 'teamLead', 'executive'], lead: ['self', 'executive'] }
 
-/** D-164: part = 'weights'(사원·팀장이 받는 평가·등급 인원 비율 — 가중치·기간 설정 탭) / 'exec'(임원 평가 배정 — 평가자 배정 탭) */
+/** D-164: part = 'weights'(사원·팀장이 받는 평가·등급 인원 비율 — 가중치·등급 탭, D-198) / 'exec'(임원 평가 배정 — 평가자 배정 탭) */
 export default function EvalAssign({ cycle, part }: { cycle: Cycle; part: 'weights' | 'exec' }) {
   const s = useAppState()
   const live = s.cycles.find((c) => c.id === cycle.id)!

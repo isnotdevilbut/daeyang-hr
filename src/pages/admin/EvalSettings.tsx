@@ -19,7 +19,7 @@ function splitPeriod(p: string): [string, string] {
 
 type Form = { name: string; start: string; end: string; due: string; status: CycleStatus; join: string[]; self: Record<string, boolean> }
 
-/** D-164: part = 'info'(기본 정보 — 가중치·기간 설정 탭) / 'people'(평가 참여자 — 평가자 배정 탭 맨 위). 저장은 같은 폼(보이지 않는 부분은 그대로) */
+/** D-164: part = 'info'(기본 정보 — 평가 설정 탭, D-198) / 'people'(평가 참여자 — 평가자 배정 탭 맨 위). 저장은 같은 폼(보이지 않는 부분은 그대로) */
 export default function EvalSettings({ cycle, onCreate, onSelect, part }: { cycle: Cycle; onCreate: () => void; onSelect: (id: string) => void; part: 'info' | 'people' }) {
   const s = useAppState()
   const [ps, pe] = splitPeriod(cycle.period)

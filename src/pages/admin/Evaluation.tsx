@@ -11,9 +11,10 @@ import EvalSettings from './EvalSettings'
 import EvalQuestions from './EvalQuestions'
 import EvalAssign from './EvalAssign'
 
-export type EvalTab = 'settings' | 'questions' | 'assign'
-// 탭(D-164): 문항 관리 → 평가자 배정(평가 참여자 + 임원 평가 배정) → 가중치·기간 설정(기본 정보 + 사원·팀장이 받는 평가 + 등급 인원 비율). 처음 들어오면 문항 관리
-const TABS: [EvalTab, string][] = [['questions', '문항 관리'], ['assign', '평가자 배정'], ['settings', '가중치·기간 설정']]
+export type EvalTab = 'settings' | 'questions' | 'assign' | 'setup'
+// 탭(D-164 → D-198): 문항 관리 → 평가 설정 → 평가자 배정(평가 참여자 + 임원 평가 배정) → 가중치·등급(사원·팀장이 받는 평가 + 등급 인원 비율). 처음 들어오면 문항 관리
+// D-198: 문항 관리 → 평가 설정(평가 복제·삭제·새 평가 + 기본 정보) → 평가자 배정 → 가중치·등급(단계 반영 비율 + 등급 인원 비율)
+const TABS: [EvalTab, string][] = [['questions', '문항 관리'], ['setup', '평가 설정'], ['assign', '평가자 배정'], ['settings', '가중치·등급']]
 
 export default function Evaluation() {
   const s = useAppState()
@@ -53,10 +54,8 @@ export default function Evaluation() {
               <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => goTab(k)}>{label}</button>
             ))}
           </div>
-          {tab === 'settings' && <>
-            <EvalSettings key={cycle.id} cycle={cycle} onCreate={() => setCreating(true)} onSelect={selectCycle} part="info" />
-            <EvalAssign key={`w-${cycle.id}`} cycle={cycle} part="weights" />
-          </>}
+          {tab === 'setup' && <EvalSettings key={cycle.id} cycle={cycle} onCreate={() => setCreating(true)} onSelect={selectCycle} part="info" />}
+          {tab === 'settings' && <EvalAssign key={`w-${cycle.id}`} cycle={cycle} part="weights" />}
           {tab === 'questions' && <EvalQuestions key={cycle.id} cycle={cycle} />}
           {tab === 'assign' && <>
             <EvalSettings key={cycle.id} cycle={cycle} onCreate={() => setCreating(true)} onSelect={selectCycle} part="people" />
@@ -64,7 +63,7 @@ export default function Evaluation() {
           </>}
         </>
       )}
-      {creating && <NewEvaluation onClose={() => setCreating(false)} onCreated={(id) => { setCreating(false); selectCycle(id); setParams({ tab: 'settings' }) }} />}
+      {creating && <NewEvaluation onClose={() => setCreating(false)} onCreated={(id) => { setCreating(false); selectCycle(id); setParams({ tab: 'setup' }) }} />}
     </div>
   )
 }
