@@ -912,41 +912,41 @@ function PeoplePicker({ scope, setScope }: { scope: VersionScope; setScope: (x: 
   const setPeople = (ids: string[], on: boolean) => {
     const base = scope.employees ?? current()
     const next = on ? [...new Set([...base, ...ids])] : base.filter((x) => !ids.includes(x))
-    setScope({ ...scope, teams: 'all', employees: next })
+    const every = people.every((e) => next.includes(e.id)) // 모두 고르면 다시 '전체 팀'으로(D-173)
+    setScope({ ...scope, teams: 'all', employees: every ? undefined : next })
   }
   return (
     <fieldset className="scope-set scope-people"><legend>적용 팀</legend>
       <label className="check"><input type="checkbox" checked={all} onChange={(e) => setScope(e.target.checked ? { ...scope, teams: 'all', employees: undefined } : { ...scope, teams: 'all', employees: [] })} /> 전체 팀</label>
       {legacy && <p className="muted small scope-legacy">팀 단위로 선택된 범위입니다. 사람을 바꾸면 그때 팀원으로 직접 선택이 됩니다.</p>}
-      {!all && (
-        <div className="pick-teams">
-          {groups.map((g) => {
-            const n = g.list.filter((e) => picked(e.id)).length
-            const isOpen = !!open[g.key]
-            return (
-              <div key={g.key} className={`pick-team ${isOpen ? 'open' : ''} ${g.key === '__exec' ? 'exec' : ''}`}>
-                <div className="pick-team-head">
-                  <input type="checkbox" aria-label={`${g.name} 전체 선택`} checked={n === g.list.length} ref={(el) => { if (el) el.indeterminate = n > 0 && n < g.list.length }}
-                    onChange={(e) => setPeople(g.list.map((x) => x.id), e.target.checked)} />
-                  <button type="button" className="pick-team-toggle" aria-expanded={isOpen} onClick={() => setOpen((o) => ({ ...o, [g.key]: !o[g.key] }))}>
-                    <span>{g.name}</span><span className="pick-n">{n}/{g.list.length}명</span><span className="caret" aria-hidden>▾</span>
-                  </button>
-                </div>
-                {isOpen && (
-                  <ul className="pick-people">
-                    {g.list.map((e) => (
-                      <li key={e.id}><label>
-                        <input type="checkbox" checked={picked(e.id)} aria-label={`${g.name} ${e.name}`} onChange={(ev) => setPeople([e.id], ev.target.checked)} />
-                        <b>{e.name}</b><span className="muted">{positionName(s, e)}</span>
-                      </label></li>
-                    ))}
-                  </ul>
-                )}
+      {/* D-173: '전체 팀'이 켜져 있어도 팀별 목록을 보여 줘 팀·사람 단위로 바로 뺄 수 있게 */}
+      <div className="pick-teams">
+        {groups.map((g) => {
+          const n = g.list.filter((e) => picked(e.id)).length
+          const isOpen = !!open[g.key]
+          return (
+            <div key={g.key} className={`pick-team ${isOpen ? 'open' : ''} ${g.key === '__exec' ? 'exec' : ''}`}>
+              <div className="pick-team-head">
+                <input type="checkbox" aria-label={`${g.name} 전체 선택`} checked={n === g.list.length} ref={(el) => { if (el) el.indeterminate = n > 0 && n < g.list.length }}
+                  onChange={(e) => setPeople(g.list.map((x) => x.id), e.target.checked)} />
+                <button type="button" className="pick-team-toggle" aria-expanded={isOpen} onClick={() => setOpen((o) => ({ ...o, [g.key]: !o[g.key] }))}>
+                  <span>{g.name}</span><span className="pick-n">{n}/{g.list.length}명</span><span className="caret" aria-hidden>▾</span>
+                </button>
               </div>
-            )
-          })}
-        </div>
-      )}
+              {isOpen && (
+                <ul className="pick-people">
+                  {g.list.map((e) => (
+                    <li key={e.id}><label>
+                      <input type="checkbox" checked={picked(e.id)} aria-label={`${g.name} ${e.name}`} onChange={(ev) => setPeople([e.id], ev.target.checked)} />
+                      <b>{e.name}</b><span className="muted">{positionName(s, e)}</span>
+                    </label></li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )
+        })}
+      </div>
     </fieldset>
   )
 }
