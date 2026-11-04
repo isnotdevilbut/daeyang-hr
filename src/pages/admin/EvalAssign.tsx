@@ -224,7 +224,7 @@ function Assignments({ cycle, locked, execDraft, setExecDraft, onSave, msg }: { 
                 const isOpen = !!open[key] || !!qq
                 const sel = all.filter((r) => r.cur === ex.id).length
                 const pick = shown.filter((r) => !fixed(r) || r.cur === ex.id) // 팀 전체 선택 대상: 보이는 사람만, 다른 임원에게 제출된 평가 제외
-                // 팀 체크(D-087): 보이는 팀원이 모두 이 임원 담당일 때만 체크, 일부·없음은 빈 칸(부분 표시 없음 — 인원은 'n/m명'으로)
+                // 팀 체크(D-087): 보이는 팀원이 모두 이 임원 담당일 때만 체크, 일부·없음은 빈 칸(부분 표시 없음 — 인원은 담당 인원만, D-204)
                 const onAll = shown.length > 0 && shown.every((r) => r.cur === ex.id)
                 return (
                   <div key={tm} className={`exec-team ${isOpen ? 'open' : ''}`}>
@@ -237,7 +237,7 @@ function Assignments({ cycle, locked, execDraft, setExecDraft, onSave, msg }: { 
                           else setNote('')
                         }} />
                       <button type="button" className="exec-team-toggle" aria-expanded={isOpen} onClick={() => setOpen((o) => ({ ...o, [key]: !o[key] }))}>
-                        <span>{tm}</span><span className="exec-team-n">{sel}/{all.length}명</span><span className="caret" aria-hidden>▾</span>
+                        <span>{tm}</span>{sel > 0 && <span className="exec-team-n on">{sel}명</span>}{/* D-204: 이 임원 담당 인원만 파란색, 0명이면 표시 없음 */}<span className="caret" aria-hidden>▾</span>
                       </button>
                     </div>
                     {isOpen && (

@@ -1638,3 +1638,9 @@ body.drag-sorting, body.drag-sorting * { cursor: grabbing !important; user-selec
 .sec-title-btn:focus-visible { outline: 2px solid #20b8ca; outline-offset: 2px; border-radius: 6px; }
 .tt-all { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; } .tt-all .muted { font-size: 13.5px; }
 .tt-all input { flex: none; width: 18px; height: 18px; margin: 0; }
+/* D-204: 임원 평가 배정 카드 = 평가 참여자 팀 카드와 같은 모양(이름 + 아래 회색 선, 바탕색 없음). 팀별 인원은 이 임원 담당 수만 파란색 */
+.exec-col { padding: 10px 14px; }
+.exec-col-head { align-items: center; padding: 0 0 6px; background: none; border-bottom: 1px solid var(--line); }
+.exec-col-head b { font-size: inherit; color: inherit; }
+.exec-team-head { padding: 4px 0; }
+.exec-team-n.on { color: var(--brand-blue); font-weight: 800; }
