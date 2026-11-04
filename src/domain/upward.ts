@@ -6,7 +6,7 @@
 // - 평가표: 평가표 버전 '팀원→팀장 평가표'(공통 기본, 적용 평가 = 팀원→팀장평가). 이 평가표가 있는 회차에서만 배정을 만든다
 //   (저장 데이터 v18 변환·새 평가 만들기·복제에서 만든다 — 그 이전 변환 단계의 배정 맞추기에서는 만들지 않음)
 import type { AppState, Assignment, Cycle } from './types'
-import { makeUpwardTemplate, UPWARD_NAME, UPWARD_V1_KEYS } from './templates'
+import { EXEC_UPWARD_NAME, makeExecUpwardTemplate, makeUpwardTemplate, UPWARD_NAME, UPWARD_V1_KEYS } from './templates'
 import { liveVersions, resolveVersion } from './versions'
 import { demoAnswers } from './demoV15'
 
@@ -191,3 +191,46 @@ export function upwardExecV26(s: AppState): string[] {
 }
 /** D-187 이전 임원 예시(팀 KPI 60·상향평가 40 꺼짐) */
 export const EXEC_BLEND_OLD = (): NonNullable<Cycle['finalBlendPlan']>['exec'] => [{ key: 'kpi', on: true, pct: 60 }, { key: 'upward', on: false, pct: 40 }]
+
+/**
+ * 임원 상향평가표(D-189): 이 회차 참여 임원을 평가받는 사람으로 직접 선택한 평가표 버전(적용 평가 = 상향평가).
+ * 임원은 대상자 명단에 없을 수 있어 직급이 아니라 사람으로 고른다. 이미 있으면(이름·평가표 ID) 그대로. 버전 목록에서는 팀원→팀장 평가표 바로 뒤
+ */
+export function ensureExecUpward(s: Pick<AppState, 'employees'>, c: Cycle): string | null {
+  const id = `${c.id}-tpl-upward-exec`
+  if (!c.versions) return null
+  const has = c.versions.find((v) => v.templateId === id || (!v.archived && v.name === EXEC_UPWARD_NAME))
+  if (has) return has.templateId
+  if (!c.templates[id]) c.templates[id] = makeExecUpwardTemplate(id)
+  const execs = upwardExecs(s, c).map((e) => e.id)
+  const v = { templateId: id, name: EXEC_UPWARD_NAME, scope: { mode: 'custom' as const, rules: ['upward' as const], teams: 'all' as const, positions: 'all' as const, employees: execs } }
+  const up = upwardTemplateOf(c)
+  const at = c.versions.findIndex((x) => x.templateId === up)
+  c.versions = at < 0 ? [...c.versions, v] : [...c.versions.slice(0, at + 1), v, ...c.versions.slice(at + 1)]
+  return id
+}
+
+/**
+ * v26 → v27 (D-189): 준비·진행 회차(임원 상향평가 있음)에 '임원 상향평가표' 버전을 만들고, 임원이 받는 상향평가를 이 평가표로.
+ * 응답 없는 배정·시연 응답 배정만 바꾸고 시연 답은 새 문항으로 다시 만든다(제출·임시저장 상태 그대로). 사용자 응답 배정은 이전 평가표 그대로. 반복 실행 안전
+ */
+export function execUpwardFormV27(s: AppState): string[] {
+  const notes: string[] = []
+  for (const c of s.cycles) {
+    if (!open(c) || !c.upwardToExec) continue
+    const had = !!c.versions?.some((v) => v.templateId === `${c.id}-tpl-upward-exec` || v.name === EXEC_UPWARD_NAME)
+    const id = ensureExecUpward(s, c)
+    if (!id || had) continue
+    const execs = new Set(upwardExecs(s, c).map((e) => e.id))
+    let n = 0, kept = 0
+    for (const a of c.assignments) {
+      if (a.direction !== 'up' || !execs.has(a.targetId) || a.templateId === id) continue
+      const r = s.responses[a.id]
+      if (r && !r.demo) { kept++; continue }
+      a.templateId = id
+      if (r) { r.answers = r.status === 'submitted' ? demoAnswers(c, a) : {}; n++ }
+    }
+    notes.push(`${c.name}: ${EXEC_UPWARD_NAME} 추가(임원 ${execs.size}명 선택) — 임원 상향평가 연결, 시연 응답 ${n}건 새 문항에 맞춤${kept ? `, 사용자 응답 ${kept}건은 이전 평가표 그대로` : ''}`)
+  }
+  return notes
+}

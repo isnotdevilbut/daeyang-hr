@@ -459,3 +459,20 @@ export function makeUpwardTemplate(id: string): Template {
     ],
   }
 }
+
+// ── 임원 상향평가 (D-189) ─────────────────────────
+export const EXEC_UPWARD_NAME = '임원 상향평가표'
+/** 사원·팀장이 소속 팀 임원을 평가하는 평가표 초기값(목업 — 회사 '임원 및 팀장 상향평가 예시'의 영역·배점, 팀원→팀장 평가표와 같은 구성). 러시아어 번역 초안 포함 */
+export function makeExecUpwardTemplate(id: string): Template {
+  const base = makeUpwardTemplate(id)
+  const free = base.sections[base.sections.length - 1]
+  const fq = free.questions[0]
+  return {
+    ...base, name: EXEC_UPWARD_NAME, targetRole: 'any',
+    sourceNote: '임원 및 팀장 상향평가 예시(회사 자료) 기준 임원 상향평가 초기값(D-189, 목업). 영역·배점·문항은 수정 가능',
+    sections: [
+      ...base.sections.slice(0, -1),
+      { ...free, questions: [{ ...fq, title: '임원에게 바라는 점이나 하고 싶은 말을 자유롭게 적어주세요', i18n: { ru: { ...fq.i18n!.ru!, title: 'Свободно напишите, чего вы ждёте от руководителя-директора или что хотели бы ему сказать', basis: { ...fq.i18n!.ru!.basis!, title: '임원에게 바라는 점이나 하고 싶은 말을 자유롭게 적어주세요' } } } }] },
+    ],
+  }
+}

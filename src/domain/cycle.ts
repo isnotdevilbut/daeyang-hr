@@ -2,7 +2,7 @@
 import type { AppState, Assignment, Cycle, Employee, PathPolicy, Stage, TargetSnapshot, Template } from './types'
 import { DRAFT_ID } from './templates'
 import { templateFor } from './catalog'
-import { ensureUpwardTemplate, syncUpward } from './upward'
+import { ensureExecUpward, ensureUpwardTemplate, syncUpward } from './upward'
 import { applyVersions, ensureVersions } from './versions'
 import { cycleExecs, distributeExecs } from './execPlan'
 
@@ -152,7 +152,7 @@ export function createCycle(
   cycle.assignments = buildAssignments(s, cycle, oneExec)
   if (!oneExec) distributeExecs(s, cycle)
   ensureVersions(cycle) // 평가표 버전: 지금 문항을 "공통 평가표"로 (D-082)
-  if (upward) { cycle.upwardToExec = true; ensureUpwardTemplate(cycle); syncUpward(s, cycle) } // 팀원→팀장평가 평가표·배정 (D-114)
+  if (upward) { cycle.upwardToExec = true; ensureUpwardTemplate(cycle); ensureExecUpward(s, cycle); syncUpward(s, cycle) } // 팀원→팀장평가 평가표·배정 (D-114)
   return cycle
 }
 

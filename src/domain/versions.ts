@@ -82,8 +82,16 @@ export function applyVersions(s: Pick<AppState, 'responses'>, c: Cycle): Version
 export const visibleCount = (t: Template, c: Cycle, a: Assignment) => t.sections.reduce((n, sec) => n + sec.questions.filter((q) => applies(q, ctxFor(c, a))).length, 0)
 
 /** 이번 회차 참여 대상자 중 이 범위(사람·팀·직급)에 드는 사람 — 최종 적용 인원 표시·빈 대상 검사 (D-087) */
-export const scopeTargets = (c: Pick<Cycle, 'targets'>, sc: VersionScope) =>
-  sc.mode === 'all' ? c.targets : c.targets.filter((t) => whoInScope(sc, { teamId: t.departmentId || undefined, positionId: t.positionId, employeeId: t.employeeId }))
+/** 대상자 명단에 없지만 상향평가를 받는 임원(D-187)도 센다 — 직접 선택한 사람으로만 판단(회차 정보가 없어 팀·직급은 모름, D-189) */
+export const scopeTargets = (c: Pick<Cycle, 'targets'> & Partial<Pick<Cycle, 'assignments'>>, sc: VersionScope): { employeeId: ID }[] => {
+  const extra = [...new Set((c.assignments ?? []).filter((a) => a.direction === 'up' && !a.excluded && !c.targets.some((t) => t.employeeId === a.targetId)).map((a) => a.targetId))]
+    .map((employeeId) => ({ employeeId }))
+  if (sc.mode === 'all') return [...c.targets, ...(sc.rules.includes('upward') ? extra : [])]
+  return [
+    ...c.targets.filter((t) => whoInScope(sc, { teamId: t.departmentId || undefined, positionId: t.positionId, employeeId: t.employeeId })),
+    ...(sc.rules.includes('upward') ? extra.filter((x) => whoInScope(sc, x)) : []),
+  ]
+}
 
 /** 공통 기본(모두에게 동일 적용)은 평가 유형별로 하나만 */
 export function scopeErrors(c: Pick<Cycle, 'versions'>, templateId: ID, scope: VersionScope): string[] {

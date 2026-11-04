@@ -13,7 +13,7 @@ import { syncCycle } from '../domain/cycleSync'
 import { v15 } from '../domain/demoV15'
 import { leadBlendV25, scoringV16 } from '../domain/scoringV16'
 import { execPerTeam } from '../domain/execTeamsV17'
-import { upwardExecV26, upwardFormV22, upwardV18 } from '../domain/upward'
+import { execUpwardFormV27, upwardExecV26, upwardFormV22, upwardV18 } from '../domain/upward'
 import { joinAllStaff } from '../domain/joinAllV19'
 import { leadUpwardOpen, moreDemo } from '../domain/demoV20'
 import { demoKpiV23 } from '../domain/demoV23'
@@ -253,7 +253,13 @@ export function migrate(raw: any): MigrationResult | null {
     s.schemaVersion = 26
   }
 
-  if (s.schemaVersion !== 26) return null
+  if (s.schemaVersion === 26) {
+    // v26 → v27 (D-189): 임원 상향평가표(임원 직접 선택) 추가 — 임원이 받는 상향평가를 이 평가표로(사용자 응답 배정은 그대로)
+    notes.push(...execUpwardFormV27(s))
+    s.schemaVersion = 27
+  }
+
+  if (s.schemaVersion !== 27) return null
   return { state: s as AppState, notes }
 }
 
