@@ -1611,3 +1611,6 @@ body.drag-sorting, body.drag-sorting * { cursor: grabbing !important; user-selec
 .result-head-actions .cycle-pick { padding: 4px 6px 4px 14px; }
 .result-head-actions .cycle-pick select { min-height: 36px; padding-top: 4px; padding-bottom: 4px; }
 @media (max-width: 640px) { .result-head-actions .cycle-pick { padding: 8px 10px; } .result-head-actions .head-btn { min-height: 40px; } }
+/* D-182: 일괄 업로드 양식 내려받기 */
+.upload-tpl { gap: 8px; flex-wrap: wrap; }
+.upload-tpl .muted { font-size: 14px; margin-right: 2px; }

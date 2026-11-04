@@ -268,11 +268,15 @@ export function rosterLeads(d: Pick<AppState, 'teams' | 'positions'>, added: Emp
 }
 
 // ── 템플릿 ───────────────────────────────────────────
-/** 양식 머리글 = 필수 5열 + 현재 분류 기준(선택 입력) */
-export const templateHeader = (cat: Pick<AppState, 'customFields'> = {}) => [...ROSTER_HEADER, ...(cat.customFields ?? []).map((f) => f.name)]
+/** 양식 머리글 = 직원 목록 표와 같은 순서(D-182): 팀 · 직급 · 이름 · 직무 · 추가한 칼럼 · 사번 */
+export const templateHeader = (cat: Pick<AppState, 'customFields'> = {}) => [...ROSTER_HEADER.slice(0, 4), ...(cat.customFields ?? []).map((f) => f.name), ...ROSTER_HEADER.slice(4)]
 export const templateXlsxBytes = (cat: Pick<AppState, 'customFields'> = {}) => templateXlsx('직원 명단', templateHeader(cat))
 /** 엑셀에서 한글이 깨지지 않도록 UTF-8 BOM을 붙인다 */
 export const templateCsvText = (cat: Pick<AppState, 'customFields'> = {}) => `﻿${templateHeader(cat).map(csvCell).join(',')}\r\n`
+/** 칼럼 값 채우기 양식(D-182): 사번 · 이름 + 추가한 칼럼 */
+export const fillHeader = (cat: Pick<AppState, 'customFields'> = {}) => ['사번', '이름', ...(cat.customFields ?? []).map((f) => f.name)]
+export const fillXlsxBytes = (cat: Pick<AppState, 'customFields'> = {}) => templateXlsx('칼럼 값', fillHeader(cat))
+export const fillCsvText = (cat: Pick<AppState, 'customFields'> = {}) => `﻿${fillHeader(cat).map(csvCell).join(',')}\r\n`
 const csvCell = (v: string) => (/[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v)
 
 // ── 기존 직원 칼럼 값 채우기 (D-136) ───────────────────

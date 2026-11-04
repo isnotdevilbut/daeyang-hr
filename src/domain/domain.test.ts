@@ -27,7 +27,7 @@ const migrate = (x: any) => {
 import { scoringV16 } from './scoringV16'
 import type { AppState, Assignment, Cycle, Response, Template } from './types'
 import { activeTeams, deleteEmployee, deleteTeam, isEvalTarget, nameConflicts, teamMembers, teamNameError } from './org'
-import { canRegister, checkRoster, decodeText, parseCsv, readRosterFile, rosterEmployees, templateCsvText, templateXlsxBytes } from './roster'
+import { canRegister, checkRoster, decodeText, parseCsv, readRosterFile, rosterEmployees, templateCsvText, templateXlsxBytes, fillCsvText, fillXlsxBytes } from './roster'
 import { readXlsx, templateXlsx } from './xlsx'
 import { applies, ctxFor, parseQuestionCsv, validateQuestion, newQuestion, weightErrors, answeredCount } from './questions'
 import { assignmentProblems, cloneCycle, setTargets } from './cycle'
@@ -467,7 +467,9 @@ describe('조직 관리 (회사 구분·언어 제거)', () => {
     const t = await readXlsx(templateXlsxBytes())
     expect(t[0].rows).toEqual([['팀', '직급', '이름', '직무', '사번']]) // D-104: 직원 목록과 같은 순서
     expect(templateCsvText()).toBe('\uFEFF팀,직급,이름,직무,사번\r\n')
-    expect(templateCsvText({ customFields: [{ id: 'cf1', name: '근무지, 본사', type: 'text', options: [] }] })).toBe('\uFEFF팀,직급,이름,직무,사번,"근무지, 본사"\r\n')
+    expect(templateCsvText({ customFields: [{ id: 'cf1', name: '근무지, 본사', type: 'text', options: [] }] })).toBe('\uFEFF팀,직급,이름,직무,"근무지, 본사",사번\r\n') // D-182: 추가 칼럼은 직원 목록처럼 사번 앞
+    expect(fillCsvText({ customFields: [{ id: 'cf1', name: '자격증', type: 'text', options: [] }] })).toBe('\uFEFF사번,이름,자격증\r\n')
+    expect((await readXlsx(fillXlsxBytes()))[0].rows).toEqual([['사번', '이름']])
   })
   it('평가 대상 여부는 재직 여부와 별개', () => {
     const s = createSeed()

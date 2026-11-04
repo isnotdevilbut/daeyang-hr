@@ -6,10 +6,11 @@ import { activeTeams, applyTier, customFieldErrors, customFieldUsage, customValu
 import { syncOpenCycles } from '../../domain/cycleSync'
 import { joinOpenCycles } from '../../domain/cycle'
 import { activeJobs, classDefault, deleteJob, deletePosition, jobName, jobUsage, positionById, positionName, positionsOf, positionUsage, saveJob, savePosition } from '../../domain/catalog'
-import { applyRosterFill, applyRosterUpdates, canFill, canRegister, checkRoster, checkRosterFill, readRosterFile, ROSTER_FIELDS, rosterEmployees, rosterLeads, type ExistingMode, type RosterRow } from '../../domain/roster'
+import { applyRosterFill, applyRosterUpdates, canFill, canRegister, checkRoster, checkRosterFill, readRosterFile, ROSTER_FIELDS, rosterEmployees, rosterLeads, templateXlsxBytes, templateCsvText, fillXlsxBytes, fillCsvText, type ExistingMode, type RosterRow } from '../../domain/roster'
 import type { Sheet } from '../../domain/xlsx'
 import type { CustomField, Employee, EvalClass, JobDef, PositionDef } from '../../domain/types'
 import { Forbidden, Modal, Notice } from '../../components/ui'
+import { saveFile } from './Report'
 
 const blank = (teamId: string): Employee => ({
   id: '', empNo: '', name: '', teamId, position: '사원', positionId: 'pos-staff', jobType: 'office',
@@ -598,6 +599,17 @@ function PositionEditor() {
 
 type Loaded = { file: string; sheets: Sheet[]; sheet: number }
 
+/** 양식 내려받기(D-182): 머리글만 있는 빈 양식 — 직원 목록 표의 열(추가한 칼럼 포함). 브라우저 안에서 만들어 내려받기 */
+function TemplateDownload({ name, xlsx, csv }: { name: string; xlsx: () => Uint8Array; csv: () => string }) {
+  return (
+    <div className="row upload-tpl">
+      <span className="muted">양식 내려받기</span>
+      <button type="button" className="btn small" onClick={() => saveFile(`${name}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', xlsx())}>엑셀(.xlsx)</button>
+      <button type="button" className="btn small" onClick={() => saveFile(`${name}.csv`, 'text/csv;charset=utf-8', csv())}>CSV</button>
+    </div>
+  )
+}
+
 /** 직원 명단 업로드: 파일 선택 → 표 미리보기·검증 → 등록 (검증 전 자동 등록 없음, 차단 오류가 있으면 등록 안 함) */
 /** 일괄 업로드(D-136·D-137): 직원 명단 업로드(새 직원 등록) 아래에 칼럼 값 채우기 — 칼럼은 CSV로 만들지 않음(직원 목록의 '+ 칼럼 추가'로만) */
 function Upload() {
@@ -639,6 +651,7 @@ function FillUpload() {
       <ul className="upload-guide">
         <li><b>필수 열</b> 사번 또는 이름(직원 찾기) + 채울 칼럼</li>
       </ul>
+      <TemplateDownload name="칼럼값_채우기_양식" xlsx={() => fillXlsxBytes(s)} csv={() => fillCsvText(s)} />
       <div className="row upload-pick">
         <label className="btn primary file-btn">
           파일 선택
@@ -737,6 +750,7 @@ function AddUpload() {
       <ul className="upload-guide">
         <li><b>필수 열</b> 이름 · 사번 · 팀</li>
       </ul>
+      <TemplateDownload name="직원명단_양식" xlsx={() => templateXlsxBytes(s)} csv={() => templateCsvText(s)} />
       <div className="row upload-pick">
         <label className="btn primary file-btn">
           파일 선택
