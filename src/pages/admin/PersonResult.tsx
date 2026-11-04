@@ -88,7 +88,6 @@ export default function PersonResultPage() {
   const anyUngraded = r.stages.some((x) => x.ungraded) // 배점 있는 서술형 미채점(D-103) — 0점이 아닌 미완료
   const noStages = r.stages.length === 0 // 자기평가를 끈 임원(D-192): 1·2·3단계 없음 — 임원 점수(팀 KPI·상향평가)는 반영 보류(D-103)
   const baseText = r.combined.base !== null ? fmt(r.combined.base) : noStages ? '—' : anyUnsubmitted || anyUngraded ? '미완료' : '계산 안 됨'
-  const baseHint = r.combined.base !== null ? '' : noStages ? '임원: 팀 KPI·상향평가 반영 방식 보류' : anyUnsubmitted ? '제출 전 단계 있음' : anyUngraded ? '서술형 채점 필요' : '반영 비율 확인 필요'
 
   return (
     <div className="page detail-page">
@@ -136,12 +135,12 @@ export default function PersonResultPage() {
             </tbody>
           </table>}
           <dl className="score-sum">
-            <div><dt>개인평가 기초 점수</dt><dd>{baseText}{baseHint && <small>{baseHint}</small>}</dd></div>
+            <div><dt>개인평가 기초 점수</dt><dd>{baseText}</dd>{/* D-201: 안내 문구 없음 */}</div>
             <div><dt>팀 KPI 점수</dt><dd>{r.kpi === null ? '—' : fmt(r.kpi)}</dd></div>
             {/* D-197: 팀 보정·보정 후 점수·최종 지정 점수 없앰 — 점수 보정 한 칸, 등급은 등급 인원 비율로 자동 */}
             <div><dt>점수 보정</dt><dd>{fmtSigned(r.person)}</dd></div>
             <div className="total"><dt>최종 점수</dt><dd>{r.combined.final === null ? '—' : fmt(r.combined.final)}</dd></div>
-            <div className="total"><dt>최종 등급</dt><dd>{r.grade ?? '—'}{!r.grade && <small>최종 점수가 나오면 등급 인원 비율로 자동</small>}</dd></div>
+            <div className="total"><dt>최종 등급</dt><dd>{r.grade ?? '—'}</dd></div>
           </dl>
         </section>
         </div>
@@ -164,7 +163,7 @@ export default function PersonResultPage() {
           <details className="panel stage-card stage-group" key={rule}>
             <summary className="stage-head">
               <h3>{rule !== 'upward' && <><span className="stage-no">{order}단계</span> · </>}{RULE_TEXT[rule]}{rule === 'upward' && <> <span className="stage-no">({[...new Set(list.map((a) => UPWARD_KIND_TEXT[upwardKind(s, a)]))].join('·')})</span></>}</h3>
-              {list.length === 1 ? <span className="muted">작성자 <b>{name(list[0].evaluatorId)}</b></span> : <span className="muted">작성자 {list.length}명 · 제출 <b>{sub}</b></span>}
+              {list.length === 1 ? <span className="muted">작성자 <b>{name(list[0].evaluatorId)}</b></span> : <span className="muted"><b>{sub}/{list.length}</b> 완료</span>}
               <span className="spacer" />
               {stage && sub > 0 && (stage.score !== null || stage.grade) && (
                 <span className="stage-score">{stage.score !== null && <>점수 <b>{fmt(stage.score)}</b></>}{stage.grade && <> · 등급 <b>{stage.grade.slice(0, 1)}</b></>}</span>
