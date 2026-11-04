@@ -70,6 +70,7 @@ export default function EvalSettings({ cycle, onCreate, onSelect, part }: { cycl
   ].map((g) => ({ ...g, list: g.list.sort((a, b) => TIERS.indexOf(tierOf(s, a)) - TIERS.indexOf(tierOf(s, b)) || a.name.localeCompare(b.name, 'ko')) })).filter((g) => g.list.length > 0)
   const joined = (id: string) => f.join.includes(id)
   const setJoin = (id: string, on: boolean) => setF({ ...f, join: on ? [...new Set([...f.join, id])] : f.join.filter((x) => x !== id) })
+  const setJoinMany = (ids: string[], on: boolean) => setF({ ...f, join: on ? [...new Set([...f.join, ...ids])] : f.join.filter((x) => !ids.includes(x)) }) // 팀 단위 체크(D-203)
   const setSelf = (id: string, on: boolean) => setF({ ...f, self: { ...f.self, [id]: on } })
 
   const save = () => {
@@ -162,7 +163,10 @@ export default function EvalSettings({ cycle, onCreate, onSelect, part }: { cycl
         <div className="target-teams">
           {groups.map((g) => (
             <div key={g.key} className={`target-team ${g.key === 'exec' ? 'exec-group' : ''}`} role="group" aria-label={g.title}>
-              <div className="tt-head"><b>{g.title}</b></div>
+              {/* D-203: 팀 이름 앞 체크 = 그 팀 모두 참여/해제(일부만 참여면 중간 표시) */}
+              <div className="tt-head">{(() => { const n = g.list.filter((e) => joined(e.id)).length; return (
+                <label className="tt-all"><input type="checkbox" disabled={locked} aria-label={`${g.title} 전체 참여`} checked={n === g.list.length && n > 0} ref={(el) => { if (el) el.indeterminate = n > 0 && n < g.list.length }} onChange={(x) => setJoinMany(g.list.map((e) => e.id), x.target.checked)} /><b>{g.title}</b><span className="muted">{n}/{g.list.length}명</span></label>
+              ) })()}</div>
               {/* D-156: 열 이름 '참여'는 표시하지 않음(빈 칸으로 자리만 유지 — 자기평가는 오른쪽 그대로) */}
               <div className="tt-cols" aria-hidden><span />{g.list.some(configurable) && <span>자기평가</span>}</div>
               <ul className="target-list">

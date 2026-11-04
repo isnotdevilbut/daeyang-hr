@@ -1636,3 +1636,5 @@ body.drag-sorting, body.drag-sorting * { cursor: grabbing !important; user-selec
 .sec-toggle:focus-visible { outline: 2px solid #20b8ca; outline-offset: 2px; }
 .sec-title-btn { all: unset; cursor: pointer; }
 .sec-title-btn:focus-visible { outline: 2px solid #20b8ca; outline-offset: 2px; border-radius: 6px; }
+.tt-all { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; } .tt-all .muted { font-size: 13.5px; }
+.tt-all input { flex: none; width: 18px; height: 18px; margin: 0; }
