@@ -137,7 +137,7 @@ export default function PersonResultPage() {
           </table>}
           <dl className="score-sum">
             <div><dt>개인평가 기초 점수</dt><dd>{baseText}{baseHint && <small>{baseHint}</small>}</dd></div>
-            <div><dt>팀 KPI 점수</dt><dd>{r.kpi === null ? '—' : fmt(r.kpi)}{r.kpi !== null && <span className="chip na tag">{r.kpiBlend.enabled && (r.kpiBlend.kpi ?? 0) > 0 ? `반영 ${r.kpiBlend.kpi}%` : '미반영'}</span>}</dd></div>
+            <div><dt>팀 KPI 점수</dt><dd>{r.kpi === null ? '—' : fmt(r.kpi)}</dd></div>
             <div><dt>팀 보정</dt><dd>{fmtSigned(r.dept)}</dd></div>
             <div><dt>개인 보정</dt><dd>{fmtSigned(r.person)}</dd></div>
             <div><dt>보정 후 점수</dt><dd>{r.combined.afterAdjust === null ? '—' : fmt(r.combined.afterAdjust)}</dd></div>

@@ -137,7 +137,8 @@ export function personResult(state: AppState, cycle: Cycle, targetId: string): P
   // 조직 단위는 회차 시작 시점 소속(스냅샷) 기준 — 나중에 팀을 옮겨도 과거 회차 KPI는 그대로
   const kpiDetail = deptKpi(state, cycle.id, target.departmentId, target.jobType) // 그 사람 직무에 적용되는 지표만(D-150)
   const kpi = kpiDetail.score
-  const kpiBlend = cycle.kpiBlend ?? { enabled: false, personal: null, kpi: null }
+  // D-194: '개인평가 반영' 설정을 없애 점수에 쓰지 않음(저장된 비율은 지우지 않고 보관) — 팀 KPI 반영은 직급별 최종 반영 비율로(보류)
+  const kpiBlend = { ...(cycle.kpiBlend ?? { personal: null, kpi: null }), enabled: false }
   // 팀 보정: 새 팀에 기록이 있으면 그것, 없으면 네 팀 정리 전 조직의 기록(D-065 — 정리 때문에 점수가 바뀌지 않게)
   const deptRec = latestAdjustment(state.adjustments, cycle.id, 'dept', target.departmentId)
     ?? (target.legacyUnitId ? latestAdjustment(state.adjustments, cycle.id, 'dept', target.legacyUnitId) : null)

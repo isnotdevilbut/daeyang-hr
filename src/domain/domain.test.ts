@@ -831,7 +831,7 @@ describe('부서 KPI (목업 제안 정책, 회사 승인 산식 아님)', () =>
     expect([r.afterKpi, r.afterAdjust, r.final, r.kpiApplied, r.incomplete]).toEqual([80, 81, 81, false, false])
     expect(combine2({ stages: [{ score: 80, weight: 100, submitted: true }], dept: null, person: null, ceoScore: 70, kpi: { blend: on, deptScore: null } }).final).toBe(70)
   })
-  it('KPI 상태 구분: 없음 / 정상 / 설정 미완료 — 미완료 KPI는 결과에서 개인 점수로 계산, 반영 켜면 정상 KPI만 섞음', async () => {
+  it('KPI 상태 구분: 없음 / 정상 / 설정 미완료 — 결과 점수에는 KPI를 섞지 않음(D-194 개인평가 반영 없앰)', async () => {
     const { kpiState } = await import('./kpi')
     const s = createSeed({ until: 22 }); const c = s.cycles[0]
     c.kpiBlend = { enabled: true, personal: 80, kpi: 20 }
@@ -852,8 +852,10 @@ describe('부서 KPI (목업 제안 정책, 회사 승인 산식 아님)', () =>
     s.kpiIndicators[s.kpiIndicators.length - 1].weight = 100
     expect(kpiState(deptKpi(s, c.id, dept))).toBe('ok')
     r = personResult(s, c, t.employeeId)!
-    expect(r.combined.kpiApplied).toBe(true)
-    expect(r.combined.afterKpi).toBeCloseTo(r.combined.base! * 0.8 + 90 * 0.2)
+    // D-194: '개인평가 반영' 설정을 없애 저장된 반영 값(켬 80/20)이 있어도 점수에 섞지 않음 — KPI 점수는 표시만
+    expect([r.kpi, r.combined.kpiApplied, r.combined.afterKpi]).toEqual([90, false, r.combined.base])
+    expect(c.kpiBlend).toEqual({ enabled: true, personal: 80, kpi: 20 }) // 저장값은 그대로
+    expect(applyBlend(r.combined.base, c.kpiBlend, 90).afterKpi).toBeCloseTo(r.combined.base! * 0.8 + 90 * 0.2) // 계산 함수 자체는 그대로
   })
   it('비율 검증: 합계 100·각 0~100', () => {
     expect(blendErrors({ personal: 80, kpi: 20 })).toEqual([])

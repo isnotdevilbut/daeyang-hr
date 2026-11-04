@@ -4,7 +4,7 @@ import { useSelectedCycle } from '../../data/hooks'
 import { can } from '../../domain/permissions'
 import { cycleLabel } from '../../domain/cycle'
 import {
-  blendErrors, BLEND_START, deptKpi, indicatorErrors, indicatorResult, kpiEntry, kpiLocked, orgUnits, UNIT_LABEL, withUnit, type DeptKpi,
+  deptKpi, indicatorErrors, indicatorResult, kpiEntry, kpiLocked, orgUnits, UNIT_LABEL, withUnit, type DeptKpi,
 } from '../../domain/kpi'
 import type { Cycle, FinalBlendItem, FinalBlendPlan, FinalPart, JobType, KpiIndicator, KpiUnit } from '../../domain/types'
 import { FINAL_BLEND_EXAMPLE } from '../../domain/scoringV16'
@@ -51,8 +51,7 @@ function Body({ cycle }: { cycle: Cycle }) {
   return (
     <>
       {locked && <p className="save-note">확정된 평가라 KPI를 수정할 수 없습니다. 평가 관리에서 상태를 바꾼 뒤 수정하세요.</p>}
-      {/* 개인평가 반영 = 회차 공통 설정 한 줄, 제목 아래·팀 목록/상세 위 (D-093) */}
-      <BlendPanel cycle={cycle} editable={editable} />
+      {/* D-194: '개인평가 반영' 설정 없앰 — 팀 KPI 반영은 직급별 최종 반영 비율에서(점수 적용은 보류) */}
       <div className="kpi-grid">
         <section className="panel" aria-labelledby="dept-list-title">
           <div className="panel-head"><h2 id="dept-list-title">팀별 KPI 점수</h2></div>
@@ -302,58 +301,6 @@ function KpiModal({ dialog, cycle, deptId, blank, k, onClose, onSaved }: { dialo
   )
 }
 
-function BlendPanel({ cycle, editable }: { cycle: Cycle; editable: boolean }) {
-  const saved = cycle.kpiBlend ?? { enabled: false, personal: null, kpi: null }
-  const [on, setOn] = useState(saved.enabled)
-  const [p, setP] = useState(str(saved.personal))
-  const [k, setK] = useState(str(saved.kpi))
-  const [errs, setErrs] = useState<string[]>([])
-  const [ok, setOk] = useState('')
-  const dirty = on !== saved.enabled || (on && (p !== str(saved.personal) || k !== str(saved.kpi)))
-  const toggle = (v: boolean) => {
-    setOn(v); setOk(''); setErrs([])
-    if (v && p === '' && k === '') { setP(String(BLEND_START.personal)); setK(String(BLEND_START.kpi)) } // 최초 활성화 시작값(편집 가능)
-  }
-  const apply = () => {
-    const b = { enabled: on, personal: num(p), kpi: num(k) }
-    if (on) {
-      const e = blendErrors(b)
-      setErrs(e)
-      if (e.length) return
-    }
-    update((d) => { d.cycles.find((c) => c.id === cycle.id)!.kpiBlend = on ? b : { ...saved, enabled: false } })
-    setOk(on ? '적용했습니다. 결과 화면 점수에 반영됩니다.' : '반영을 껐습니다.')
-  }
-  const pv = num(p), kv = num(k)
-
-  return (
-    // 한 줄 설정(D-093): 제목 · 반영 체크 · 개인평가 비율 · + · 팀 KPI 비율 · 적용 — 카드 없이 본문 위, 계산식은 바로 아래
-    <section className="blend blend-plain blend-row" aria-labelledby="blend-title">
-      {/* 기능 묶음 셋: 제목·체크 / 비율 두 칸(+) / 적용·결과 — 묶음 사이 간격 > 라벨·입력 간격, 모두 입력란 높이 기준 세로 가운데 (D-094) */}
-      <div className="blend-line">
-        <div className="bl-g bl-title">
-          <h2 id="blend-title">개인평가 반영</h2>
-          <label className="check big"><input type="checkbox" checked={on} disabled={!editable} onChange={(e) => toggle(e.target.checked)} /> 팀 KPI를 개인평가에 반영</label>
-        </div>
-        {on && <div className="bl-g blend-inputs">
-          <label className="field blend-f"><span className="bl-l">개인평가 비율 (%)</span><input type="text" inputMode="decimal" value={p} disabled={!editable} onChange={(e) => { setP(e.target.value); setOk('') }} /></label>
-          <span className="plus" aria-hidden>+</span>
-          <label className="field blend-f"><span className="bl-l">팀 KPI 비율 (%)</span><input type="text" inputMode="decimal" value={k} disabled={!editable} onChange={(e) => { setK(e.target.value); setOk('') }} /></label>
-        </div>}
-        <div className="bl-g bl-apply">
-          <button className="btn primary blend-btn" disabled={!editable || !dirty} onClick={apply}>적용</button>
-        </div>
-        {/* 계산식: 적용 오른쪽 남는 공간(D-095) — 좁으면 다음 줄, 길면 이 칸 안에서 줄바꿈 */}
-        {on && pv !== null && kv !== null && Number.isFinite(pv) && Number.isFinite(kv) && (
-          <p className="bl-g formula">최종 점수(보정 전) = 개인평가 기초 점수 × {pv}% + 팀 KPI 점수 × {kv}%</p>
-        )}
-      </div>
-      {/* 적용 결과는 설정 줄 아래 짧게 — 계산식·입력 위치를 밀지 않음 */}
-      {ok && <p className="bl-ok"><span className="feedback ok" role="status">✓ {ok}</span></p>}
-      {errs.length > 0 && <div className="feedback fail" role="alert">{errs.map((x) => <div key={x}>✕ {x}</div>)}</div>}
-    </section>
-  )
-}
 
 /**
  * 직급별 최종 반영 비율(D-103, 자문 예시) — 요소별 켜기·비율 입력·활성 합계 100% 검증·저장만 한다.

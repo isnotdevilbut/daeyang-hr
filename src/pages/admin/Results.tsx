@@ -56,7 +56,6 @@ export default function Results() {
 
 function Body({ cycle, ids, setIds, pickable }: { cycle: Cycle; ids: string[]; setIds: (x: string[]) => void; pickable: boolean }) {
   const s = useAppState()
-  const kpiOn = !!cycle.kpiBlend?.enabled // 이 회차의 실제 반영 설정
   const people = resultPeople(s, cycle) // 대상자 + 참여 임원 — 진행 현황 전체 대상자와 같은 인원(D-192)
   const depts = [...new Map(people.map((t) => [t.departmentId, t.departmentName])).entries()]
   // 고정 순서(D-111): 팀 가나다순 → 팀 안에서 직급 목록 순서(임원·팀장·사원) → 이름순. 머리글 정렬 없음
@@ -80,13 +79,12 @@ function Body({ cycle, ids, setIds, pickable }: { cycle: Cycle; ids: string[]; s
                       onChange={(e) => setIds(e.target.checked ? [...new Set([...ids, ...teamIds])] : ids.filter((id) => !teamIds.includes(id)))} /></th>}
                     <th className="c-team">팀</th><th className="c-pos">직급</th><th className="c-name">이름</th>
                     <th className="num c-score">개인 평가 점수</th>
-                    {kpiOn && <th className="num c-score">팀 KPI</th>}{/* D-168: 'KPI 반영 후 점수' 열 제거 — 최종 점수와 겹침 */}
                     <th className="num c-score">최종 점수</th><th className="center c-grade">최종 등급</th>
                     <th className="c-btn"><span className="sr-only">상세</span></th><th className="c-btn"><span className="sr-only">리포트</span></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map(({ t, r }) => <ResultRow key={t.employeeId} cycle={cycle} t={t} r={r} kpiOn={kpiOn} pick={pickable ? { on: ids.includes(t.employeeId), set: (v) => setIds(v ? [...ids, t.employeeId] : ids.filter((x) => x !== t.employeeId)) } : undefined} />)}
+                  {rows.map(({ t, r }) => <ResultRow key={t.employeeId} cycle={cycle} t={t} r={r} pick={pickable ? { on: ids.includes(t.employeeId), set: (v) => setIds(v ? [...ids, t.employeeId] : ids.filter((x) => x !== t.employeeId)) } : undefined} />)}
                 </tbody>
               </table>
             </div>
@@ -100,7 +98,7 @@ function Body({ cycle, ids, setIds, pickable }: { cycle: Cycle; ids: string[]; s
 /** 점수가 없을 때의 짧은 상태 표시 — 0점이나 정상 점수처럼 보이지 않게 */
 const Pending = ({ text }: { text: string }) => <span className="chip stage todo">{text}</span>
 
-function ResultRow({ cycle, t, r, kpiOn, pick }: { cycle: Cycle; t: TargetSnapshot; r: PersonResult; kpiOn: boolean; pick?: { on: boolean; set: (v: boolean) => void } }) {
+function ResultRow({ cycle, t, r, pick }: { cycle: Cycle; t: TargetSnapshot; r: PersonResult; pick?: { on: boolean; set: (v: boolean) => void } }) {
   const s = useAppState()
   const c = r.combined
   const baseState = r.stages.some((x) => !x.submitted) ? '미완료' : '계산 안 됨'
@@ -109,12 +107,6 @@ function ResultRow({ cycle, t, r, kpiOn, pick }: { cycle: Cycle; t: TargetSnapsh
       {pick && <td className="c-pick"><input type="checkbox" aria-label={`${t.name} 선택`} checked={pick.on} onChange={(e) => pick.set(e.target.checked)} /></td>}
       <td>{t.teamName}</td><td>{targetPosition(s, cycle, t)}</td><td><b>{t.name}</b></td>
       <td className="num">{c.base !== null ? fmt(c.base) : !r.stages.length ? <span className="muted" title="임원: 팀 KPI·상향평가 반영 방식 보류">—</span> : <Pending text={baseState} />}</td>{/* 1·2·3단계 없는 임원(D-192) */}
-      {kpiOn && (
-        <>
-          {/* KPI는 팀별 선택 항목(D-074): 유효한 KPI가 없으면 — */}
-          <td className="num">{r.kpi !== null ? fmt(r.kpi) : <span className="na-dash" aria-label="없음">—</span>}</td>
-        </>
-      )}
       <td className="num final">{c.final !== null ? fmt(c.final) : <span className="muted">—</span>}</td>
       <td className="center"><b>{r.ceoGrade ?? '—'}</b></td>
       <td><Link className="btn small" to={`/admin/results/${t.employeeId}?from=results`}>상세</Link></td>
