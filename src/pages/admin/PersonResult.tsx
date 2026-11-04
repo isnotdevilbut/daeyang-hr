@@ -5,7 +5,7 @@ import { useSelectedCycle } from '../../data/hooks'
 import { can, canFinalAdjust } from '../../domain/permissions'
 import { cycleLabel } from '../../domain/cycle'
 import { fmt, fmtSigned, personResult, weightsFor } from '../../domain/scoring'
-import { activeWriteAssignments, appliedStages, assignmentCell, isActiveAssignment, personSnap, stageAssignments, statusOf, upwardAssignments, type CellStatus } from '../../domain/progress'
+import { activeWriteAssignments, appliedStages, assignmentCell, isActiveAssignment, personSnap, stageAssignments, STAGE_OF_RULE, statusOf, upwardAssignments, type CellStatus } from '../../domain/progress'
 import { UPWARD_KIND_TEXT, upwardKind } from '../../domain/upward'
 import { displayAnswer } from '../../domain/seed'
 import { type AdjustKind, type Assignment, type Cycle, type Lang, type Response, type Stage, type Template } from '../../domain/types'
@@ -73,8 +73,7 @@ export default function PersonResultPage() {
           <div className="person-meta"><span>{team}</span><span>{positionName(s, writer)}</span><span>{jobName(s, writer.jobType)}</span><span className="cycle-name">{cycleLabel(cycle)}</span></div>
         </header>
         <div className="detail-divider" aria-hidden />
-        {/* 자기평가를 끈 임원 등 받는 평가가 없는 평가자: 담당 평가 현황만 (D-089). 임원이 받는 상향평가(D-187)가 있으면 단계별 현황도 */}
-        {upwardAssignments(cycle, s.employees).some((a) => a.targetId === writer.id) && <><h2 className="section-title">단계별 현황</h2><RecvList cycle={cycle} targetId={writer.id} /></>}
+        {/* 자기평가를 끈 임원 등 받는 평가가 없는 평가자: 담당 평가 현황만 (D-089) — 임원이 받는 상향평가(D-187)도 여기에(D-190) */}
         <WriteList cycle={cycle} evaluatorId={writer.id} hideEmpty />
       </div>
     )
@@ -166,7 +165,7 @@ export default function PersonResultPage() {
         return (
           <details className="panel stage-card stage-group" key={rule}>
             <summary className="stage-head">
-              <h3>{rule !== 'upward' && <><span className="stage-no">{order}단계</span> · </>}{RULE_TEXT[rule]}{rule === 'upward' && <span className="muted"> ({[...new Set(list.map((a) => UPWARD_KIND_TEXT[upwardKind(s, a)]))].join('·')})</span>}</h3>
+              <h3>{rule !== 'upward' && <><span className="stage-no">{order}단계</span> · </>}{RULE_TEXT[rule]}{rule === 'upward' && <> <span className="stage-no">({[...new Set(list.map((a) => UPWARD_KIND_TEXT[upwardKind(s, a)]))].join('·')})</span></>}</h3>
               {list.length === 1 ? <span className="muted">작성자 <b>{name(list[0].evaluatorId)}</b></span> : <span className="muted">작성자 {list.length}명 · 제출 <b>{sub}</b></span>}
               <span className="spacer" />
               {stage && sub > 0 && (stage.score !== null || stage.grade) && (
@@ -221,18 +220,14 @@ function RecvList({ cycle, targetId }: { cycle: Cycle; targetId: string }) {
   const s = useAppState()
   const t = cycle.targets.find((x) => x.employeeId === targetId)
   const name = (id: string) => s.employees.find((e) => e.id === id)?.name ?? '?'
-  type Row = { key: string; stage: Stage; who: string; status: CellStatus; kind?: string }
+  type Row = { key: string; stage: Stage; who: string; status: CellStatus }
   const rows: Row[] = (t ? appliedStages(cycle, t) : []).flatMap((st) => {
     const as = stageAssignments(cycle, targetId, st.order)
     return as.length === 0
       ? [{ key: `${st.order}-none`, stage: st, who: '—', status: 'unassigned' as CellStatus }]
       : as.map((a) => ({ key: a.id, stage: st, who: name(a.evaluatorId), status: assignmentCell(cycle, s.responses, a) }))
   })
-  // 팀장·임원이 받는 상향평가(D-114·D-187, 1단계 분류) — 자기평가 다음에, 종류(팀원→팀장·팀원→임원·팀장→임원)를 함께
-  const UP: Stage = { order: 1, label: '상향평가', direction: 'up', rule: 'upward' }
-  const ups = upwardAssignments(cycle, s.employees).filter((a) => a.targetId === targetId)
-    .map((a) => ({ key: a.id, stage: UP, who: name(a.evaluatorId), status: assignmentCell(cycle, s.responses, a), kind: UPWARD_KIND_TEXT[upwardKind(s, a)] }))
-  rows.splice(rows.filter((r) => r.stage.order === 1).length, 0, ...ups)
+  // 받는 상향평가는 1·2·3단계와 별개라 여기 넣지 않고 담당 평가 현황에(D-190)
   if (!rows.length) return null
   return (
     <section className="panel recv-panel" aria-label="받는 평가">
@@ -242,7 +237,7 @@ function RecvList({ cycle, targetId }: { cycle: Cycle; targetId: string }) {
           <tbody>
             {rows.map((r) => (
               <tr key={r.key}>
-                <td>{RULE_TEXT[r.stage.rule]}{r.kind ? <> · {r.kind}</> : <> <span className="stage-no">({r.stage.order}단계)</span></>}</td>
+                <td>{RULE_TEXT[r.stage.rule]} <span className="stage-no">({r.stage.order}단계)</span></td>
                 <td>{r.who}</td>
                 <td><span className={`chip ${r.status === 'submitted' ? 'stage done' : r.status === 'unassigned' ? 'danger' : r.status}`}>{RECV_LABEL[r.status]}</span></td>
               </tr>
@@ -261,13 +256,21 @@ function RecvList({ cycle, targetId }: { cycle: Cycle; targetId: string }) {
  */
 function WriteList({ cycle, evaluatorId, hideEmpty = false }: { cycle: Cycle; evaluatorId: string; hideEmpty?: boolean }) {
   const s = useAppState()
-  const rows = activeWriteAssignments(cycle, s.employees)
-    .concat(upwardAssignments(cycle, s.employees)) // 사원·팀장이 쓰는 상향평가(D-114·D-187)
+  const ups = upwardAssignments(cycle, s.employees)
+  const mine = activeWriteAssignments(cycle, s.employees)
+    .concat(ups) // 사원·팀장이 쓰는 상향평가(D-114·D-187)
     .filter((a) => a.evaluatorId === evaluatorId && a.direction !== 'self')
     .map((a) => ({ a, t: personSnap(s, cycle, a.targetId)!, st: assignmentCell(cycle, s.responses, a) }))
     .filter((r) => !!r.t)
     // 미완료 먼저, 완료는 아래(D-093) — 같은 그룹 안에서는 팀·팀장 먼저·이름 순
     .sort((x, y) => Number(x.st === 'submitted') - Number(y.st === 'submitted') || x.t.teamName.localeCompare(y.t.teamName, 'ko') || Number(y.t.isTeamLead) - Number(x.t.isTeamLead) || x.t.name.localeCompare(y.t.name, 'ko'))
+  // D-190: 이 사람이 받는 상향평가(팀원→팀장·팀원→임원·팀장→임원)도 여기에 — 단계별 현황에는 1·2·3단계만. 쓰는 평가 다음에, 미완료 먼저·평가자 이름 순
+  const nameOf = (id: string) => s.employees.find((e) => e.id === id)?.name ?? '?'
+  const got = ups.filter((a) => a.targetId === evaluatorId)
+    .map((a) => ({ a, t: personSnap(s, cycle, a.targetId)!, st: assignmentCell(cycle, s.responses, a) }))
+    .filter((r) => !!r.t)
+    .sort((x, y) => Number(x.st === 'submitted') - Number(y.st === 'submitted') || nameOf(x.a.evaluatorId).localeCompare(nameOf(y.a.evaluatorId), 'ko'))
+  const rows = [...mine, ...got]
   const shown = rows // D-126: 전체·미완료·완료 개수 버튼 없이 모두 표시(미완료 먼저)
   if (hideEmpty && rows.length === 0) return null
   return (
@@ -277,13 +280,14 @@ function WriteList({ cycle, evaluatorId, hideEmpty = false }: { cycle: Cycle; ev
         {rows.length === 0 ? <p className="write-empty">배정된 평가 없음</p> : <>
           <div className="table-wrap">
             <table className="tbl write-tbl">
-              <thead><tr><th>평가 유형</th><th>팀</th><th>직급</th><th>평가 대상자</th><th>상태</th></tr></thead>
+              <thead><tr><th>평가 유형</th><th>팀</th><th>직급</th><th>평가자</th><th>평가 대상자</th><th>상태</th></tr></thead>
               <tbody>
                 {shown.map((r) => (
                   <tr key={r.a.id}>
-                    <td>{(() => { const rule = ctxFor(cycle, r.a).rule; return rule ? RULE_TEXT[rule] : '' })()}{r.a.direction === 'up' && <> · {UPWARD_KIND_TEXT[upwardKind(s, r.a)]}</>}</td>
+                    <td><RuleText cycle={cycle} a={r.a} /></td>
                     <td>{r.t.teamName}</td>
                     <td>{targetPosition(s, cycle, r.t)}</td>
+                    <td>{nameOf(r.a.evaluatorId)}</td>
                     <td><b>{r.t.name}</b></td>
                     <td>
                       <span className="write-st">
@@ -417,4 +421,12 @@ function Adjusters({ cycle, targetId, current }: { cycle: Cycle; targetId: strin
     </section>
     </div>
   )
+}
+
+/** 평가 유형 글자: 1·2·3단계는 '팀장평가 (2단계)', 상향평가는 '상향평가 (팀원→팀장)' — 괄호는 남색(D-188·D-190) */
+function RuleText({ cycle, a }: { cycle: Cycle; a: Assignment }) {
+  const s = useAppState()
+  const rule = ctxFor(cycle, a).rule
+  if (!rule) return null
+  return <>{RULE_TEXT[rule]} <span className="stage-no">({rule === 'upward' ? UPWARD_KIND_TEXT[upwardKind(s, a)] : `${STAGE_OF_RULE[rule]}단계`})</span></>
 }
