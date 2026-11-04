@@ -366,3 +366,21 @@ export function selfForStaff(d: AppState, cycleId: string): string[] {
   }
   return out
 }
+
+/**
+ * 평가 삭제(D-192): 회차와 그 회차의 배정·응답·채점·KPI·보정·리포트 기록을 함께 지운다. 확정 회차는 지우지 않음.
+ * 직원·조직·다른 회차는 그대로. 되돌릴 수 없음(화면에서 확인 후 실행)
+ */
+export function deleteCycle(d: AppState, cycleId: string): boolean {
+  const c = d.cycles.find((x) => x.id === cycleId)
+  if (!c || c.status === '확정') return false
+  const aids = new Set(c.assignments.map((a) => a.id))
+  for (const id of aids) { delete d.responses[id]; if (d.manualScores) delete d.manualScores[id] }
+  d.cycles = d.cycles.filter((x) => x.id !== cycleId)
+  d.kpi = d.kpi.filter((k) => k.cycleId !== cycleId)
+  d.kpiIndicators = (d.kpiIndicators ?? []).filter((k) => k.cycleId !== cycleId)
+  d.adjustments = d.adjustments.filter((a) => a.cycleId !== cycleId)
+  d.tokens = (d.tokens ?? []).filter((t) => t.cycleId !== cycleId)
+  if (d.reportNotes) for (const k of Object.keys(d.reportNotes)) if (k.startsWith(`${cycleId}|`)) delete d.reportNotes[k]
+  return true
+}

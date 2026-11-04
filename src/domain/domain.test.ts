@@ -3232,3 +3232,30 @@ describe('임원 상향평가 = 담당 임원 기준 (D-191)', async () => {
     expect(ups.map((a) => a.targetId)).toEqual([other])
   })
 })
+
+describe('결과·리포트 임원 포함 · 평가 삭제 (D-192)', async () => {
+  const P = await import('./progress')
+  const C = await import('./cycle')
+  it('결과·리포트 인원 = 진행 현황 전체 대상자(참여 임원 포함), 임원도 결과 계산(1·2·3단계 없음)', () => {
+    const s = createSeed(); const c = s.cycles.find((x) => x.status === '진행')!
+    const people = P.resultPeople(s, c)
+    expect(people.length).toBe(P.progressRows(s, c).length)
+    const execs = people.filter((t) => s.employees.find((e) => e.id === t.employeeId)!.isExecutive)
+    expect(execs.length).toBe(4)
+    for (const t of execs) { const r = personResult(s, c, t.employeeId)!; expect(r).not.toBeNull(); expect(r.stages).toEqual([]) }
+  })
+  it('평가 삭제: 그 회차와 배정 응답·KPI·보정·리포트 기록만 지움, 확정 회차는 지우지 않음', () => {
+    const s = createSeed(); const c = s.cycles[0]
+    const copy = C.cloneCycle(s, c, '복제'); s.cycles.push(copy)
+    const otherResp = Object.keys(s.responses).filter((k) => !c.assignments.some((a) => a.id === k))
+    s.reportNotes = { [`${c.id}|e05`]: 'x', [`${copy.id}|e05`]: 'y' }
+    expect(C.deleteCycle(s, c.id)).toBe(true)
+    expect(s.cycles.map((x) => x.id)).toEqual([copy.id])
+    expect(Object.keys(s.responses).sort()).toEqual(otherResp.sort())
+    expect(s.kpi.some((k) => k.cycleId === c.id) || s.adjustments.some((a) => a.cycleId === c.id)).toBe(false)
+    expect(s.reportNotes).toEqual({ [`${copy.id}|e05`]: 'y' })
+    copy.status = '확정'
+    expect(C.deleteCycle(s, copy.id)).toBe(false)
+    expect(s.cycles).toHaveLength(1)
+  })
+})

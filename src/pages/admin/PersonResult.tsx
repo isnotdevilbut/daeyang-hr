@@ -5,7 +5,7 @@ import { useSelectedCycle } from '../../data/hooks'
 import { can, canFinalAdjust } from '../../domain/permissions'
 import { cycleLabel } from '../../domain/cycle'
 import { fmt, fmtSigned, personResult, weightsFor } from '../../domain/scoring'
-import { activeWriteAssignments, appliedStages, assignmentCell, isActiveAssignment, personSnap, stageAssignments, STAGE_OF_RULE, statusOf, upwardAssignments, type CellStatus } from '../../domain/progress'
+import { activeWriteAssignments, appliedStages, assignmentCell, isActiveAssignment, personSnap, resultPerson, stageAssignments, STAGE_OF_RULE, statusOf, upwardAssignments, type CellStatus } from '../../domain/progress'
 import { UPWARD_KIND_TEXT, upwardKind } from '../../domain/upward'
 import { displayAnswer } from '../../domain/seed'
 import { type AdjustKind, type Assignment, type Cycle, type Lang, type Response, type Stage, type Template } from '../../domain/types'
@@ -59,7 +59,7 @@ export default function PersonResultPage() {
   const from = params.get('from') === 'results' ? 'results' : 'progress'
   const back = BACK[from]
   if (!can(role, 'viewResults')) return <Forbidden />
-  const t = cycle?.targets.find((x) => x.employeeId === targetId)
+  const t = cycle && targetId ? resultPerson(s, cycle, targetId) : undefined // 대상자 + 참여 임원(D-192)
   // 받는 평가가 없는 평가자 전용 참여자(자기평가를 끈 임원 등, D-069): 작성할 평가만 보여 준다 (점수·리포트 없음)
   // 상향평가만 받는 임원(D-187)도 같은 화면 — 받는 상향평가 + 담당 평가 현황
   const writer = cycle && !t ? s.employees.find((e) => e.id === targetId && e.active && (cycle.assignments.some((a) => a.evaluatorId === e.id && isActiveAssignment(a)) || upwardAssignments(cycle, s.employees).some((a) => a.targetId === e.id))) : undefined
@@ -86,8 +86,9 @@ export default function PersonResultPage() {
   const weights = weightsFor(cycle, t)
   const anyUnsubmitted = r.stages.some((x) => !x.submitted)
   const anyUngraded = r.stages.some((x) => x.ungraded) // 배점 있는 서술형 미채점(D-103) — 0점이 아닌 미완료
-  const baseText = r.combined.base !== null ? fmt(r.combined.base) : anyUnsubmitted || anyUngraded ? '미완료' : '계산 안 됨'
-  const baseHint = r.combined.base !== null ? '' : anyUnsubmitted ? '제출 전 단계 있음' : anyUngraded ? '서술형 채점 필요' : '반영 비율 확인 필요'
+  const noStages = r.stages.length === 0 // 자기평가를 끈 임원(D-192): 1·2·3단계 없음 — 임원 점수(팀 KPI·상향평가)는 반영 보류(D-103)
+  const baseText = r.combined.base !== null ? fmt(r.combined.base) : noStages ? '—' : anyUnsubmitted || anyUngraded ? '미완료' : '계산 안 됨'
+  const baseHint = r.combined.base !== null ? '' : noStages ? '임원: 팀 KPI·상향평가 반영 방식 보류' : anyUnsubmitted ? '제출 전 단계 있음' : anyUngraded ? '서술형 채점 필요' : '반영 비율 확인 필요'
 
   return (
     <div className="page detail-page">
@@ -109,7 +110,6 @@ export default function PersonResultPage() {
       {/* D-129·D-130: 진행 현황에서 연 상세 = 평가 현황만, 결과·리포트에서 연 상세 = 점수 요약·최종 점수 보정·단계별 응답·변경 내역(평가 현황 없음) */}
       {from === 'progress' && <>
         {/* D-131: 받는 평가 = '단계별 현황', 이 사람이 해야 할 평가 = '담당 평가 현황'(사원·팀장·임원 모두, 없으면 표시 안 함) */}
-        <h2 className="section-title">단계별 현황</h2>
         <RecvList cycle={cycle} targetId={t.employeeId} />
         <WriteList cycle={cycle} evaluatorId={t.employeeId} hideEmpty />
       </>}
@@ -119,7 +119,7 @@ export default function PersonResultPage() {
         <div className="detail-col">
         <h2 id="score-title" className="section-title">점수 요약</h2>
         <section className="panel pad" aria-labelledby="score-title">
-          <table className="tbl score-stages">
+          {!noStages && <table className="tbl score-stages">
             <thead><tr><th>단계</th><th>평가</th><th className="num">원점수</th><th className="num">반영 비율</th></tr></thead>
             <tbody>
               {r.stages.map((st) => {
@@ -134,7 +134,7 @@ export default function PersonResultPage() {
                 )
               })}
             </tbody>
-          </table>
+          </table>}
           <dl className="score-sum">
             <div><dt>개인평가 기초 점수</dt><dd>{baseText}{baseHint && <small>{baseHint}</small>}</dd></div>
             <div><dt>팀 KPI 점수</dt><dd>{r.kpi === null ? '—' : fmt(r.kpi)}{r.kpi !== null && <span className="chip na tag">{r.kpiBlend.enabled && (r.kpiBlend.kpi ?? 0) > 0 ? `반영 ${r.kpiBlend.kpi}%` : '미반영'}</span>}</dd></div>
@@ -215,7 +215,6 @@ export default function PersonResultPage() {
 }
 
 /** 본인이 받는 평가(D-076): 평가 유형·담당 평가자·상태. 적용 단계에 배정이 없으면 "평가자 미지정"(배정 누락) */
-const RECV_LABEL: Record<CellStatus, string> = { submitted: '제출', draft: '작성 중', notStarted: '미시작', locked: '선행 단계 대기', unassigned: '평가자 미지정', na: '해당 없음' }
 function RecvList({ cycle, targetId }: { cycle: Cycle; targetId: string }) {
   const s = useAppState()
   const t = cycle.targets.find((x) => x.employeeId === targetId)
@@ -230,6 +229,8 @@ function RecvList({ cycle, targetId }: { cycle: Cycle; targetId: string }) {
   // 받는 상향평가는 1·2·3단계와 별개라 여기 넣지 않고 담당 평가 현황에(D-190)
   if (!rows.length) return null
   return (
+    <>
+    <h2 className="section-title">단계별 현황</h2>{/* 1·2·3단계가 없는 사람(자기평가를 끈 임원)은 제목도 없음 */}
     <section className="panel recv-panel" aria-label="받는 평가">
       <div className="table-wrap">
         <table className="tbl recv-tbl">
@@ -239,13 +240,15 @@ function RecvList({ cycle, targetId }: { cycle: Cycle; targetId: string }) {
               <tr key={r.key}>
                 <td>{RULE_TEXT[r.stage.rule]} <span className="stage-no">({r.stage.order}단계)</span></td>
                 <td>{r.who}</td>
-                <td><span className={`chip ${r.status === 'submitted' ? 'stage done' : r.status === 'unassigned' ? 'danger' : r.status}`}>{RECV_LABEL[r.status]}</span></td>
+                {/* D-192: 상태는 완료/미완료만(담당 평가 현황과 같게, 미시작·작성 중·선행 단계 대기·평가자 미지정 = 미완료) */}
+                <td><span className={`chip stage ${r.status === 'submitted' ? 'done' : 'todo'}`}>{r.status === 'submitted' ? '완료' : '미완료'}</span></td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
     </section>
+    </>
   )
 }
 

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { update, useAppState } from '../../data/store'
 import { confirmLeave, useDirty } from '../../data/dirty'
-import { applyParticipation, assignmentProblems, cloneCycle, cycleLabel, participation } from '../../domain/cycle'
+import { applyParticipation, assignmentProblems, cloneCycle, cycleLabel, deleteCycle, participation } from '../../domain/cycle'
 import { selfApplies } from '../../domain/progress'
 import { isEvalTarget, tierOf, TIERS } from '../../domain/org'
 import type { Cycle, CycleStatus, Employee } from '../../domain/types'
@@ -43,6 +43,7 @@ export default function EvalSettings({ cycle, onCreate, onSelect, part }: { cycl
   useEffect(() => { if (resync.current) { resync.current = false; setF(initial) } }, [initial])
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [cloning, setCloning] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   // 저장 완료 메시지는 잠시 뒤 사라짐(오류·일부만 저장 안내는 다음 동작까지 유지)
   useEffect(() => { if (!msg?.ok) return; const t = setTimeout(() => setMsg(null), 3500); return () => clearTimeout(t) }, [msg])
   // 고정 위치 = 상단 내비게이션 바로 아래 (헤더 높이는 화면 폭에 따라 다름)
@@ -105,6 +106,8 @@ export default function EvalSettings({ cycle, onCreate, onSelect, part }: { cycl
       {part === 'info' && <div className="tab-actions settings-bar">
         {part === 'info' && <>
           <button className="btn" onClick={() => confirmLeave() && setCloning(true)}>평가 복제</button>
+          {/* D-192: 평가 삭제(빨간 테두리) — 확정된 평가는 지울 수 없음 */}
+          <button className="btn danger" disabled={cycle.status === '확정'} title={cycle.status === '확정' ? '확정된 평가는 삭제할 수 없어요' : undefined} onClick={() => confirmLeave() && setDeleting(true)}>평가 삭제</button>
           <button className="btn" onClick={() => confirmLeave() && onCreate()}>+ 새 평가</button>
         </>}
         <span className="spacer" />
@@ -185,8 +188,29 @@ export default function EvalSettings({ cycle, onCreate, onSelect, part }: { cycl
         </div>
       </section>}
 
+      {deleting && <DeleteModal cycle={cycle} onClose={() => setDeleting(false)} onDone={(id) => { setDeleting(false); if (id) onSelect(id) }} />}
       {cloning && <CloneModal cycle={cycle} onClose={() => setCloning(false)} onDone={(id) => { setCloning(false); onSelect(id) }} />}
     </>
+  )
+}
+
+function DeleteModal({ cycle, onClose, onDone }: { cycle: Cycle; onClose: () => void; onDone: (nextId: string | null) => void }) {
+  const s = useAppState()
+  const answered = cycle.assignments.filter((a) => s.responses[a.id]).length
+  const go = () => {
+    let next: string | null = null
+    update((d) => {
+      if (!deleteCycle(d, cycle.id)) return
+      next = (d.cycles.find((x) => x.status === '진행') ?? d.cycles[0])?.id ?? null
+    })
+    onDone(next)
+  }
+  return (
+    <Modal title="평가 삭제" onClose={onClose}>
+      <p><b>{cycleLabel(cycle)}</b>을(를) 삭제할까요?</p>
+      <p className="muted" style={{ marginTop: 8 }}>이 평가의 문항·평가자 배정·응답{answered ? `(${answered}건)` : ''}·KPI·점수 보정·리포트 기록이 함께 지워지고 되돌릴 수 없어요. 직원·조직 정보와 다른 평가는 그대로예요.</p>
+      <div className="row" style={{ marginTop: 14 }}><span className="spacer" /><button className="btn" onClick={onClose}>취소</button><button className="btn danger" onClick={go}>삭제</button></div>
+    </Modal>
   )
 }
 

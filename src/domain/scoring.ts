@@ -1,6 +1,6 @@
 // ⚠ 개발용 가정 계산. 회사의 현재 산식이 아니다. (docs/scoring.md)
 import type { Adjustment, AppState, Cycle, Direction, Response, Template } from './types'
-import { appliedStages, pathFor, stageAssignments } from './progress'
+import { appliedStages, pathFor, resultPerson, stageAssignments } from './progress'
 import { applies, ctxFor, weightErrors, type QCtx } from './questions'
 import { applyBlend, deptKpi, type DeptKpi } from './kpi'
 import type { KpiBlend } from './types'
@@ -102,7 +102,7 @@ export interface PersonResult {
 }
 
 export function personResult(state: AppState, cycle: Cycle, targetId: string): PersonResult | null {
-  const target = cycle.targets.find((t) => t.employeeId === targetId)
+  const target = resultPerson(state, cycle, targetId) // 대상자 + 참여 임원(D-192)
   if (!target) return null
   const nameOf = (id: string) => state.employees.find((e) => e.id === id)?.name ?? '(알 수 없음)'
   // 이 대상자에게 적용되는 단계만 (끈 자기평가 제외, D-068). 기초 점수는 적용 단계의 반영 비율 합으로 나눈다

@@ -8,6 +8,7 @@ import { fmt, latestAdjustment, personResult, type PersonResult } from '../../do
 import type { AdjustKind, Cycle, TargetSnapshot } from '../../domain/types'
 import { Forbidden } from '../../components/ui'
 import { byTierThenName, targetPosition } from '../../domain/catalog'
+import { resultPeople } from '../../domain/progress'
 import { BulkDownload } from './ReportBulk'
 
 export function addAdjustment(cycleId: string, kind: AdjustKind, key: string, value: number | string | null, reason: string, by: string) {
@@ -34,7 +35,7 @@ export default function Results() {
         {cycle && (
           <div className="row result-head-actions">
             {/* D-170·D-171: 평가 회차 왼쪽에 전체 선택 · 선택 항목 다운로드 — 셋 다 각자 상자(평가 회차 상자와 같은 모양). 다운로드는 고른 사람이 없으면 누를 수 없음, 인원 수는 적지 않음 */}
-            {canReport && (() => { const all = cycle.targets.map((t) => t.employeeId); const full = all.length > 0 && all.every((id) => ids.includes(id)); return <button className="btn head-btn" onClick={() => setIds(full ? [] : all)}>{full ? '전체 해제' : '전체 선택'}</button> })()}
+            {canReport && (() => { const all = resultPeople(s, cycle).map((t) => t.employeeId); const full = all.length > 0 && all.every((id) => ids.includes(id)); return <button className="btn head-btn" onClick={() => setIds(full ? [] : all)}>{full ? '전체 해제' : '전체 선택'}</button> })()}
             {canReport && <button className="btn head-btn" disabled={!ids.length} title={ids.length ? undefined : '표에서 사람을 먼저 고르세요'} onClick={() => setBulk(true)}>선택 항목 다운로드</button>}
           <div className="cycle-pick">
             <label>
@@ -56,14 +57,15 @@ export default function Results() {
 function Body({ cycle, ids, setIds, pickable }: { cycle: Cycle; ids: string[]; setIds: (x: string[]) => void; pickable: boolean }) {
   const s = useAppState()
   const kpiOn = !!cycle.kpiBlend?.enabled // 이 회차의 실제 반영 설정
-  const depts = [...new Map(cycle.targets.map((t) => [t.departmentId, t.departmentName])).entries()]
+  const people = resultPeople(s, cycle) // 대상자 + 참여 임원 — 진행 현황 전체 대상자와 같은 인원(D-192)
+  const depts = [...new Map(people.map((t) => [t.departmentId, t.departmentName])).entries()]
   // 고정 순서(D-111): 팀 가나다순 → 팀 안에서 직급 목록 순서(임원·팀장·사원) → 이름순. 머리글 정렬 없음
   depts.sort((a, b) => a[1].localeCompare(b[1], 'ko'))
   const order = byTierThenName(s, cycle) // 팀 안: 직급(임원 → 팀장 → 사원) → 이름 가나다순 (D-169)
   return (
     <>
       {depts.map(([deptId, deptName]) => {
-        const targets = cycle.targets.filter((t) => t.departmentId === deptId)
+        const targets = people.filter((t) => t.departmentId === deptId)
         const rows = targets.sort(order).map((t) => ({ t, r: personResult(s, cycle, t.employeeId)! }))
         const teamIds = rows.map((x) => x.t.employeeId)
         const n = teamIds.filter((id) => ids.includes(id)).length
@@ -106,7 +108,7 @@ function ResultRow({ cycle, t, r, kpiOn, pick }: { cycle: Cycle; t: TargetSnapsh
     <tr className={pick?.on ? 'picked' : ''}>
       {pick && <td className="c-pick"><input type="checkbox" aria-label={`${t.name} 선택`} checked={pick.on} onChange={(e) => pick.set(e.target.checked)} /></td>}
       <td>{t.teamName}</td><td>{targetPosition(s, cycle, t)}</td><td><b>{t.name}</b></td>
-      <td className="num">{c.base !== null ? fmt(c.base) : <Pending text={baseState} />}</td>
+      <td className="num">{c.base !== null ? fmt(c.base) : !r.stages.length ? <span className="muted" title="임원: 팀 KPI·상향평가 반영 방식 보류">—</span> : <Pending text={baseState} />}</td>{/* 1·2·3단계 없는 임원(D-192) */}
       {kpiOn && (
         <>
           {/* KPI는 팀별 선택 항목(D-074): 유효한 KPI가 없으면 — */}

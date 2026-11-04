@@ -6,7 +6,7 @@ import { can } from '../../domain/permissions'
 import { fmt, fmtSigned, personResult } from '../../domain/scoring'
 import { jobName, targetPosition } from '../../domain/catalog'
 import { ctxFor } from '../../domain/questions'
-import { isActiveAssignment, pathFor } from '../../domain/progress'
+import { isActiveAssignment, pathFor, resultPerson } from '../../domain/progress'
 import type { AppState, Assignment, Cycle, Question, TargetSnapshot } from '../../domain/types'
 import { visibleSections } from '../../components/QuestionView'
 import { Forbidden, Modal } from '../../components/ui'
@@ -33,7 +33,7 @@ export default function Report() {
   const s = useAppState()
   const [cycle] = useSelectedCycle()
   if (!can(s.session.role, 'reportPreview')) return <Forbidden />
-  const t = cycle?.targets.find((x) => x.employeeId === targetId)
+  const t = cycle && targetId ? resultPerson(s, cycle, targetId) : undefined // 참여 임원도(D-192)
   if (!cycle || !t) return <div className="page">대상자를 찾을 수 없습니다.</div>
   return <ReportBody key={`${cycle.id}|${t.employeeId}`} s={s} cycle={cycle} t={t} from={from} />
 }

@@ -173,6 +173,17 @@ export function personSnap(s: Pick<AppState, 'employees' | 'teams'>, cycle: Cycl
   }
 }
 
+/**
+ * 결과·리포트에 나오는 사람(D-192): 회차 대상자 + 대상자 명단에 없는 이 회차 참여 임원(자기평가를 끈 임원 — 임원평가·상향평가로 참여).
+ * 진행 현황의 전체 대상자와 같은 사람 수가 되게
+ */
+export function resultPeople(s: Pick<AppState, 'employees' | 'teams'>, cycle: Cycle): TargetSnapshot[] {
+  const off = new Set(cycle.execOff ?? [])
+  const execs = s.employees.filter((e) => e.active && e.isExecutive && !e.isCeo && !off.has(e.id) && !cycle.targets.some((t) => t.employeeId === e.id))
+  return [...cycle.targets, ...execs.map((e) => personSnap(s, cycle, e.id)!)]
+}
+export const resultPerson = (s: Pick<AppState, 'employees' | 'teams'>, cycle: Cycle, id: string) => resultPeople(s, cycle).find((t) => t.employeeId === id)
+
 export function writerRows(s: Pick<AppState, 'employees' | 'teams' | 'responses'>, cycle: Cycle): WriterRow[] {
   const all = activeWriteAssignments(cycle, s.employees)
   const ids = [...new Set(all.map((a) => a.evaluatorId))]

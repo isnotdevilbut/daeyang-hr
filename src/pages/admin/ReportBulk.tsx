@@ -4,6 +4,7 @@ import { useAppState } from '../../data/store'
 import { cycleLabel } from '../../domain/cycle'
 import type { Cycle } from '../../domain/types'
 import { byTierThenName } from '../../domain/catalog'
+import { resultPeople } from '../../domain/progress'
 import { Modal } from '../../components/ui'
 import { templateXlsx } from '../../domain/xlsx'
 import { csvCell, evalParts, REPORT_HEAD, ReportSheet, reportRows, saveFile, sheetModel } from './Report'
@@ -26,7 +27,7 @@ export function BulkDownload({ cycle, ids, onClose }: { cycle: Cycle; ids: strin
   // 파일 안 순서 = 결과 화면과 같은 고정 순서(팀 가나다 → 직급 → 이름, D-169)
   const targets = useMemo(() => {
     const order = byTierThenName(s, cycle)
-    return cycle.targets.filter((t) => ids.includes(t.employeeId)).sort((a, b) => a.departmentName.localeCompare(b.departmentName, 'ko') || order(a, b))
+    return resultPeople(s, cycle).filter((t) => ids.includes(t.employeeId)).sort((a, b) => a.departmentName.localeCompare(b.departmentName, 'ko') || order(a, b))
   }, [s, cycle, ids])
   const sheets = targets.map((t) => { const parts = evalParts(s, cycle, t); return { t, parts, m: sheetModel(s, cycle, t, parts, on) } })
   const fileBase = `${cycleLabel(cycle)}_개인리포트_선택`.replace(/[\\/:*?"<>|]/g, '_')
