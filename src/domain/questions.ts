@@ -5,7 +5,7 @@ import type { AppState, Assignment, Cycle, Direction, EvaluatorRule, JobType, Op
 /** 응답 상황. teamId·positionId = 평가받는 대상자의 팀·직급 (D-082) */
 export interface QCtx { direction: Direction; rule?: EvaluatorRule; jobType?: JobType; isLead?: boolean; teamId?: string; positionId?: string }
 
-export const RULE_TEXT: Record<EvaluatorRule, string> = { self: '자기평가', upward: '팀원→팀장평가', teamLead: '팀장평가', executive: '임원평가' }
+export const RULE_TEXT: Record<EvaluatorRule, string> = { self: '자기평가', upward: '상향평가', teamLead: '팀장평가', executive: '임원평가' }
 export const RULES: EvaluatorRule[] = ['self', 'upward', 'teamLead', 'executive']
 
 /** 이 문항을 이 응답 상황에서 보여주는가 */

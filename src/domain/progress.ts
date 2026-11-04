@@ -160,6 +160,19 @@ const summarize = (cycle: Cycle, responses: Responses, as: Assignment[]): WriteS
   return { total: as.length, done, open: as.length - done, locked: as.filter((a) => assignmentCell(cycle, responses, a) === 'locked').length }
 }
 
+/** 회차의 그 사람 정보: 대상자면 회차 기록, 아니면(자기평가를 끈 임원 등 — 평가자·임원 상향평가 대상, D-187) 현재 직원 정보로 */
+export function personSnap(s: Pick<AppState, 'employees' | 'teams'>, cycle: Cycle, id: string): TargetSnapshot | undefined {
+  const t = cycle.targets.find((x) => x.employeeId === id)
+  if (t) return t
+  const e = s.employees.find((x) => x.id === id)
+  if (!e) return undefined
+  const team = s.teams.find((x) => x.id === e.teamId)?.name ?? ''
+  return {
+    employeeId: e.id, name: e.name, empNo: e.empNo, companyName: '', departmentId: e.teamId, departmentName: team, teamName: team,
+    position: e.position, jobType: e.jobType, isTeamLead: s.teams.some((x) => !x.archived && x.leadId === e.id), isExecutive: e.isExecutive || e.isCeo,
+  }
+}
+
 export function writerRows(s: Pick<AppState, 'employees' | 'teams' | 'responses'>, cycle: Cycle): WriterRow[] {
   const all = activeWriteAssignments(cycle, s.employees)
   const ids = [...new Set(all.map((a) => a.evaluatorId))]
@@ -168,11 +181,7 @@ export function writerRows(s: Pick<AppState, 'employees' | 'teams' | 'responses'
     const e = s.employees.find((x) => x.id === id)
     if (!e || !e.active) continue // 퇴사(삭제) 처리된 평가자는 명단에 넣지 않음
     const mine = all.filter((a) => a.evaluatorId === id)
-    const snap = cycle.targets.find((x) => x.employeeId === id) ?? {
-      employeeId: e.id, name: e.name, empNo: e.empNo, companyName: '', departmentId: e.teamId,
-      departmentName: s.teams.find((x) => x.id === e.teamId)?.name ?? '', teamName: s.teams.find((x) => x.id === e.teamId)?.name ?? '',
-      position: e.position, jobType: e.jobType, isTeamLead: s.teams.some((x) => !x.archived && x.leadId === e.id), isExecutive: e.isExecutive || e.isCeo,
-    }
+    const snap = personSnap(s, cycle, id)!
     const stages = [1, 2, 3].map((o) => summarize(cycle, s.responses, mine.filter((a) => writeStageOf(cycle, a) === o)))
     const total = summarize(cycle, s.responses, mine)
     const tier = e.isExecutive || e.isCeo ? '임원' : s.teams.some((x) => !x.archived && x.leadId === e.id) ? '팀장' : '사원'
@@ -194,7 +203,7 @@ export interface ProgressRow {
   t: TargetSnapshot
   tier: '임원' | '팀장' | '사원'
   cells: ProgressCell[] // [자기평가, 팀장평가, 임원평가]
-  /** 팀원→팀장평가(D-114, 1단계 분류): 사원 = 본인이 작성할 건(write), 팀장 = 팀원들에게 받는 건수(write 모양으로 완료/전체), 그 외 — */
+  /** 상향평가(D-114·D-187, 1단계 분류): 본인이 작성할 건 + 받는 건을 합친 완료/전체(write 모양), 없으면 — */
   up: ProgressCell
   recv: StageCell[] // 본인이 받는 단계(대상자가 아니면 모두 해당 없음)
   writes: WriterRow | null // 본인이 작성할 업무(없으면 null)
@@ -202,33 +211,35 @@ export interface ProgressRow {
   mismatch: boolean
 }
 
-/** 집계에 쓰는 팀원→팀장평가: 평가자(사원)·대상자(팀장) 모두 재직 중이고 회차 집계 대상 */
+/** 집계에 쓰는 상향평가: 평가자(사원·팀장)가 회차 집계 대상, 대상자는 집계 대상(팀장) 또는 이 회차 참여 임원(D-187) */
 export function upwardAssignments(cycle: Cycle, employees: Employee[]): Assignment[] {
   const ids = new Set(activeTargets(cycle, employees).map((t) => t.employeeId))
-  return cycle.assignments.filter((a) => isUpward(a) && ids.has(a.targetId) && ids.has(a.evaluatorId))
+  const off = new Set(cycle.execOff ?? [])
+  const execs = new Set(employees.filter((e) => e.active && e.isExecutive && !off.has(e.id)).map((e) => e.id))
+  return cycle.assignments.filter((a) => isUpward(a) && (ids.has(a.targetId) || execs.has(a.targetId)) && ids.has(a.evaluatorId))
 }
 
 export function progressRows(s: Pick<AppState, 'employees' | 'teams' | 'responses'>, cycle: Cycle): ProgressRow[] {
   const targets = activeTargets(cycle, s.employees)
   const writers = new Map(writerRows(s, cycle).map((r) => [r.t.employeeId, r]))
   const ups = upwardAssignments(cycle, s.employees)
-  const ids = [...new Set([...targets.map((t) => t.employeeId), ...writers.keys()])]
+  const ids = [...new Set([...targets.map((t) => t.employeeId), ...writers.keys(), ...ups.map((a) => a.targetId)])] // 상향평가만 받는 임원도(D-187)
   const rows: ProgressRow[] = []
   for (const id of ids) {
     const e = s.employees.find((x) => x.id === id)
     if (!e || !e.active) continue
     const t = targets.find((x) => x.employeeId === id)
     const w = writers.get(id) ?? null
-    const snap = t ?? w!.t
+    const snap = t ?? w?.t ?? personSnap(s, cycle, id)!
     const tier: ProgressRow['tier'] = e.isExecutive || e.isCeo ? '임원' : s.teams.some((x) => !x.archived && x.leadId === e.id) ? '팀장' : '사원'
     const recv = t ? targetCells(cycle, s.responses, t, 3) : [1, 2, 3].map((order) => ({ order, label: '', status: 'na' as CellStatus }))
     const r = (i: number): ProgressCell => (recv[i].status === 'na' ? { kind: 'na' } : { kind: 'recv', status: recv[i].status })
     const wc = (i: number): ProgressCell => (w && w.stages[i].total > 0 ? { kind: 'write', w: w.stages[i] } : { kind: 'na' })
     const cells: ProgressCell[] = tier === '임원' ? [r(0), { kind: 'na' }, wc(2)] : tier === '팀장' ? [r(0), wc(1), r(2)] : [r(0), r(1), r(2)]
-    // 팀원→팀장평가: 사원은 작성할 건, 팀장은 받는 건 — 완료자 판단에 함께 넣음(모든 평가 제출)
-    const upMine = ups.filter((a) => (tier === '팀장' ? a.targetId === id : a.evaluatorId === id))
+    // 상향평가(D-187): 사원 = 작성할 건(팀장·임원), 팀장 = 팀원들에게 받는 건 + 임원에게 작성할 건, 임원 = 사원·팀장에게 받는 건 — 완료자 판단에 함께 넣음
+    const upMine = ups.filter((a) => a.targetId === id || a.evaluatorId === id)
     const upSum = summarize(cycle, s.responses, upMine)
-    const up: ProgressCell = upMine.length && tier !== '임원' ? { kind: 'write', w: upSum } : { kind: 'na' }
+    const up: ProgressCell = upMine.length ? { kind: 'write', w: upSum } : { kind: 'na' }
     const recvOk = recv.every((c) => c.status === 'na' || c.status === 'submitted') && upSum.open === 0
     const writeOk = !w || w.total.open === 0
     const has = recv.some((c) => c.status !== 'na') || !!w || upMine.length > 0

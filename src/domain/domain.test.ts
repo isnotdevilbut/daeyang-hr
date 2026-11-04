@@ -11,6 +11,7 @@ import { createCycle, cycleLabel, DEFAULT_TEMPLATE_BY_JOB, eligibleTargets } fro
 import { LEGACY_UPWARD_ID } from './templates'
 import { migrate as migrateAll } from '../data/migrate'
 import { DEMO20_AT } from './demoV20'
+import { EXEC_BLEND_OLD } from './upward'
 /**
  * 이전 단계 변환 시험용: v20(D-117)·v21(D-121)의 시연 응답 조정만 빼고 본다 — 이 시험들은 각 단계가 기존 응답을 바꾸지 않는지를 확인한다.
  * v20 자체는 '시연 완료 비중 (D-117)' 시험에서 migrateAll로 확인
@@ -21,6 +22,15 @@ const migrate = (x: any) => {
   // v21(D-121)이 되돌린 팀원→팀장평가 시연 제출도 원래대로
   if (r) for (const [k, v] of Object.entries((x.responses ?? {}) as Record<string, any>)) if (v.demo && !r.state.responses[k] && r.state.cycles.some((c) => c.assignments.some((a) => a.id === k && a.direction === 'up'))) r.state.responses[k] = v
   // 원래 키 순서 유지(JSON 비교)
+  // v26(D-187)의 팀원·팀장 → 임원 상향평가 배정·시연 응답·임원 상향평가 켬도 원래대로(v26 자체는 'D-187' 시험에서 migrateAll로 확인)
+  if (r) for (const c of r.state.cycles) {
+    const ux = c.assignments.filter((a) => a.id.includes('-ux-') && !x.cycles?.some((o: any) => o.assignments?.some((b: any) => b.id === a.id)))
+    for (const a of ux) if (!x.responses?.[a.id]) delete r.state.responses[a.id]
+    c.assignments = c.assignments.filter((a) => !ux.includes(a))
+    const o = x.cycles?.find((y: any) => y.id === c.id)
+    if (!o?.upwardToExec) delete c.upwardToExec
+    if (c.finalBlendPlan && !o?.finalBlendPlan?.exec?.[1]?.on && r.notes.some((n) => n.startsWith(`${c.name}: 임원 최종 반영 비율`))) c.finalBlendPlan.exec = EXEC_BLEND_OLD()
+  }
   if (r && x.responses) { const o: Record<string, any> = {}; for (const k of Object.keys(x.responses)) if (k in r.state.responses) o[k] = r.state.responses[k]; for (const k of Object.keys(r.state.responses)) if (!(k in o)) o[k] = r.state.responses[k]; r.state.responses = o }
   return r
 }
@@ -114,7 +124,7 @@ describe('상향평가 제외 · 팀장의 두 역할', () => {
   it('D-114: 시드·새 회차의 팀원→팀장평가 = 참여 사원마다 소속 팀 팀장 한 건(1단계 분류), 팀장·임원은 평가자 아님', () => {
     const s = createSeed()
     const check = (c: Cycle) => {
-      const ups = c.assignments.filter((a) => a.direction === 'up' && !a.excluded)
+      const ups = c.assignments.filter((a) => a.direction === 'up' && !a.excluded && !s.employees.find((e) => e.id === a.targetId)!.isExecutive) // 임원이 받는 상향평가(D-187)는 따로
       const staff = c.targets.filter((t) => !t.isExecutive && !s.teams.some((x) => !x.archived && x.leadId === t.employeeId))
       expect(ups.length).toBe(staff.length)
       for (const a of ups) {
@@ -314,7 +324,7 @@ describe('이전 브라우저 저장 데이터 변환 (v1 → v2)', () => {
     const selfCount = v1.cycles[0].assignments.filter((a: any) => a.direction !== 'up').length
     const m = migrate(v1)!
     const c = m.state.cycles[0] as any
-    expect(m.state.schemaVersion).toBe(25)
+    expect(m.state.schemaVersion).toBe(26)
     // 이전(v1) 상향평가 배정·응답은 지우고, 마감·확정 회차가 아니면 D-114의 새 팀원→팀장평가가 v18에서 따로 생김
     expect(c.assignments.some((a: any) => a.id === 'up1' || a.templateId === LEGACY_UPWARD_ID)).toBe(false)
     expect(c.assignments.filter((a: any) => a.direction !== 'up').length).toBe(selfCount)
@@ -525,7 +535,7 @@ describe('평가 관리 통합 (v3)', () => {
     delete s.cycles[0].stageWeights
     s.policy.stageWeights = { 1: 20, 2: 40, 3: 40 }
     const m = migrate(s)!
-    expect(m.state.schemaVersion).toBe(25)
+    expect(m.state.schemaVersion).toBe(26)
     expect(m.state.cycles[0].stageWeights.member).toEqual({ 1: 20, 2: 40, 3: 40 })
     expect(m.state.cycles[0].stageWeights.lead).toEqual({ 1: 33.3, 3: 66.7 }) // v8: 팀장 임원평가 = 3단계
     expect((m.state.policy as any).stageWeights).toBeUndefined()
@@ -857,7 +867,7 @@ describe('부서 KPI (목업 제안 정책, 회사 승인 산식 아님)', () =>
     s.kpi = [{ cycleId: s.cycles[0].id, departmentId: 'd-a-mgmt', score: 77, range: '0~100', unit: '점', source: '사용자', basisPeriod: 'x' }]
     delete s.cycles[0].kpiBlend
     const m = migrate(s)!
-    expect(m.state.schemaVersion).toBe(25)
+    expect(m.state.schemaVersion).toBe(26)
     expect(m.state.kpi[0]).toMatchObject({ score: 77, mode: 'manual', source: '사용자' })
     expect(m.state.kpiIndicators.filter((x) => !x.id.includes('-kpi-plan-'))).toEqual([]) // v23(D-151) 경영기획팀 가상 지표만
     expect(m.state.cycles[0].kpiBlend).toEqual({ enabled: false, personal: null, kpi: null })
@@ -894,7 +904,7 @@ describe('평가 상태 4가지 (D-054)', () => {
     s.cycles.push(other)
     const before = JSON.stringify([s.responses, s.adjustments, s.kpi, s.cycles[0].assignments, s.cycles[0].targets, s.cycles[0].templates])
     const m = migrate(s)!
-    expect(m.state.schemaVersion).toBe(25)
+    expect(m.state.schemaVersion).toBe(26)
     expect(m.state.cycles.map((c) => c.status)).toEqual(['마감', '확정'])
     const c = m.state.cycles[0]
     expect(JSON.stringify([m.state.responses, m.state.adjustments, m.state.kpi, c.assignments, c.targets, c.templates])).toBe(before)
@@ -998,7 +1008,7 @@ describe('진행 현황 카드 = 평가받는 대상자 기준 (D-056·D-057)', 
     s.responses['old-exec-self'] = { assignmentId: 'old-exec-self', answers: { x: '1' }, status: 'submitted', savedAt: '', submittedAt: '', lang: 'ko' }
     const respBefore = JSON.stringify(s.responses)
     const m = migrate(s)!
-    expect(m.state.schemaVersion).toBe(25)
+    expect(m.state.schemaVersion).toBe(26)
     const mc = m.state.cycles[0]
     expect(mc.assignments.find((a) => a.id === 'old-exec-self')!.excluded).toBe('execSelf')
     expect(mc.assignments.filter((a) => a.excluded === 'execSelf')).toHaveLength(1)
@@ -1126,7 +1136,7 @@ describe('네 팀 구조·자연스러운 가상 성명 (D-065)', () => {
     const old = v6()
     const m = migrate(structuredClone(old))!
     const s = m.state
-    expect(s.schemaVersion).toBe(25)
+    expect(s.schemaVersion).toBe(26)
     const base = s.employees.slice(0, old.employees.length) // D-079 가상 사원은 뒤에 추가
     expect(base.map((e) => [e.id, e.empNo])).toEqual(old.employees.map((e) => [e.id, e.empNo]))
     expect(base.map((e) => e.name)).toEqual(old.employees.map((e) => NEW_NAMES[e.id]))
@@ -1159,7 +1169,7 @@ describe('네 팀 구조·자연스러운 가상 성명 (D-065)', () => {
     // 배정(평가자)도 새 데이터와 같은 구조 — 새 시드에서도 임원 3명 모두 배정을 가진다
     // D-116: 새 데이터는 문태호를 임원 담당 나누기(v15) 전에 참여시키고, 변환은 v19에서(기존 담당을 다시 나누지 않음) 참여시킨다 —
     // 그래서 응답 없는 임원평가의 담당 임원은 다를 수 있음. 대상자·단계 구조와 '대상자당 임원 한 명'은 같게
-    const shape = (st: AppState) => st.cycles[0].assignments.map((x) => [x.targetId, x.stageOrder === 3 ? '임원' : x.evaluatorId, x.stageOrder]).sort().join()
+    const shape = (st: AppState) => st.cycles[0].assignments.filter((x) => !x.id.includes('-ux-')).map((x) => [x.targetId, x.stageOrder === 3 ? '임원' : x.evaluatorId, x.stageOrder]).sort().join()
     expect(shape(s)).toBe(shape(fresh))
     const execIds = new Set(s.employees.filter((e) => e.isExecutive).map((e) => e.id))
     for (const t of s.cycles[0].targets) expect(s.cycles[0].assignments.filter((x) => x.targetId === t.employeeId && x.stageOrder === 3 && !x.excluded).every((x) => execIds.has(x.evaluatorId))).toBe(true)
@@ -1252,7 +1262,7 @@ describe('고정 단계 번호·팀장/임원 자기평가·세 직급 (D-068)',
     const resp = JSON.stringify(old.responses)
     const m = migrate(structuredClone(old))!
     const c = m.state.cycles[0]
-    expect(m.state.schemaVersion).toBe(25)
+    expect(m.state.schemaVersion).toBe(26)
     expect(c.assignments.find((a) => a.id === leadA.id)!.stageOrder).toBe(3)
     expect(JSON.stringify(m.state.responses)).toBe(resp)
     expect(c.stageWeights.lead).toEqual({ 1: 20, 3: 40 }) // v8 50/50(같은 유형) → v16 자문 초기값 20/40 (D-103)
@@ -1406,7 +1416,7 @@ describe('진행 현황 = 작성자 기준 (D-071)', () => {
     const s = createSeed(); const c = s.cycles[0]
     const r = row(s, 'e04')!
     expect(r.stages[0].total).toBe(1)
-    expect(r.stages[1].total).toBe(c.assignments.filter((a) => a.evaluatorId === 'e04' && a.direction !== 'self' && !a.excluded).length)
+    expect(r.stages[1].total).toBe(c.assignments.filter((a) => a.evaluatorId === 'e04' && a.direction !== 'self' && a.direction !== 'up' && !a.excluded).length)
     expect(r.stages[2].total).toBe(0)
     setSelfEval(s, c.id, 'e04', false)
     expect(row(s, 'e04')!.stages[0].total).toBe(0)
@@ -1504,7 +1514,7 @@ describe('평가 참여자·자기평가 통합 설정 (D-072)', () => {
     applyParticipation(s, c.id, ids(s), { e02: true })
     expect(c.assignments.some((a) => a.targetId === 'e02' && a.direction === 'self')).toBe(true)
     applyParticipation(s, c.id, ids(s), { e02: false })
-    expect(c.assignments.some((a) => a.targetId === 'e02' && !a.excluded)).toBe(false)
+    expect(c.assignments.some((a) => a.targetId === 'e02' && !a.excluded && a.direction !== 'up')).toBe(false) // 받는 상향평가(D-187)는 자기평가와 무관
     expect(c.assignments.filter((a) => a.evaluatorId === 'e02' && a.targetId !== 'e02').map((a) => a.id).sort()).toEqual(before)
     expect(participation(s, c).has('e02')).toBe(true)
   })
@@ -1520,12 +1530,13 @@ describe('평가 참여자·자기평가 통합 설정 (D-072)', () => {
   it('배정 없는 임원 참여 해제 → execOff, 자기평가 값은 초기화하지 않고 배정만 정리, 새 배정의 평가자에서 제외', () => {
     const s = createSeed(); const c = s.cycles[0]
     for (const a of c.assignments.filter((x) => x.evaluatorId === 'e01')) a.evaluatorId = 'e02' // 작성 배정이 없는 임원으로 만든 뒤 확인
+    for (const a of c.assignments.filter((x) => x.targetId === 'e01' && x.direction === 'up')) delete s.responses[a.id] // 받은 상향평가 응답도 없게(D-187 — 응답이 있으면 참여 해제하지 않음)
     applyParticipation(s, c.id, ids(s), { e01: true })
     expect(c.assignments.some((a) => a.targetId === 'e01' && a.direction === 'self')).toBe(true)
     applyParticipation(s, c.id, ids(s).filter((x) => x !== 'e01'), { e01: true })
     expect(c.execOff).toEqual(['e01'])
     expect(c.selfEval?.e01).toBe(true) // 값 보존
-    expect(c.assignments.some((a) => a.targetId === 'e01' && !a.excluded)).toBe(false)
+    expect(c.assignments.some((a) => a.targetId === 'e01' && !a.excluded && a.direction !== 'up')).toBe(false)
     expect(c.targets.some((t) => t.employeeId === 'e01')).toBe(false)
     // 참여하지 않는 임원은 새로 만드는 배정의 평가자로 고르지 않음
     c.execOff = s.employees.filter((e) => e.isExecutive && e.id !== 'e03').map((e) => e.id)
@@ -1611,7 +1622,7 @@ describe('한국어·러시아어: 저장된 번역문 표시 (D-075)', async ()
     const resp = JSON.stringify(s.responses); const ids = JSON.stringify(d.sections.map((x: any) => x.questions.map((q: any) => [q.id, q.options.map((o: any) => o.id)])))
     const m = migrate(s)!
     const md = m.state.cycles[0].templates['tpl-draft']
-    expect(m.state.schemaVersion).toBe(25)
+    expect(m.state.schemaVersion).toBe(26)
     expect(md.sections[0].questions[0].i18n).toBeUndefined()
     expect(md.sections[0].questions[1].i18n!.ru!.title).toBe('Мой перевод')
     expect(md.sections.find((x) => x.id === 'd-performance')!.questions[0].i18n!.ru!.title).toContain('Результаты')
@@ -1699,9 +1710,9 @@ describe('진행 현황: 받는 평가 + 작성 업무, 임원 4명·배정 정�
     c.assignments = c.assignments.filter((a) => !(a.targetId === m.employeeId && a.stageOrder === 2)) // 배정 누락
     expect(row(s, m.employeeId).recv[1].status).toBe('unassigned')
     expect(row(s, m.employeeId).complete).toBe(false)
-    // 임원: 받는 평가 없음 → 작성 업무를 모두 제출해야 완료
+    // 임원: 받는 평가는 상향평가(D-187)만 → 작성 업무와 받는 상향평가를 모두 제출해야 완료
     const ex = row(s, 'e01'); expect(ex.complete).toBe(false)
-    for (const a of c.assignments.filter((x) => x.evaluatorId === 'e01')) sub(s, a.id)
+    for (const a of c.assignments.filter((x) => x.evaluatorId === 'e01' || (x.targetId === 'e01' && x.direction === 'up'))) sub(s, a.id)
     expect(row(s, 'e01').complete).toBe(true)
   })
   it('카드(사람 수): 자기평가 = 자기평가 대상자, 팀장평가 = 사원 평가 배정이 있는 현재 팀장, 임원평가 = 배정이 있는 임원(4명), 단계 카드 클릭 = 그 기준 미완료자만', () => {
@@ -1759,7 +1770,7 @@ describe('자기평가 스위치는 현재 직급 기준, 현재 사원은 자�
     const s: any = createSeed({ until: 19 }); s.schemaVersion = 10
     setSelfEval(s, s.cycles[0].id, 'e21', false) // 송하은(현재 사원)
     const m = migrate(structuredClone(s))!
-    expect(m.state.schemaVersion).toBe(25)
+    expect(m.state.schemaVersion).toBe(26)
     expect(selfApplies(m.state.cycles[0], m.state.cycles[0].targets.find((t) => t.employeeId === 'e21')!)).toBe(true)
     expect(m.notes.join()).toContain('송하은')
     s.cycles[0].status = '확정'
@@ -1841,7 +1852,7 @@ describe('35명 구성·현재 조직 기준 평가 경로 (D-079)', async () =>
     expect(badges(before).length).toBeGreaterThan(0)
     const m = migrate(structuredClone(before))!
     const s = m.state
-    expect(s.schemaVersion).toBe(25)
+    expect(s.schemaVersion).toBe(26)
     expect(sizes(s)).toEqual([4, 7, 11, 9])
     expect(s.employees.filter((e) => e.active && tierOf(s, e) === '임원')).toHaveLength(4)
     expect(s.employees.filter((e) => e.active)).toHaveLength(35)
@@ -1936,7 +1947,7 @@ describe('조직 설정: 직무·직급 목록 (D-080)', async () => {
     old.employees.push({ id: 'e-gone', empNo: '0099', name: '가상퇴사', teamId: 'tm-prod1', position: '반장', jobType: 'production', isExecutive: false, isCeo: false, active: false, evalExcluded: false })
     const m = migrate(structuredClone(old))!
     const s = m.state
-    expect(s.schemaVersion).toBe(25)
+    expect(s.schemaVersion).toBe(26)
     expect(JSON.stringify([s.responses, s.cycles])).toBe(JSON.stringify([old.responses, old.cycles]))
     expect(s.employees.map((e) => [e.id, e.empNo, e.name, e.teamId, e.jobType])).toEqual(old.employees.map((e: any) => [e.id, e.empNo, e.name, e.teamId, e.jobType]))
     const g = s.employees.find((e) => e.id === 'e-gone')!
@@ -2440,7 +2451,7 @@ describe('평가표 배점·점수 산식 (D-103)', async () => {
     expect(leadSelf.filter((a) => !s.responses[a.id]).every((a) => a.templateId === lv.templateId)).toBe(true)
     expect(leadSelf.filter((a) => s.responses[a.id]).every((a) => a.templateId === 'tpl-draft')).toBe(true)
     // 사원 자기평가·팀장평가는 공통(사원) 평가표
-    expect(c.assignments.filter((a) => !a.excluded && !c.targets.find((t) => t.employeeId === a.targetId)!.isTeamLead && !c.targets.find((t) => t.employeeId === a.targetId)!.isExecutive).every((a) => a.templateId === 'tpl-draft')).toBe(true)
+    expect(c.assignments.filter((a) => !a.excluded && !a.id.includes('-ux-') && !c.targets.find((t) => t.employeeId === a.targetId)!.isTeamLead && !c.targets.find((t) => t.employeeId === a.targetId)!.isExecutive).every((a) => a.templateId === 'tpl-draft')).toBe(true)
     expect(c.finalBlendPlan!.lead.map((x) => [x.key, x.pct])).toEqual([['self', 20], ['kpi', 40], ['upward', 40]]) // D-183: 회사 정정 20/40/40
     expect(c.finalBlendPlan!.lead.find((x) => x.key === 'upward')!.on).toBe(true) // D-183: 합계 100%가 되도록 상향평가 켬(점수 반영은 보류 그대로)
     void makeLeadSelfTemplate
@@ -2453,13 +2464,15 @@ describe('평가표 배점·점수 산식 (D-103)', async () => {
     const lid = c.versions.find((v: any) => v.name === '팀장 자기평가표').templateId
     c.versions = c.versions.filter((v: any) => v.templateId !== lid); delete c.templates[lid]; delete c.finalBlendPlan
     c.assignments.forEach((a: any) => { if (a.templateId === lid) a.templateId = 'tpl-draft' })
+    for (const a of c.assignments.filter((x: any) => x.id.includes('-ux-'))) delete s.responses[a.id] // v26(D-187) 이전: 임원 상향평가 없음
+    c.assignments = c.assignments.filter((x: any) => !x.id.includes('-ux-')); delete c.upwardToExec
     c.stageWeights = { member: { 1: 33.3, 2: 33.3, 3: 33.4 }, lead: { 1: 60, 3: 40 }, exec: { 1: 100 } } // 팀장 경로는 사용자가 바꾼 값
     const done = structuredClone(c); done.id = 'c-done'; done.status = '확정'; s.cycles.push(done)
     s.schemaVersion = 15
     const before = structuredClone(s)
     const m = migrate(s)!
     const n = m.state.cycles[0]
-    expect(m.state.schemaVersion).toBe(25)
+    expect(m.state.schemaVersion).toBe(26)
     expect(JSON.stringify(m.state.responses)).toBe(JSON.stringify(before.responses))
     expect(n.assignments.map((a) => a.id)).toEqual(before.cycles[0].assignments.map((a: any) => a.id))
     expect(n.templates['tpl-draft'].sections.flatMap((x) => x.questions.map((q) => [q.id, q.i18n?.ru?.title]))).toEqual(before.cycles[0].templates['tpl-draft'].sections.flatMap((x: any) => x.questions.map((q: any) => [q.id, q.i18n?.ru?.title])))
@@ -2524,7 +2537,7 @@ describe('임원 팀마다 한 명 (D-110)', async () => {
     old.employees.find((e: any) => e.id === 'e02').teamId = 'tm-plan'
     old.employees.find((e: any) => e.id === 'e23').teamId = 'tm-plan'
     const m = migrate(structuredClone(old))!
-    expect(m.state.schemaVersion).toBe(25)
+    expect(m.state.schemaVersion).toBe(26)
     expect(execTeams(m.state)).toEqual(['경영기획팀', '생산팀', '설계팀', '현장팀'])
     expect(m.notes.filter((n) => n.startsWith('임원 '))).toHaveLength(2)
     const strip = (x: any) => x.employees.map((e: any) => ({ ...e, teamId: e.isExecutive ? '' : e.teamId }))
@@ -2593,22 +2606,25 @@ describe('팀원→팀장평가 (D-114)', async () => {
     for (const a of ups) delete s.responses[a.id]
     expect(personResult(s, c, lead.employeeId)!.combined).toEqual(before)
   })
-  it('진행 현황: 사원 = 작성할 1건, 팀장 = 받는 건수, 완료자는 팀원→팀장평가까지 제출해야', () => {
+  it('진행 현황: 상향평가 칸 = 작성할 건 + 받는 건(사원 팀장·임원 2건, 팀장 받는 건 + 임원 1건, 임원 받는 건), 완료자는 상향평가까지 제출해야', () => {
     const s = createSeed(); const c = live(s)
     const rows = progressRows(s, c)
     const lead = rows.find((r) => r.tier === '팀장')!
-    const n = upwardAssignments(c, s.employees).filter((a) => a.targetId === lead.t.employeeId).length
+    const n = upwardAssignments(c, s.employees).filter((a) => a.targetId === lead.t.employeeId || a.evaluatorId === lead.t.employeeId).length
     expect(lead.up).toMatchObject({ kind: 'write', w: { total: n } })
     const member = rows.find((r) => r.tier === '사원' && r.up.kind === 'write' && r.up.w.open === 1)!
     expect(member.complete).toBe(false)
     // 그 사원의 나머지가 모두 제출이면 팀원→팀장평가 제출로 완료자가 됨
     const doneMember = rows.find((r) => r.tier === '사원' && r.up.kind === 'write' && r.up.w.open === 1 && r.recv.every((x) => x.status === 'na' || x.status === 'submitted'))
     if (doneMember) {
-      const a = upwardAssignments(c, s.employees).find((x) => x.evaluatorId === doneMember.t.employeeId)!
+      const a = upwardAssignments(c, s.employees).find((x) => x.evaluatorId === doneMember.t.employeeId && statusOf(s.responses, x.id) !== 'submitted')!
       s.responses[a.id] = { assignmentId: a.id, answers: {}, status: 'submitted', savedAt: '', submittedAt: '', lang: 'ko' }
       expect(progressRows(s, c).find((r) => r.t.employeeId === doneMember.t.employeeId)!.complete).toBe(true)
     }
-    expect(rows.find((r) => r.tier === '임원')!.up.kind).toBe('na')
+    const ex = rows.find((r) => r.tier === '임원')!
+    expect(ex.up).toMatchObject({ kind: 'write', w: { total: upwardAssignments(c, s.employees).filter((a) => a.targetId === ex.t.employeeId).length } })
+    const m2 = rows.find((r) => r.tier === '사원')!
+    expect(m2.up).toMatchObject({ kind: 'write', w: { total: 2 } }) // 팀장 + 임원
   })
   it('팀장이 바뀌면: 응답 없는 배정은 새 팀장으로, 응답 있는 배정은 보존(집계 제외)', () => {
     const s = createSeed({ until: 19 }); const c = live(s)
@@ -2634,7 +2650,7 @@ describe('팀원→팀장평가 (D-114)', async () => {
       delete c.templates[`${c.id}-tpl-upward`]
     }
     const m = migrate(structuredClone(old))!
-    expect(m.state.schemaVersion).toBe(25)
+    expect(m.state.schemaVersion).toBe(26)
     for (const [i, c] of m.state.cycles.entries()) {
       expect(c.assignments.filter((a) => a.direction !== 'up')).toEqual(old.cycles[i].assignments)
       if (c.status === '진행' || c.status === '준비') expect(c.assignments.some((a) => a.direction === 'up')).toBe(true)
@@ -2657,7 +2673,9 @@ describe('재직 사원·팀장 모두 평가 참여 (D-116)', async () => {
     expect(c.assignments.some((a) => a.evaluatorId === 'e26' && a.direction === 'self')).toBe(true)
     for (const a of c.assignments.filter((x) => x.direction === 'up' && !x.excluded)) {
       const m = s.employees.find((e) => e.id === a.evaluatorId)!
-      expect(s.teams.find((t) => t.id === m.teamId)!.leadId).toBe(a.targetId)
+      const to = s.employees.find((e) => e.id === a.targetId)!
+      if (to.isExecutive) expect(to.teamId).toBe(m.teamId) // 팀원·팀장 → 소속 팀 임원(D-187)
+      else expect(s.teams.find((t) => t.id === m.teamId)!.leadId).toBe(a.targetId)
     }
   })
   it('v18 → v19: 참여하지 않던 사원(이전에 올린 직원·평가 제외)을 참여자로, 기존 배정·응답·마감 회차 그대로, 반복 안전', () => {
@@ -2703,7 +2721,7 @@ describe('시연 완료 비중 (D-117)', async () => {
     const mineA = c.assignments.find((a: any) => a.direction === 'self' && !old.responses[a.id])!
     old.responses[mineA.id] = { assignmentId: mineA.id, answers: {}, status: 'draft', savedAt: '2026-11-01T00:00:00.000Z', submittedAt: null, lang: 'ko' } // 사용자 임시저장
     const m = migrateAll(structuredClone(old))!
-    expect(m.state.schemaVersion).toBe(25)
+    expect(m.state.schemaVersion).toBe(26)
     expect(m.state.responses[mineA.id]).toEqual(old.responses[mineA.id])
     const e10up = new Set(c.assignments.filter((a: any) => a.direction === 'up' && a.targetId === 'e10').map((a: any) => a.id)) // v21(D-121)이 한 건 되돌림
     for (const [k, r] of Object.entries(old.responses as Record<string, any>)) if (!(r.demo && r.status === 'draft') && !e10up.has(k)) expect(m.state.responses[k]).toEqual(r)
@@ -2791,7 +2809,9 @@ describe('장현우 팀원→팀장평가 5/6 (D-121)', async () => {
   it('새 시드: 장현우가 받는 팀원→팀장평가 5/6, 사용자 응답이면 되돌리지 않음, 반복 안전', () => {
     const s = createSeed(); const c = s.cycles.find((x) => x.status === '진행')!
     const r = progressRows(s, c).find((x) => x.t.employeeId === 'e10')!
-    expect(r.up).toMatchObject({ kind: 'write', w: { done: 5, total: 6 } })
+    const got = c.assignments.filter((a) => a.direction === 'up' && !a.excluded && a.targetId === 'e10') // 받는 상향평가(팀원→팀장)
+    expect([got.filter((a) => statusOf(s.responses, a.id) === 'submitted').length, got.length]).toEqual([5, 6])
+    expect(r.up.kind).toBe('write')
     expect(r.complete).toBe(false)
     expect(leadUpwardOpen(s)).toEqual([])
     const u: any = createSeed({ until: 19 })
@@ -3042,7 +3062,7 @@ describe('v23 → v24 등급 인원 비율 E 등급 (D-160)', () => {
   it('E가 없으면 0%로 추가, A~D는 그대로 · 다시 실행해도 같다 · 이미 있으면 그대로', () => {
     const s: any = createSeed({ until: 23 }); expect(s.policy.gradeRatios.E).toBeUndefined(); s.policy.gradeRatios.A = 30; s.policy.gradeRatios.C = 30
     const m = migrateAll(s)!
-    expect(m.state.schemaVersion).toBe(25)
+    expect(m.state.schemaVersion).toBe(26)
     expect(m.state.policy.gradeRatios).toEqual({ A: 30, B: 25, C: 30, D: 15, E: 0 })
     const again: any = structuredClone(m.state); again.schemaVersion = 23; again.policy.gradeRatios.E = 5
     expect(migrateAll(again)!.state.policy.gradeRatios.E).toBe(5)
@@ -3055,7 +3075,7 @@ describe('v24 → v25 팀장 최종 반영 비율 20/40/40 (D-183)', () => {
     const open = s.cycles.find((c: any) => c.status === '진행' || c.status === '준비')
     expect(open.finalBlendPlan.lead.map((x: any) => x.pct)).toEqual([20, 30, 40])
     const m = migrateAll(structuredClone(s))!
-    expect(m.state.schemaVersion).toBe(25)
+    expect(m.state.schemaVersion).toBe(26)
     const lead = m.state.cycles.find((c) => c.id === open.id)!.finalBlendPlan!.lead
     expect(lead).toEqual([{ key: 'self', on: true, pct: 20 }, { key: 'kpi', on: true, pct: 40 }, { key: 'upward', on: true, pct: 40 }])
     const again: any = structuredClone(m.state); again.schemaVersion = 24
@@ -3064,5 +3084,47 @@ describe('v24 → v25 팀장 최종 반영 비율 20/40/40 (D-183)', () => {
     expect(migrateAll(edited)!.state.cycles.find((c) => c.id === open.id)!.finalBlendPlan!.lead[1].pct).toBe(35)
     const closed: any = structuredClone(s); closed.cycles.find((c: any) => c.id === open.id).status = '마감'
     expect(migrateAll(closed)!.state.cycles.find((c) => c.id === open.id)!.finalBlendPlan!.lead[1].pct).toBe(30)
+  })
+})
+
+describe('상향평가 = 팀원→팀장·팀원→임원·팀장→임원 (D-187)', async () => {
+  const U = await import('./upward')
+  const { progressRows } = await import('./progress')
+  it('v25 → v26: 사원·팀장 → 소속 팀 임원 배정 추가, 기존 배정·응답 그대로, 임원 최종 반영 60 + 상향 40 켬, 마감·확정 그대로, 반복 안전', () => {
+    const old: any = createSeed({ until: 25 })
+    const done = structuredClone(old.cycles[0]); done.id = 'c-done'; done.status = '확정'; old.cycles.push(done)
+    expect(old.cycles[0].finalBlendPlan.exec).toEqual(U.EXEC_BLEND_OLD())
+    const m = migrateAll(structuredClone(old))!
+    expect(m.state.schemaVersion).toBe(26)
+    const c = m.state.cycles[0], s = m.state
+    expect(c.upwardToExec).toBe(true)
+    for (const [id, r] of Object.entries(old.responses)) expect(s.responses[id]).toEqual(r)
+    expect(c.assignments.filter((a) => !a.id.includes('-ux-'))).toEqual(old.cycles[0].assignments)
+    const ux = c.assignments.filter((a) => a.id.includes('-ux-'))
+    const staff = c.targets.filter((t) => !t.isExecutive)
+    expect(ux.length).toBe(staff.length) // 참여 사원·팀장마다 소속 팀 임원 한 건(팀마다 임원 한 명, D-110)
+    for (const a of ux) {
+      const from = s.employees.find((e) => e.id === a.evaluatorId)!, to = s.employees.find((e) => e.id === a.targetId)!
+      expect(to.isExecutive).toBe(true); expect(to.teamId).toBe(from.teamId); expect(a.direction).toBe('up'); expect(a.stageOrder).toBe(1)
+    }
+    expect(new Set(ux.map((a) => U.upwardKind(s, a)))).toEqual(new Set(['memberToExec', 'leadToExec']))
+    expect(ux.some((a) => s.responses[a.id]?.status === 'submitted')).toBe(true) // 새 배정에만 시연 응답(절반 제출)
+    expect(c.finalBlendPlan!.exec).toEqual([{ key: 'kpi', on: true, pct: 60 }, { key: 'upward', on: true, pct: 40 }])
+    expect(m.state.cycles[1]).toEqual(old.cycles[1]) // 확정 회차 그대로
+    const again = structuredClone(s)
+    expect(U.upwardExecV26(again)).toEqual([])
+    expect(again).toEqual(s)
+    // 사용자가 고친 임원 비율은 그대로
+    const o2: any = createSeed({ until: 25 }); o2.cycles[0].finalBlendPlan.exec = [{ key: 'kpi', on: true, pct: 100 }, { key: 'upward', on: false, pct: 0 }]
+    expect(migrateAll(o2)!.state.cycles[0].finalBlendPlan!.exec[0].pct).toBe(100)
+  })
+  it('진행 현황·참여 변경: 임원이 받는 상향평가는 임원이 대상자가 아니어도 집계, 참여자를 바꿔도 응답 있는 배정을 지우지 않음', () => {
+    const s = createSeed(); const c = s.cycles[0]
+    const answered = c.assignments.filter((a) => a.id.includes('-ux-') && s.responses[a.id])
+    expect(answered.length).toBeGreaterThan(0)
+    const exRow = progressRows(s, c).find((r) => r.t.employeeId === answered[0].targetId)!
+    expect(exRow.tier).toBe('임원'); expect(exRow.up.kind).toBe('write')
+    setTargets(s, c, c.targets.map((t) => t.employeeId))
+    for (const a of answered) expect(c.assignments).toContainEqual(a)
   })
 })

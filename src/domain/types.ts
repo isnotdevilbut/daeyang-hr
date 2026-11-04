@@ -211,6 +211,8 @@ export interface Cycle {
   stageWeights: { member: Record<number, number | null>; lead: Record<number, number | null>; exec?: Record<number, number | null> }
   /** 팀장이 받는 팀원→팀장평가 단계 이름·반영 비율(D-162). 없으면 이름 '팀원→팀장평가'·비율 0. 비율은 저장만 — 점수 반영 방식은 보류(D-103) */
   upwardStage?: { label: string; weight: number | null }
+  /** 상향평가에 팀원→임원·팀장→임원도 포함(D-187, v26 변환·새 회차에서 켬). 없으면 팀원→팀장만 */
+  upwardToExec?: boolean
   /** 팀장·임원의 자기평가 참여 여부(회차별·직원별, D-068). 없으면 기본값: 팀장 켬, 임원 끔. 사원은 항상 자기평가 */
   selfEval?: Record<ID, boolean>
   /** 이 회차에 참여하지 않는 임원(직원 ID, D-072). 없으면 재직 임원 모두 참여 — 참여 임원만 새 배정의 평가자로 고른다. 사원·팀장의 참여는 targets */

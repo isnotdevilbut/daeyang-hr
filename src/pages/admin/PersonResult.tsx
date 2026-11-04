@@ -5,7 +5,8 @@ import { useSelectedCycle } from '../../data/hooks'
 import { can, canFinalAdjust } from '../../domain/permissions'
 import { cycleLabel } from '../../domain/cycle'
 import { fmt, fmtSigned, personResult, weightsFor } from '../../domain/scoring'
-import { activeWriteAssignments, appliedStages, assignmentCell, isActiveAssignment, stageAssignments, statusOf, upwardAssignments, type CellStatus } from '../../domain/progress'
+import { activeWriteAssignments, appliedStages, assignmentCell, isActiveAssignment, personSnap, stageAssignments, statusOf, upwardAssignments, type CellStatus } from '../../domain/progress'
+import { UPWARD_KIND_TEXT, upwardKind } from '../../domain/upward'
 import { displayAnswer } from '../../domain/seed'
 import { type AdjustKind, type Assignment, type Cycle, type Lang, type Response, type Stage, type Template } from '../../domain/types'
 import { optLabel, qTitle, t as tr } from '../../i18n'
@@ -60,7 +61,8 @@ export default function PersonResultPage() {
   if (!can(role, 'viewResults')) return <Forbidden />
   const t = cycle?.targets.find((x) => x.employeeId === targetId)
   // 받는 평가가 없는 평가자 전용 참여자(자기평가를 끈 임원 등, D-069): 작성할 평가만 보여 준다 (점수·리포트 없음)
-  const writer = cycle && !t ? s.employees.find((e) => e.id === targetId && e.active && cycle.assignments.some((a) => a.evaluatorId === e.id && isActiveAssignment(a))) : undefined
+  // 상향평가만 받는 임원(D-187)도 같은 화면 — 받는 상향평가 + 담당 평가 현황
+  const writer = cycle && !t ? s.employees.find((e) => e.id === targetId && e.active && (cycle.assignments.some((a) => a.evaluatorId === e.id && isActiveAssignment(a)) || upwardAssignments(cycle, s.employees).some((a) => a.targetId === e.id))) : undefined
   if (cycle && writer) {
     const team = s.teams.find((x) => x.id === writer.teamId)?.name ?? ''
     return (
@@ -71,8 +73,9 @@ export default function PersonResultPage() {
           <div className="person-meta"><span>{team}</span><span>{positionName(s, writer)}</span><span>{jobName(s, writer.jobType)}</span><span className="cycle-name">{cycleLabel(cycle)}</span></div>
         </header>
         <div className="detail-divider" aria-hidden />
-        {/* 자기평가를 끈 임원 등 받는 평가가 없는 평가자: 담당 평가 현황만 (D-089) */}
-        <WriteList cycle={cycle} evaluatorId={writer.id} />
+        {/* 자기평가를 끈 임원 등 받는 평가가 없는 평가자: 담당 평가 현황만 (D-089). 임원이 받는 상향평가(D-187)가 있으면 단계별 현황도 */}
+        {upwardAssignments(cycle, s.employees).some((a) => a.targetId === writer.id) && <><h2 className="section-title">단계별 현황</h2><RecvList cycle={cycle} targetId={writer.id} /></>}
+        <WriteList cycle={cycle} evaluatorId={writer.id} hideEmpty />
       </div>
     )
   }
@@ -163,7 +166,7 @@ export default function PersonResultPage() {
         return (
           <details className="panel stage-card stage-group" key={rule}>
             <summary className="stage-head">
-              <h3>{order}단계 · {RULE_TEXT[rule]}</h3>
+              <h3>{order}단계 · {RULE_TEXT[rule]}{rule === 'upward' && <span className="muted"> ({[...new Set(list.map((a) => UPWARD_KIND_TEXT[upwardKind(s, a)]))].join('·')})</span>}</h3>
               {list.length === 1 ? <span className="muted">작성자 <b>{name(list[0].evaluatorId)}</b></span> : <span className="muted">작성자 {list.length}명 · 제출 <b>{sub}</b></span>}
               <span className="spacer" />
               {stage && sub > 0 && (stage.score !== null || stage.grade) && (
@@ -217,19 +220,20 @@ const RECV_LABEL: Record<CellStatus, string> = { submitted: '제출', draft: '�
 function RecvList({ cycle, targetId }: { cycle: Cycle; targetId: string }) {
   const s = useAppState()
   const t = cycle.targets.find((x) => x.employeeId === targetId)
-  if (!t) return null
   const name = (id: string) => s.employees.find((e) => e.id === id)?.name ?? '?'
-  const rows = appliedStages(cycle, t).flatMap((st) => {
+  type Row = { key: string; stage: Stage; who: string; status: CellStatus; kind?: string }
+  const rows: Row[] = (t ? appliedStages(cycle, t) : []).flatMap((st) => {
     const as = stageAssignments(cycle, targetId, st.order)
     return as.length === 0
       ? [{ key: `${st.order}-none`, stage: st, who: '—', status: 'unassigned' as CellStatus }]
       : as.map((a) => ({ key: a.id, stage: st, who: name(a.evaluatorId), status: assignmentCell(cycle, s.responses, a) }))
   })
-  // 팀장이 팀원들에게 받는 팀원→팀장평가(D-114, 1단계 분류) — 자기평가 다음에
-  const UP: Stage = { order: 1, label: cycle.upwardStage?.label || '팀원→팀장평가', direction: 'up', rule: 'upward' } // 이름은 평가자·가중치 설정에서(D-162)
+  // 팀장·임원이 받는 상향평가(D-114·D-187, 1단계 분류) — 자기평가 다음에, 종류(팀원→팀장·팀원→임원·팀장→임원)를 함께
+  const UP: Stage = { order: 1, label: '상향평가', direction: 'up', rule: 'upward' }
   const ups = upwardAssignments(cycle, s.employees).filter((a) => a.targetId === targetId)
-    .map((a) => ({ key: a.id, stage: UP, who: name(a.evaluatorId), status: assignmentCell(cycle, s.responses, a) }))
+    .map((a) => ({ key: a.id, stage: UP, who: name(a.evaluatorId), status: assignmentCell(cycle, s.responses, a), kind: UPWARD_KIND_TEXT[upwardKind(s, a)] }))
   rows.splice(rows.filter((r) => r.stage.order === 1).length, 0, ...ups)
+  if (!rows.length) return null
   return (
     <section className="panel recv-panel" aria-label="받는 평가">
       <div className="table-wrap">
@@ -238,7 +242,7 @@ function RecvList({ cycle, targetId }: { cycle: Cycle; targetId: string }) {
           <tbody>
             {rows.map((r) => (
               <tr key={r.key}>
-                <td>{RULE_TEXT[r.stage.rule]} <span className="muted">({r.stage.order}단계)</span></td>
+                <td>{RULE_TEXT[r.stage.rule]}{r.kind && <> · {r.kind}</>} <span className="muted">({r.stage.order}단계)</span></td>
                 <td>{r.who}</td>
                 <td><span className={`chip ${r.status === 'submitted' ? 'stage done' : r.status === 'unassigned' ? 'danger' : r.status}`}>{RECV_LABEL[r.status]}</span></td>
               </tr>
@@ -258,9 +262,9 @@ function RecvList({ cycle, targetId }: { cycle: Cycle; targetId: string }) {
 function WriteList({ cycle, evaluatorId, hideEmpty = false }: { cycle: Cycle; evaluatorId: string; hideEmpty?: boolean }) {
   const s = useAppState()
   const rows = activeWriteAssignments(cycle, s.employees)
-    .concat(upwardAssignments(cycle, s.employees)) // 사원의 팀원→팀장평가(D-114)
+    .concat(upwardAssignments(cycle, s.employees)) // 사원·팀장이 쓰는 상향평가(D-114·D-187)
     .filter((a) => a.evaluatorId === evaluatorId && a.direction !== 'self')
-    .map((a) => ({ a, t: cycle.targets.find((x) => x.employeeId === a.targetId)!, st: assignmentCell(cycle, s.responses, a) }))
+    .map((a) => ({ a, t: personSnap(s, cycle, a.targetId)!, st: assignmentCell(cycle, s.responses, a) }))
     .filter((r) => !!r.t)
     // 미완료 먼저, 완료는 아래(D-093) — 같은 그룹 안에서는 팀·팀장 먼저·이름 순
     .sort((x, y) => Number(x.st === 'submitted') - Number(y.st === 'submitted') || x.t.teamName.localeCompare(y.t.teamName, 'ko') || Number(y.t.isTeamLead) - Number(x.t.isTeamLead) || x.t.name.localeCompare(y.t.name, 'ko'))
@@ -277,7 +281,7 @@ function WriteList({ cycle, evaluatorId, hideEmpty = false }: { cycle: Cycle; ev
               <tbody>
                 {shown.map((r) => (
                   <tr key={r.a.id}>
-                    <td>{(() => { const rule = ctxFor(cycle, r.a).rule; return rule ? RULE_TEXT[rule] : '' })()}</td>
+                    <td>{(() => { const rule = ctxFor(cycle, r.a).rule; return rule ? RULE_TEXT[rule] : '' })()}{r.a.direction === 'up' && <> · {UPWARD_KIND_TEXT[upwardKind(s, r.a)]}</>}</td>
                     <td>{r.t.teamName}</td>
                     <td>{targetPosition(s, cycle, r.t)}</td>
                     <td><b>{r.t.name}</b></td>

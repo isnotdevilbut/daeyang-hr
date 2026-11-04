@@ -1,7 +1,7 @@
 import { Link, Navigate, useParams } from 'react-router-dom'
 import { useAppState } from '../../data/store'
 import { can } from '../../domain/permissions'
-import { cycleClosed, isUnlocked, statusOf } from '../../domain/progress'
+import { cycleClosed, isUnlocked, personSnap, statusOf } from '../../domain/progress'
 import type { Cycle } from '../../domain/types'
 import { secTitle, t as tr, tierText, useLang } from '../../i18n'
 import { LangSelect } from '../employee/mobile'
@@ -28,7 +28,7 @@ export default function EvaluateForm() {
 function Form({ cycle, aid }: { cycle: Cycle; aid: string }) {
   const s = useAppState()
   const a = cycle.assignments.find((x) => x.id === aid)!
-  const t = cycle.targets.find((x) => x.employeeId === a.targetId)!
+  const t = personSnap(s, cycle, a.targetId)! // 상향평가 대상 임원은 대상자 명단에 없을 수 있음(D-187)
   const tpl = cycle.templates[a.templateId]
   const [lang, setLang] = useLang()
   const ed = useResponseEditor(aid, lang)

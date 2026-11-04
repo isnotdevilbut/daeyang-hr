@@ -844,7 +844,7 @@ function ScopeEditor({ cycle, v, onDup, onRemove, msg, setMsg }: { cycle: Cycle;
       </div>
       {/* D-155: 공통 기본 평가표의 '이 평가표는 적용 평가 중 …' 안내는 표시하지 않음 */}
       {/* D-122: 팀·직급·사람 조건은 평가받는 사람 기준 — 팀원→팀장평가는 평가받는 사람이 팀장(평가하는 팀원이 아님) */}
-      {scope.mode === 'custom' && scope.rules.includes('upward') && <p className="muted small scope-hint">팀·직급·사람은 <b>평가받는 사람</b> 기준이에요. 팀원→팀장평가는 평가받는 사람이 <b>팀장</b>이라, 직급을 고를 때 '팀장'을 넣어야 해요.</p>}
+      {scope.mode === 'custom' && scope.rules.includes('upward') && <p className="muted small scope-hint">팀·직급·사람은 <b>평가받는 사람</b> 기준이에요. 상향평가는 평가받는 사람이 <b>팀장·임원</b>이라, 직급을 고를 때 '팀장'·'임원'을 넣어야 해요.</p>}
       {preview.length > 0 && (
         <div className="feedback fail scope-preview" role="status">
           ⚠ 이대로 적용하면 — {problemText(cycle, preview)}
@@ -973,7 +973,7 @@ function Problems({ cycle }: { cycle: Cycle }) {
   return (
     <div className="feedback fail version-problems" role="alert">
       <div>⚠ 평가표 확인 필요 — {(['conflict', 'none', 'empty'] as const).filter((k) => by(k).length).map((k) => `${label[k]}: ${part(by(k))}`).join(' · ')}</div>
-      {by('none').length > 0 && <div className="muted small">해당 평가에 쓸 평가표의 적용 범위를 확인하세요 — 팀·직급·사람 조건은 평가받는 사람 기준입니다(예: 팀원→팀장평가는 팀장). '모두에게 동일 적용'으로 두거나 조건에 그 사람을 넣고 적용하면 사라집니다.</div>}
+      {by('none').length > 0 && <div className="muted small">해당 평가에 쓸 평가표의 적용 범위를 확인하세요 — 팀·직급·사람 조건은 평가받는 사람 기준입니다(예: 상향평가는 팀장·임원). '모두에게 동일 적용'으로 두거나 조건에 그 사람을 넣고 적용하면 사라집니다.</div>}
     </div>
   )
 }

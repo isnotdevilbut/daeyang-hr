@@ -357,10 +357,10 @@ function BlendPanel({ cycle, editable }: { cycle: Cycle; editable: boolean }) {
 
 /**
  * 직급별 최종 반영 비율(D-103, 자문 예시) — 요소별 켜기·비율 입력·활성 합계 100% 검증·저장만 한다.
- * 점수에는 아직 적용하지 않음: 사원 '자기평가 80%'의 의미 미정(기존 계산 유지). 상향평가 — 팀장: 팀원→팀장평가는 있으나(D-114) 점수 반영 방식 미정, 임원: 팀장→임원 상향평가는 아직 없음(D-149)
+ * 점수에는 아직 적용하지 않음: 사원 '자기평가 80%'의 의미 미정(기존 계산 유지). 상향평가 — 팀장: 팀원→팀장평가(D-114), 임원: 사원·팀장 → 임원 상향평가의 평균(D-187) — 점수 반영은 아직
  */
 const PART_TEXT: Record<FinalPart, string> = { personal: '자기평가', self: '자기평가', kpi: '팀 KPI', upward: '상향평가' }
-/** D-153: 팀장(팀원→팀장평가)·임원(팀장→임원) 모두 '상향평가'로 표시. 임원 상향평가는 아직 없어 켤 수 없음(마우스를 올리면 안내) */
+/** D-153: 팀장(팀원→팀장평가)·임원(사원·팀장 → 임원, D-187) 모두 '상향평가'로 표시 */
 const partLabel = (_tier: keyof FinalBlendPlan, key: FinalPart) => PART_TEXT[key]
 /** 같은 요소는 직급이 달라도 같은 칸(세로 한 줄)에 — D-155 */
 const FP_COL: Record<FinalPart, number> = { personal: 1, self: 1, kpi: 2, upward: 3 }
@@ -393,8 +393,8 @@ function FinalPlan({ cycle, editable }: { cycle: Cycle; editable: boolean }) {
                 <td>
                   <div className="fp-items">
                     {d[tier].map((it, i) => (
-                      <label key={it.key} className="fp-item" style={{ gridColumn: FP_COL[it.key] }} title={it.key === 'upward' && tier === 'exec' ? '팀장이 임원을 평가하는 상향평가는 아직 없어요' : undefined}>
-                        <input type="checkbox" checked={it.on} disabled={!editable || (it.key === 'upward' && tier === 'exec')} onChange={(e) => setItem(tier, i, { on: e.target.checked })} />
+                      <label key={it.key} className="fp-item" style={{ gridColumn: FP_COL[it.key] }}>
+                        <input type="checkbox" checked={it.on} disabled={!editable} onChange={(e) => setItem(tier, i, { on: e.target.checked })} />
                         {partLabel(tier, it.key)}
                         <input type="text" inputMode="decimal" aria-label={`${TIER_TEXT[tier]} ${PART_TEXT[it.key]} 비율`} disabled={!editable} value={it.pct ?? ''} onChange={(e) => setItem(tier, i, { pct: e.target.value === '' ? null : Number(e.target.value) })} />%
                       </label>

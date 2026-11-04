@@ -152,7 +152,7 @@ export function createCycle(
   cycle.assignments = buildAssignments(s, cycle, oneExec)
   if (!oneExec) distributeExecs(s, cycle)
   ensureVersions(cycle) // 평가표 버전: 지금 문항을 "공통 평가표"로 (D-082)
-  if (upward) { ensureUpwardTemplate(cycle); syncUpward(s, cycle) } // 팀원→팀장평가 평가표·배정 (D-114)
+  if (upward) { cycle.upwardToExec = true; ensureUpwardTemplate(cycle); syncUpward(s, cycle) } // 팀원→팀장평가 평가표·배정 (D-114)
   return cycle
 }
 
@@ -183,6 +183,7 @@ export function cloneCycle(s: AppState, src: Cycle, name: string): Cycle {
     templates: structuredClone(src.templates),
     ...(src.versions ? { versions: structuredClone(src.versions).filter((v) => !v.archived) } : {}), // 평가표 버전·선택도 함께 (D-082)
     ...(src.versionPicks ? { versionPicks: structuredClone(src.versionPicks) } : {}),
+    ...(src.upwardToExec ? { upwardToExec: true } : {}),
     targets: s.employees.filter((e) => targetIds.includes(e.id)).map((e) => snapshotTarget(s, e)),
     assignments: [],
     createdAt: new Date().toISOString(),
@@ -208,7 +209,9 @@ export function setTargets(s: AppState, c: Cycle, ids: string[]): string[] {
   })
   const added = s.employees.filter((e) => ids.includes(e.id) && !keep.some((t) => t.employeeId === e.id)).map((e) => snapshotTarget(s, e))
   const keptIds = new Set(keep.map((t) => t.employeeId))
-  c.assignments = c.assignments.filter((a) => keptIds.has(a.targetId))
+  // 임원이 받는 상향평가(D-187)는 임원이 대상자 명단에 없어도 남긴다(평가자 변화는 syncUpward가 정리)
+  const isExecUp = (a: Assignment) => a.direction === 'up' && !!s.employees.find((e) => e.id === a.targetId)?.isExecutive
+  c.assignments = c.assignments.filter((a) => keptIds.has(a.targetId) || isExecUp(a))
   c.targets = [...keep, ...added]
   if (added.length) {
     const tmp: Cycle = { ...c, targets: added }
@@ -263,7 +266,7 @@ export function setSelfEval(d: AppState, cycleId: string, empId: string, on: boo
     const answered = new Set(Object.keys(d.responses))
     c.assignments = c.assignments.filter((a) => !(selfs.includes(a) && !answered.has(a.id)))
     c.assignments.forEach((a) => { if (selfs.includes(a) && answered.has(a.id)) a.excluded = 'selfOff' })
-    const anyLeft = c.assignments.some((a) => a.targetId === empId)
+    const anyLeft = c.assignments.some((a) => a.targetId === empId && a.direction !== 'up') // 임원이 받는 상향평가(D-187)는 대상자 여부와 무관
     if (t.isExecutive && !anyLeft) c.targets = c.targets.filter((x) => x.employeeId !== empId)
   }
   return null

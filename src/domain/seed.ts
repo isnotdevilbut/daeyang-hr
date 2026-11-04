@@ -1,7 +1,7 @@
 // 가상 데이터. 실제 직원·조직·평가 결과가 아니다. 이름은 "성 + 역할" 형태의 가상 이름.
 import { LEAD_BLEND_OLD, scoringV16 } from './scoringV16'
 import { execPerTeam } from './execTeamsV17'
-import { upwardV18 } from './upward'
+import { EXEC_BLEND_OLD, upwardExecV26, upwardV18 } from './upward'
 import { joinAllStaff } from './joinAllV19'
 import { leadUpwardOpen, moreDemo } from './demoV20'
 import { demoKpiV23 } from './demoV23'
@@ -21,7 +21,7 @@ import { createCycle, DEFAULT_TEMPLATE_BY_JOB, eligibleTargets } from './cycle'
 import { isUnlocked } from './progress'
 
 // v2: 상향평가 제외 / v3: 단계 반영 비율 회차별 / v4: KPI 지표·개인평가 반영. 이전 저장본은 data/migrate.ts에서 변환
-export const SCHEMA_VERSION = 25
+export const SCHEMA_VERSION = 26
 
 function rng(seed: number) {
   return () => {
@@ -211,6 +211,7 @@ export function createSeed(opts: { legacy?: boolean; until?: number } = {}): App
   joinAllStaff(state) // 재직 사원·팀장 모두 평가 참여 (D-116) — 임원 담당 나누기(v15) 전에 넣어 새 데이터와 변환 데이터가 같게
   v15(state, () => true) // 평가표 버전·임원 담당 나누기·시연 완료 구성(팀장 2·임원 1) (D-082) — 저장 데이터 변환과 같은 함수
   scoringV16(state) // 평가표 배점·팀장 자기평가표·반영 비율 20/40/40 (D-103) — 저장 데이터 변환과 같은 함수
+  for (const c of state.cycles) if (c.finalBlendPlan) c.finalBlendPlan.exec = EXEC_BLEND_OLD() // v26 이전 저장 데이터와 같게: 임원 상향평가 꺼짐 → 끝에서 upwardExecV26 (D-187)
   execPerTeam(state) // 임원 팀마다 한 명 (D-110) — 저장 데이터 변환과 같은 함수
   upwardV18(state) // 팀원→팀장평가 배정·시연 응답 (D-114) — 저장 데이터 변환과 같은 함수
   if ((opts.until ?? SCHEMA_VERSION) < 20) { state.schemaVersion = opts.until!; return state }
@@ -220,5 +221,7 @@ export function createSeed(opts: { legacy?: boolean; until?: number } = {}): App
   demoKpiV23(state) // 경영기획팀 가상 KPI 지표 (D-151) — 저장 데이터 변환과 같은 함수
   if ((opts.until ?? SCHEMA_VERSION) < 24) { delete (state.policy.gradeRatios as Partial<AppState['policy']['gradeRatios']>).E; state.schemaVersion = opts.until!; return state } // v24 이전: E 등급 없음 (D-160)
   if ((opts.until ?? SCHEMA_VERSION) < 25) { for (const c of state.cycles) if (c.finalBlendPlan) c.finalBlendPlan.lead = LEAD_BLEND_OLD(); state.schemaVersion = opts.until!; return state } // v25 이전: 팀장 20/30/40 (D-183)
+  if ((opts.until ?? SCHEMA_VERSION) < 26) { state.schemaVersion = opts.until!; return state }
+  upwardExecV26(state) // 상향평가 팀원·팀장 → 임원·임원 최종 반영 상향평가 켬 (D-187) — 저장 데이터 변환과 같은 함수
   return state
 }

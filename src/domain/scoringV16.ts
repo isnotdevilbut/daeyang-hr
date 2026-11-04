@@ -12,7 +12,7 @@ import { syncable } from './cycleSync'
 export const FINAL_BLEND_EXAMPLE = (): FinalBlendPlan => ({
   member: [{ key: 'personal', on: true, pct: 80 }, { key: 'kpi', on: true, pct: 20 }],
   lead: [{ key: 'self', on: true, pct: 20 }, { key: 'kpi', on: true, pct: 40 }, { key: 'upward', on: true, pct: 40 }], // D-183: 회사 정정 20/40/40(이전 예시 20/30/40·상향 꺼짐)
-  exec: [{ key: 'kpi', on: true, pct: 60 }, { key: 'upward', on: false, pct: 40 }],
+  exec: [{ key: 'kpi', on: true, pct: 60 }, { key: 'upward', on: true, pct: 40 }], // D-187: 상향평가 = 사원·팀장이 임원을 평가한 평균(이전 예시 상향 꺼짐)
 })
 const same = (a: Record<number, number | null> | undefined, b: Record<number, number>) => !!a && JSON.stringify(Object.entries(a).filter(([, v]) => v !== null).sort()) === JSON.stringify(Object.entries(b).sort())
 const empty = (a: Record<number, number | null> | undefined) => !a || Object.values(a).every((v) => v === null || v === undefined)

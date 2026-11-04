@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 import { useAppState } from '../../data/store'
 import { can } from '../../domain/permissions'
 import { cycleLabel } from '../../domain/cycle'
-import { assignmentCell, cycleClosed, isActiveAssignment, isUpward, statusOf, type CellStatus } from '../../domain/progress'
+import { assignmentCell, cycleClosed, isActiveAssignment, isUpward, personSnap, statusOf, type CellStatus } from '../../domain/progress'
 import type { Assignment, Cycle, Lang, TargetSnapshot } from '../../domain/types'
 import { t as tr, useLang } from '../../i18n'
 import { Empty, Forbidden, StatusChip } from '../../components/ui'
@@ -20,11 +20,11 @@ export default function MyTasks() {
   const rowsOf = (pick: (a: Assignment) => boolean) => s.cycles.flatMap((c) =>
     c.assignments
       .filter((a) => a.evaluatorId === me && pick(a))
-      .map((a) => ({ c, a, t: c.targets.find((x) => x.employeeId === a.targetId)!, cell: assignmentCell(c, s.responses, a) }))
+      .map((a) => ({ c, a, t: personSnap(s, c, a.targetId)!, cell: assignmentCell(c, s.responses, a) })) // 상향평가 대상 임원은 대상자 명단에 없을 수 있음(D-187)
       .filter((r) => !!r.t),
   )
   const rows = rowsOf((a) => a.direction === 'down' && isActiveAssignment(a))
-  // 팀원→팀장평가(D-114): 사원이 소속 팀 팀장을 평가 — 자기평가 아래 따로
+  // 상향평가(D-114·D-187): 사원이 소속 팀 팀장·임원을, 팀장이 소속 팀 임원을 평가 — 자기평가 아래 따로
   const ups = rowsOf(isUpward)
 
   return (

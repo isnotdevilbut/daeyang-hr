@@ -163,7 +163,7 @@ function Body({ s, cycle }: { s: AppState; cycle: Cycle }) {
                       {r.mismatch && <span className="chip draft tag" title="지금 직급과 맞지 않는 평가 업무가 남아 있어요(직급·팀장을 바꾸기 전에 써 둔 평가)">⚠ 배정 확인 필요</span>}
                     </span>
                   </td>
-                  {/* 열 순서: 자기평가 · 팀원→팀장평가(1단계 분류, D-114) · 팀장평가 · 임원평가 */}
+                  {/* 열 순서: 자기평가 · 상향평가(1단계 분류, D-114·D-187) · 팀장평가 · 임원평가 */}
                   {[r.cells[0], r.up, r.cells[1], r.cells[2]].map((cell, i) => <td key={i} className="writes c-eval"><span className="cell-in"><Cell c={cell} /></span></td>)}
                   <td className="c-act">{can(s.session.role, 'viewResults') && <Link className="btn small" to={`/admin/results/${r.t.employeeId}?from=progress`} onClick={() => { try { sessionStorage.setItem(SCROLL_KEY, String(window.scrollY)) } catch { /* 무시 */ } }}>상세</Link>}</td>
                 </tr>
@@ -186,8 +186,8 @@ function cardGlow(e: React.PointerEvent) {
   b.style.setProperty('--cy', `${e.clientY - r.top}px`)
 }
 
-/** 열 이름(D-076) — 내부 단계 번호 1·2·3은 그대로. 팀원→팀장평가(D-114)는 1단계로 분류해 자기평가 옆 — 사원은 작성할 건, 팀장은 받는 건수 */
-const STAGE_COLS = ['자기평가', '팀원→팀장평가', '팀장평가', '임원평가']
+/** 열 이름(D-076) — 내부 단계 번호 1·2·3은 그대로. 상향평가(D-114·D-187: 팀원→팀장·팀원→임원·팀장→임원)는 1단계로 분류해 자기평가 옆 — 작성할 건 + 받는 건 */
+const STAGE_COLS = ['자기평가', '상향평가', '팀장평가', '임원평가']
 
 /** 칸: 받는 평가 = 완료/미완료(선행 대기·평가자 미지정도 미완료), 작성 업무 = 건수, 적용 안 됨 — */
 function Cell({ c }: { c: ProgressCell }) {
