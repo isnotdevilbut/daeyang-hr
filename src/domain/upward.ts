@@ -9,6 +9,7 @@ import type { AppState, Assignment, Cycle } from './types'
 import { EXEC_UPWARD_NAME, makeExecUpwardTemplate, makeUpwardTemplate, UPWARD_NAME, UPWARD_V1_KEYS } from './templates'
 import { liveVersions, resolveVersion } from './versions'
 import { demoAnswers } from './demoV15'
+import { execAssignment } from './execPlan'
 
 const open = (c: Pick<Cycle, 'status'>) => c.status === '준비' || c.status === '진행'
 
@@ -45,7 +46,8 @@ export function upwardKind(s: Pick<AppState, 'employees' | 'teams'>, a: Pick<Ass
 
 /**
  * 있어야 할 (평가자 → 대상자) 쌍: 참여 사원 → 소속 팀 현재 팀장(D-114).
- * upwardToExec 회차(D-187)는 참여 사원·팀장 → 소속 팀 임원(이 회차 참여 임원)도
+ * upwardToExec 회차(D-187)는 참여 사원·팀장 → 그 사람을 임원평가하는 담당 임원(평가자 배정의 임원 평가 배정, D-191 — 이 회차 참여 임원)도.
+ * 담당 임원이 미지정이면 임원 상향평가 없음
  */
 export function upwardPairs(s: Pick<AppState, 'employees' | 'teams'>, c: Cycle): { member: string; lead: string }[] {
   const out: { member: string; lead: string }[] = []
@@ -61,7 +63,10 @@ export function upwardPairs(s: Pick<AppState, 'employees' | 'teams'>, c: Cycle):
       const le = lead ? emp(lead) : undefined
       if (lead && lead !== e.id && le?.active && inCycle.has(lead)) out.push({ member: e.id, lead })
     }
-    for (const x of execs) if (x.teamId === e.teamId && x.id !== e.id) out.push({ member: e.id, lead: x.id })
+    if (execs.length) {
+      const ex = execAssignment(c, t)?.evaluatorId
+      if (ex && ex !== e.id && execs.some((x) => x.id === ex)) out.push({ member: e.id, lead: ex })
+    }
   }
   return out
 }
@@ -231,6 +236,35 @@ export function execUpwardFormV27(s: AppState): string[] {
       if (r) { r.answers = r.status === 'submitted' ? demoAnswers(c, a) : {}; n++ }
     }
     notes.push(`${c.name}: ${EXEC_UPWARD_NAME} 추가(임원 ${execs.size}명 선택) — 임원 상향평가 연결, 시연 응답 ${n}건 새 문항에 맞춤${kept ? `, 사용자 응답 ${kept}건은 이전 평가표 그대로` : ''}`)
+  }
+  return notes
+}
+
+/**
+ * v27 → v28 (D-191): 임원 상향평가 대상 = 소속 팀 임원 → 나를 임원평가하는 담당 임원(평가자 배정 기준).
+ * 준비·진행 회차에서 짝이 바뀐 배정: 응답 없음·시연 응답만 있는 배정은 지우고(시연 응답도) 새 짝으로 만든 뒤 새 배정에만 시연 응답(절반 제출).
+ * 사용자 응답이 있는 배정은 지우지 않고 보존·집계 제외(leadChanged). 팀원→팀장·마감·확정 회차 그대로, 반복 실행 안전
+ */
+export function execUpwardPairsV28(s: AppState): string[] {
+  const notes: string[] = []
+  for (const c of s.cycles) {
+    if (!open(c) || !c.upwardToExec) continue
+    const want = new Set(upwardPairs(s, c).map((p) => `${p.member}|${p.lead}`))
+    const execs = new Set(upwardExecs(s, c).map((e) => e.id))
+    let dropped = 0
+    for (const a of c.assignments.filter((x) => x.direction === 'up' && !x.excluded && execs.has(x.targetId))) {
+      if (want.has(`${a.evaluatorId}|${a.targetId}`)) continue
+      const r = s.responses[a.id]
+      if (r && !r.demo) continue // 사용자 응답은 syncUpward가 보존·집계 제외
+      if (r) delete s.responses[a.id]
+      c.assignments = c.assignments.filter((x) => x !== a); dropped++
+    }
+    const before = new Set(c.assignments.map((a) => a.id))
+    notes.push(...syncUpward(s, c))
+    const fresh = (a: Assignment) => !before.has(a.id)
+    const made = c.assignments.filter((a) => a.direction === 'up' && fresh(a)).length
+    const n = made ? upwardDemo(s, c, fresh) : 0
+    if (dropped || made) notes.push(`${c.name}: 임원 상향평가를 담당 임원 기준으로 — 이전 짝 ${dropped}건 정리, 새 짝 ${made}건(시연 제출 ${n}건)`)
   }
   return notes
 }

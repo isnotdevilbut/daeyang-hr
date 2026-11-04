@@ -4,6 +4,7 @@ import { useDirty } from '../../data/dirty'
 import { buildAssignments, cycleExecs } from '../../domain/cycle'
 import { applyVersions } from '../../domain/versions'
 import { applyExecDraft, distributeExecs, execAssignment, execOrder } from '../../domain/execPlan'
+import { syncUpward } from '../../domain/upward'
 import { pathFor, STAGE_OF_RULE, statusOf } from '../../domain/progress'
 import { cycleHasResponses, weightErrors, weightSum } from '../../domain/questions'
 import { type Cycle, type EvaluatorRule } from '../../domain/types'
@@ -57,13 +58,13 @@ export default function EvalAssign({ cycle, part }: { cycle: Cycle; part: 'weigh
       c.path = { ...c.path, [k]: draft.path[k] }
       c.stageWeights = { ...(c.stageWeights ?? { member: {}, lead: {} }), [k]: draft.weights[k] }
       if (k === 'lead') c.upwardStage = structuredClone(draft.up)
-      if (rebuild) { c.assignments = buildAssignments(d, c); distributeExecs(d, c); applyVersions(d, c) }
+      if (rebuild) { const ups = c.assignments.filter((a) => a.direction === 'up'); c.assignments = [...buildAssignments(d, c), ...ups]; distributeExecs(d, c); syncUpward(d, c); applyVersions(d, c) } // 상향평가 배정은 그대로 두고 새 짝에 맞춤(D-191)
     })
     setMsgFor(k, { ok: true, text: rebuild ? '저장하고 배정을 다시 만들었습니다.' : '저장했습니다.' })
   }
   /** 임원 평가 배정만 저장 */
   const saveExec = () => {
-    update((d) => applyExecDraft(d, d.cycles.find((x) => x.id === cycle.id)!, execDraft))
+    update((d) => { const c = d.cycles.find((x) => x.id === cycle.id)!; applyExecDraft(d, c, execDraft); syncUpward(d, c) }) // 담당 임원이 바뀌면 임원 상향평가 대상도(D-191)
     setExecDraft({})
     setMsgFor('exec', { ok: true, text: '저장했습니다.' })
   }

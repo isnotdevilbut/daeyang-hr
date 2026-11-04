@@ -13,7 +13,7 @@ import { syncCycle } from '../domain/cycleSync'
 import { v15 } from '../domain/demoV15'
 import { leadBlendV25, scoringV16 } from '../domain/scoringV16'
 import { execPerTeam } from '../domain/execTeamsV17'
-import { execUpwardFormV27, upwardExecV26, upwardFormV22, upwardV18 } from '../domain/upward'
+import { execUpwardFormV27, execUpwardPairsV28, upwardExecV26, upwardFormV22, upwardV18 } from '../domain/upward'
 import { joinAllStaff } from '../domain/joinAllV19'
 import { leadUpwardOpen, moreDemo } from '../domain/demoV20'
 import { demoKpiV23 } from '../domain/demoV23'
@@ -259,7 +259,13 @@ export function migrate(raw: any): MigrationResult | null {
     s.schemaVersion = 27
   }
 
-  if (s.schemaVersion !== 27) return null
+  if (s.schemaVersion === 27) {
+    // v27 → v28 (D-191): 임원 상향평가 대상 = 담당 임원(평가자 배정 기준) — 짝이 바뀐 응답 없음·시연 배정만 새 짝으로, 사용자 응답은 보존
+    notes.push(...execUpwardPairsV28(s))
+    s.schemaVersion = 28
+  }
+
+  if (s.schemaVersion !== 28) return null
   return { state: s as AppState, notes }
 }
 
