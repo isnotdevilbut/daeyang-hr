@@ -3297,3 +3297,17 @@ describe('점수 보정 한 칸 · 등급 자동 (D-197)', async () => {
     return c.targets.map((t) => ({ id: t.employeeId, v: personResult(s, c, t.employeeId)!.combined.final })).filter((x): x is { id: string; v: number } => x.v !== null).sort((a, b) => b.v - a.v)
   }
 })
+
+describe('퇴사자는 참여 인원·결과에서 뺌 (D-205)', async () => {
+  const P = await import('./progress')
+  it('진행 중 평가: 퇴사 처리된 대상자는 결과·리포트 인원에서 빠지고(기록 그대로) 진행 현황 인원과 같음, 확정 평가는 기록 그대로', () => {
+    const s = createSeed(); const c = s.cycles.find((x) => x.status === '진행')!
+    const gone = c.targets.find((t) => !t.isTeamLead)!
+    s.employees.find((e) => e.id === gone.employeeId)!.active = false
+    expect(P.resultPeople(s, c).some((t) => t.employeeId === gone.employeeId)).toBe(false)
+    expect(P.resultPeople(s, c).length).toBe(P.progressRows(s, c).length)
+    expect(c.targets.some((t) => t.employeeId === gone.employeeId)).toBe(true) // 회차 기록 그대로
+    c.status = '확정'
+    expect(P.resultPeople(s, c).some((t) => t.employeeId === gone.employeeId)).toBe(true)
+  })
+})

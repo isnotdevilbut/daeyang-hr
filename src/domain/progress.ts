@@ -180,7 +180,9 @@ export function personSnap(s: Pick<AppState, 'employees' | 'teams'>, cycle: Cycl
 export function resultPeople(s: Pick<AppState, 'employees' | 'teams'>, cycle: Cycle): TargetSnapshot[] {
   const off = new Set(cycle.execOff ?? [])
   const execs = s.employees.filter((e) => e.active && e.isExecutive && !e.isCeo && !off.has(e.id) && !cycle.targets.some((t) => t.employeeId === e.id))
-  return [...cycle.targets, ...execs.map((e) => personSnap(s, cycle, e.id)!)]
+  // D-205: 진행 중인 평가는 진행 현황과 같은 사람(재직·평가 제외 아님)만 — 퇴사 처리된 이전 대상자는 빼고(기록은 그대로), 확정된 평가는 기록 그대로 모두
+  const base = cycle.status === '확정' ? cycle.targets : activeTargets(cycle, s.employees)
+  return [...base, ...execs.map((e) => personSnap(s, cycle, e.id)!)]
 }
 export const resultPerson = (s: Pick<AppState, 'employees' | 'teams'>, cycle: Cycle, id: string) => resultPeople(s, cycle).find((t) => t.employeeId === id)
 
