@@ -103,7 +103,7 @@ function EmployeeList() {
                     <button type="button" className="cf-head" aria-haspopup="menu" aria-expanded={menu === f.id} onClick={() => setMenu(menu === f.id ? null : f.id)}>{f.name} <span aria-hidden>▾</span></button>
                     {menu === f.id && (
                       <div className="cf-menu" role="menu">
-                        <button type="button" role="menuitem" onClick={() => { setMenu(null); setFieldEdit(structuredClone(f)) }}>이름·선택지 편집</button>
+                        <button type="button" role="menuitem" onClick={() => { setMenu(null); setFieldEdit(structuredClone(f)) }}>{f.type === 'select' ? '이름·선택지 편집' : '이름 편집'}</button>
                         <button type="button" role="menuitem" className="danger" onClick={() => {
                           setMenu(null)
                           const n = customFieldUsage(s, f.id)
@@ -154,13 +154,12 @@ function EmployeeList() {
   )
 }
 
-/** 분류 기준 추가·편집 (D-078). 이름·입력 방식(텍스트/선택형)·선택지. 값이 있는 항목은 입력 방식을 바꾸지 않음 */
+/** 분류 기준 추가·편집 (D-078·D-178). 새 칼럼은 텍스트 입력만, 예전 선택형 칼럼은 선택지 편집 유지 */
 function FieldModal({ field, onClose }: { field: CustomField; onClose: () => void }) {
   const s = useAppState()
   const [f, setF] = useState<CustomField>(field)
   const [err, setErr] = useState<string[]>([])
   const isNew = !field.id
-  const used = isNew ? 0 : customFieldUsage(s, field.id)
   const save = () => {
     const e = customFieldErrors(s, f)
     setErr(e)
@@ -175,13 +174,7 @@ function FieldModal({ field, onClose }: { field: CustomField; onClose: () => voi
   return (
     <Modal title={isNew ? '칼럼 추가' : '칼럼 편집'} onClose={onClose}>
       <label className="field">항목 이름<input type="text" value={f.name} autoFocus onChange={(e) => setF({ ...f, name: e.target.value })} /></label>
-      <fieldset className="field cf-type">
-        <legend>입력 방식</legend>
-        <div className="row">
-          <label className="check"><input type="radio" name="cf-type" checked={f.type === 'text'} disabled={used > 0} onChange={() => setF({ ...f, type: 'text' })} /> 텍스트</label>
-          <label className="check"><input type="radio" name="cf-type" checked={f.type === 'select'} disabled={used > 0} onChange={() => setF({ ...f, type: 'select', options: f.options.length ? f.options : [{ id: `o-${Date.now().toString(36)}`, label: '' }] })} /> 선택형</label>
-        </div>
-      </fieldset>
+      {/* D-178: 새 칼럼은 직접 입력(텍스트)만 — 입력 방식 선택 없음. 이미 선택형으로 만든 칼럼은 선택지 편집 그대로 */}
       {f.type === 'select' && (
         <fieldset className="field cf-opts">
           <legend>선택지</legend>
