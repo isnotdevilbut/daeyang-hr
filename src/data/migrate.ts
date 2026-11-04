@@ -11,7 +11,7 @@ import { createSeed } from '../domain/seed'
 import { ensureCatalog } from '../domain/catalog'
 import { syncCycle } from '../domain/cycleSync'
 import { v15 } from '../domain/demoV15'
-import { scoringV16 } from '../domain/scoringV16'
+import { leadBlendV25, scoringV16 } from '../domain/scoringV16'
 import { execPerTeam } from '../domain/execTeamsV17'
 import { upwardFormV22, upwardV18 } from '../domain/upward'
 import { joinAllStaff } from '../domain/joinAllV19'
@@ -241,7 +241,13 @@ export function migrate(raw: any): MigrationResult | null {
     s.schemaVersion = 24
   }
 
-  if (s.schemaVersion !== 24) return null
+  if (s.schemaVersion === 24) {
+    // v24 → v25 (D-183): 팀장 최종 반영 비율 20/30/40 → 20/40/40(상향평가 켬) — 이전 예시 그대로인 준비·진행 회차만
+    notes.push(...leadBlendV25(s))
+    s.schemaVersion = 25
+  }
+
+  if (s.schemaVersion !== 25) return null
   return { state: s as AppState, notes }
 }
 

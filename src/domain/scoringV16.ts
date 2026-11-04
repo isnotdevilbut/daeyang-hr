@@ -11,11 +11,28 @@ import { syncable } from './cycleSync'
 
 export const FINAL_BLEND_EXAMPLE = (): FinalBlendPlan => ({
   member: [{ key: 'personal', on: true, pct: 80 }, { key: 'kpi', on: true, pct: 20 }],
-  lead: [{ key: 'self', on: true, pct: 20 }, { key: 'kpi', on: true, pct: 30 }, { key: 'upward', on: false, pct: 40 }],
+  lead: [{ key: 'self', on: true, pct: 20 }, { key: 'kpi', on: true, pct: 40 }, { key: 'upward', on: true, pct: 40 }], // D-183: 회사 정정 20/40/40(이전 예시 20/30/40·상향 꺼짐)
   exec: [{ key: 'kpi', on: true, pct: 60 }, { key: 'upward', on: false, pct: 40 }],
 })
 const same = (a: Record<number, number | null> | undefined, b: Record<number, number>) => !!a && JSON.stringify(Object.entries(a).filter(([, v]) => v !== null).sort()) === JSON.stringify(Object.entries(b).sort())
 const empty = (a: Record<number, number | null> | undefined) => !a || Object.values(a).every((v) => v === null || v === undefined)
+
+/** D-183 이전 팀장 예시(20/30/40·상향평가 꺼짐) */
+export const LEAD_BLEND_OLD = (): FinalBlendPlan['lead'] => [{ key: 'self', on: true, pct: 20 }, { key: 'kpi', on: true, pct: 30 }, { key: 'upward', on: false, pct: 40 }]
+/**
+ * v24 → v25 (D-183): 직급별 최종 반영 비율의 팀장 = 자기평가 20 / 팀 KPI 40 / 상향평가 40(회사 정정, 합계 100).
+ * 준비·진행 회차 중 팀장 값이 이전 예시 그대로일 때만 바꾼다(사용자가 고친 값·마감·확정 회차 그대로). 점수 계산은 바꾸지 않음
+ */
+export function leadBlendV25(s: AppState): string[] {
+  const notes: string[] = []
+  for (const c of s.cycles ?? []) {
+    if (!syncable(c) || !c.finalBlendPlan) continue
+    if (JSON.stringify(c.finalBlendPlan.lead) !== JSON.stringify(LEAD_BLEND_OLD())) continue
+    c.finalBlendPlan.lead = FINAL_BLEND_EXAMPLE().lead
+    notes.push(`${c.name}: 팀장 최종 반영 비율 자기평가 20 / 팀 KPI 40 / 상향평가 40`)
+  }
+  return notes
+}
 
 export function scoringV16(s: AppState): string[] {
   const notes: string[] = []
