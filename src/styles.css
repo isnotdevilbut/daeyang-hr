@@ -1607,3 +1607,7 @@ body.drag-sorting, body.drag-sorting * { cursor: grabbing !important; user-selec
 .upload-grid .upload:has(.upload-sum, .feedback) { grid-column: 1 / -1; height: auto; }
 .upload-grid .dup-check { flex-wrap: wrap; }
 @media (max-width: 860px) { .upload-grid { grid-template-columns: minmax(0, 1fr); } }
+/* D-181: 결과·리포트 윗줄 세 상자 높이 줄임(글자 위아래 여백) — 버튼은 평가 회차 상자 높이를 따라감 */
+.result-head-actions .cycle-pick { padding: 4px 6px 4px 14px; }
+.result-head-actions .cycle-pick select { min-height: 36px; padding-top: 4px; padding-bottom: 4px; }
+@media (max-width: 640px) { .result-head-actions .cycle-pick { padding: 8px 10px; } .result-head-actions .head-btn { min-height: 40px; } }
