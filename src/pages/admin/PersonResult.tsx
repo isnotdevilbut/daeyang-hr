@@ -150,9 +150,9 @@ export default function PersonResultPage() {
         <Adjusters cycle={cycle} targetId={t.employeeId} current={r} />
       </div>
 
-      <h2 className="section-title">단계별 응답</h2>
+      <h2 className="section-title">응답 결과</h2>
       {/* D-132: 평가 유형별 토글(1단계 자기평가 · 상향평가(단계 표시 없음, D-188) · 2단계 팀장평가 · 3단계 임원평가). 작성자가 여럿이면 작성자마다 토글 — 처음엔 접힘 */}
-      {(['self', 'upward', 'teamLead', 'executive'] as const).map((rule) => {
+      {(['self', 'teamLead', 'executive', 'upward'] as const).map((rule) => { // D-193: 1·2·3단계 다음에 상향평가
         const list = staged.filter((a) => ctxFor(cycle, a).rule === rule)
         if (!list.length) return null
         const order = list[0].stageOrder
