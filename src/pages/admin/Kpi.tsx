@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { update, useAppState } from '../../data/store'
 import { useSelectedCycle } from '../../data/hooks'
 import { can } from '../../domain/permissions'
@@ -41,8 +42,14 @@ export default function Kpi() {
   )
 }
 
+/** D-195: 탭 — 팀별 KPI / 직급별 비율(직급별 최종 반영 비율). 처음 들어오면 팀별 KPI */
+const KPI_TABS = [['team', '팀별 KPI'], ['blend', '직급별 비율']] as const
+type KpiTab = (typeof KPI_TABS)[number][0]
+
 function Body({ cycle }: { cycle: Cycle }) {
   const s = useAppState()
+  const [params, setParams] = useSearchParams()
+  const tab: KpiTab = params.get('tab') === 'blend' ? 'blend' : 'team'
   const locked = kpiLocked(cycle)
   const editable = can(s.session.role, 'editKpi') && !locked
   const units = orgUnits(s, cycle) // 이 회차의 팀 (확정된 이전 회차는 그때의 단위)
@@ -52,7 +59,10 @@ function Body({ cycle }: { cycle: Cycle }) {
     <>
       {locked && <p className="save-note">확정된 평가라 KPI를 수정할 수 없습니다. 평가 관리에서 상태를 바꾼 뒤 수정하세요.</p>}
       {/* D-194: '개인평가 반영' 설정 없앰 — 팀 KPI 반영은 직급별 최종 반영 비율에서(점수 적용은 보류) */}
-      <div className="kpi-grid">
+      <div className="tabs" role="tablist" aria-label="KPI 관리">
+        {KPI_TABS.map(([k, label]) => <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => setParams({ tab: k })}>{label}</button>)}
+      </div>
+      {tab === 'team' && <div className="kpi-grid">
         <section className="panel" aria-labelledby="dept-list-title">
           <div className="panel-head"><h2 id="dept-list-title">팀별 KPI 점수</h2></div>
           <ul className="dept-list">
@@ -70,8 +80,8 @@ function Body({ cycle }: { cycle: Cycle }) {
           </ul>
         </section>
         {dept && <DeptEditor key={dept.id} cycle={cycle} deptId={dept.id} deptName={dept.name} editable={editable} />}
-      </div>
-      <FinalPlan cycle={cycle} editable={editable} />
+      </div>}
+      {tab === 'blend' && <FinalPlan cycle={cycle} editable={editable} />}
     </>
   )
 }

@@ -1618,3 +1618,6 @@ body.drag-sorting, body.drag-sorting * { cursor: grabbing !important; user-selec
 /* D-188: 1·2·3단계 번호는 남색으로(상향평가는 단계와 별개라 번호 없음) */
 .stage-no { color: #1f3a8f; font-weight: 700; }
 @media print { .stage-no { color: #1f3a8f; -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+/* D-195: 결과·리포트 상세 '응답 결과' 상자 폭을 줄여 토글이 제목 가까이에(펼친 내용도 옆 여백 없이) · KPI 관리 탭 바로 아래 직급별 비율 */
+.stage-group { max-width: 880px; }
+.tabs + .final-plan { margin-top: 0; }
