@@ -82,7 +82,7 @@ function AdminLayout() {
         <div className="hdr-inner">
           <NavLink to="/admin/progress" className="brand" aria-label="진행 현황으로"><img src={logoKo} alt="ROLLENT 대양롤랜트(주)" /></NavLink>
           <PaintNav label="관리자 메뉴" items={ADMIN_NAV.filter((n) => can(s.session.role, n.action)).map((n) => ({ to: n.to, label: n.label }))} />
-          <UserArea account={account} name={ROLE_LABEL.admin} role={account.finalAdjust ? '최종 조정' : ''} />
+          <UserArea account={account} name={ROLE_LABEL.admin} role="" />
         </div>
       </header>
       <AppPanel><Outlet /></AppPanel>

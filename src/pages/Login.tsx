@@ -70,7 +70,7 @@ export default function Login() {
                   <tr key={a.key}>
                     <td><button type="button" className="link-btn" onClick={() => fill(a.adminId!, DEMO_PASSWORD)}>{a.adminId}</button></td>
                     <td className="muted">{DEMO_PASSWORD}</td>
-                    <td>{a.finalAdjust ? '운영담당자 · 최종 조정 가능' : '운영담당자'}</td>
+                    <td>운영담당자</td>
                   </tr>
                 ))}
                 {/* 현재 조직 관리 데이터의 재직 직원 (가상 데이터) */}

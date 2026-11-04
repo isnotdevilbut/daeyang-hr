@@ -669,7 +669,8 @@ describe('목업 로그인·역할 (실제 보안 인증 아님) — 직원: 아
     expect(checkLogin(s, 'nobody', DEMO_PASSWORD)).toContain('올바르지 않습니다')
     expect(checkLogin(s, 'admin', 'wrong')).toContain('올바르지 않습니다')
     expect(login(s, ' admin ', DEMO_PASSWORD).kind).toBe('admin')
-    expect(login(s, 'admin-final', DEMO_PASSWORD).finalAdjust).toBe(true)
+    expect(login(s, 'admin', DEMO_PASSWORD).finalAdjust).toBe(true) // D-184: admin이 최종 조정까지
+    expect(checkLogin(s, 'admin-final', DEMO_PASSWORD)).toContain('올바르지 않습니다')
   })
   it('직원은 이름 + 사번(앞자리 0까지), 내부 ID로 연결, 데모 비밀번호로는 안 됨', () => {
     const s = createSeed()
@@ -725,13 +726,12 @@ describe('목업 로그인·역할 (실제 보안 인증 아님) — 직원: 아
     expect(JSON.stringify([s.cycles, s.responses])).toBe(before)
     expect(sessionFor(s, participantAccount('e09'))?.personaId).toBe('e09')
   })
-  it('대표자였던 직원은 임원으로 로그인(관리 권한 없음), 최종 조정은 최종 조정 표시 운영담당자만', () => {
+  it('대표자였던 직원은 임원으로 로그인(관리 권한 없음), 최종 조정은 운영담당자(admin)만', () => {
     const s = createSeed()
     const ceo = checkLogin(s, '홍성훈', '0001')
     expect(typeof ceo === 'object' && sessionFor(s, ceo)!.role).toBe('exec')
-    const [plain, final] = ADMIN_ACCOUNTS
-    expect(canFinalAdjust(sessionFor(s, final)!)).toBe(true)
-    expect(canFinalAdjust(sessionFor(s, plain)!)).toBe(false)
+    expect(ADMIN_ACCOUNTS.map((a) => a.adminId)).toEqual(['admin']) // D-184: admin-final 없음
+    expect(canFinalAdjust(sessionFor(s, ADMIN_ACCOUNTS[0])!)).toBe(true)
     expect(canFinalAdjust(sessionFor(s, participantAccount('e07'))!)).toBe(false)
   })
   it('평가 참여자에게 운영 권한 없음, 평가 작성 권한은 참여자만', () => {

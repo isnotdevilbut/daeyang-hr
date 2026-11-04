@@ -7,7 +7,7 @@ import { positionName } from '../domain/catalog'
 
 /**
  * 로그인 계정 (D-059).
- *  - 운영담당자: 고정 아이디(admin, admin-final) + 공용 목업 비밀번호. 직원 등록·임원 지정으로는 생기지 않는다.
+ *  - 운영담당자: 고정 아이디(admin) + 공용 목업 비밀번호(최종 점수·등급 지정 포함 — D-184에서 admin-final을 admin에 합침). 직원 등록·임원 지정으로는 생기지 않는다.
  *  - 평가 참여자: 조직 관리의 현재 직원 데이터와 직접 연결 — 아이디 = 이름, 비밀번호 = 사번.
  *    로그인 상태는 직원 내부 ID(p:<id>)로 기억하므로 이름·사번을 바꿔도 응답·배정 연결은 그대로이고,
  *    직원을 삭제(재직 해제)하면 그 즉시 세션이 무효가 된다.
@@ -24,8 +24,7 @@ export interface DemoAccount {
 export const DEMO_PASSWORD = 'demo1234'
 
 export const ADMIN_ACCOUNTS: DemoAccount[] = [
-  { key: 'admin', kind: 'admin', adminId: 'admin', personaId: null },
-  { key: 'admin-final', kind: 'admin', adminId: 'admin-final', personaId: null, finalAdjust: true },
+  { key: 'admin', kind: 'admin', adminId: 'admin', personaId: null, finalAdjust: true }, // D-184: admin-final 없앰(이전 로그인은 로그인 화면으로)
 ]
 
 export const participantAccount = (employeeId: string): DemoAccount => ({ key: `p:${employeeId}`, kind: 'participant', personaId: employeeId })
@@ -83,7 +82,7 @@ export function homeFor(role: DemoRole): string {
 
 /**
  * 로그인 대조. 성공하면 계정, 실패하면 오류 문구.
- *  - 운영담당자: 아이디 admin / admin-final + 공용 목업 비밀번호
+ *  - 운영담당자: 아이디 admin + 공용 목업 비밀번호
  *  - 평가 참여자: 아이디 = 현재 이름, 비밀번호 = 현재 사번(글자 그대로 — 앞자리 0까지 같아야 함).
  *    동명이인은 사번으로 구분되고, 사번은 직원마다 하나라서 같은 이름·사번 조합은 둘이 될 수 없다.
  */

@@ -351,7 +351,7 @@ function parseScore(raw: string, min: number, max: number): { value: number | nu
 function Adjusters({ cycle, targetId, current }: { cycle: Cycle; targetId: string; current: NonNullable<ReturnType<typeof personResult>> }) {
   const s = useAppState()
   const role = s.session.role
-  const by = s.session.finalAdjust ? '운영담당자(최종 조정)' : '운영담당자'
+  const by = '운영담당자'
   const [person, setPerson] = useState(current.person === null ? '' : String(current.person))
   const [ceo, setCeo] = useState(current.ceoScore === null ? '' : String(current.ceoScore))
   const [grade, setGrade] = useState(current.ceoGrade ?? '')
