@@ -13,6 +13,7 @@ import { syncCycle } from '../domain/cycleSync'
 import { v15 } from '../domain/demoV15'
 import { leadBlendV25, scoringV16 } from '../domain/scoringV16'
 import { execPerTeam } from '../domain/execTeamsV17'
+import { versionScopesV30 } from '../domain/versions'
 import { execUpwardFormV27, execUpwardPairsV28, upwardDemoMoreV29, upwardExecV26, upwardFormV22, upwardV18 } from '../domain/upward'
 import { joinAllStaff } from '../domain/joinAllV19'
 import { leadUpwardOpen, moreDemo } from '../domain/demoV20'
@@ -271,7 +272,13 @@ export function migrate(raw: any): MigrationResult | null {
     s.schemaVersion = 29
   }
 
-  if (s.schemaVersion !== 29) return null
+  if (s.schemaVersion === 29) {
+    // v29 → v30 (D-210): 평가표 범위는 모두 체크 방식 — '모두에게 동일 적용'을 '전체 체크'로(적용 대상 그대로, 확정 회차 그대로)
+    notes.push(...versionScopesV30(s))
+    s.schemaVersion = 30
+  }
+
+  if (s.schemaVersion !== 30) return null
   return { state: s as AppState, notes }
 }
 

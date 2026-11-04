@@ -7,7 +7,7 @@
 //   (저장 데이터 v18 변환·새 평가 만들기·복제에서 만든다 — 그 이전 변환 단계의 배정 맞추기에서는 만들지 않음)
 import type { AppState, Assignment, Cycle } from './types'
 import { EXEC_UPWARD_NAME, makeExecUpwardTemplate, makeUpwardTemplate, UPWARD_NAME, UPWARD_V1_KEYS } from './templates'
-import { liveVersions, resolveVersion } from './versions'
+import { liveVersions, resolveVersion, wideScope } from './versions'
 import { demoAnswers } from './demoV15'
 import { execAssignment } from './execPlan'
 
@@ -16,7 +16,7 @@ const open = (c: Pick<Cycle, 'status'>) => c.status === '준비' || c.status ===
 /** 이 회차의 팀원→팀장평가 평가표 ID — 없으면 평가표·버전을 만든다 */
 export function ensureUpwardTemplate(c: Cycle): string {
   const id = `${c.id}-tpl-upward`
-  const v = liveVersions(c).find((x) => x.scope.mode === 'all' && x.scope.rules.includes('upward'))
+  const v = liveVersions(c).find((x) => wideScope(x.scope) && x.scope.rules.includes('upward')) // 상향평가 전체 체크(이전 '모두에게 동일 적용', D-210)
   if (v) return v.templateId
   if (!c.templates[id]) c.templates[id] = makeUpwardTemplate(id)
   if (c.versions) c.versions = [...c.versions, { templateId: id, name: UPWARD_NAME, scope: { mode: 'all', rules: ['upward'], teams: 'all', positions: 'all' } }]
@@ -25,7 +25,7 @@ export function ensureUpwardTemplate(c: Cycle): string {
 
 /** 이 회차의 팀원→팀장평가 평가표(없으면 null = 이 회차는 팀원→팀장평가 없음) */
 export function upwardTemplateOf(c: Cycle): string | null {
-  const v = liveVersions(c).find((x) => x.scope.mode === 'all' && x.scope.rules.includes('upward'))
+  const v = liveVersions(c).find((x) => wideScope(x.scope) && x.scope.rules.includes('upward'))
   return v?.templateId ?? (c.templates[`${c.id}-tpl-upward`] ? `${c.id}-tpl-upward` : null)
 }
 

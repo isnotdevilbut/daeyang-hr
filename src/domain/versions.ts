@@ -39,7 +39,10 @@ export function narrower(a: VersionScope, b: VersionScope): boolean {
 export function resolveVersion(c: Pick<Cycle, 'versions' | 'versionPicks' | 'templateByJob'>, x: VersionCtx & { jobType?: string }): Resolution {
   if (!c.versions?.length) return { templateId: x.jobType ? templateFor(c, x.jobType) : templateFor(c, 'office'), candidates: [], conflict: false }
   const act = liveVersions(c)
-  const custom = act.filter((v) => v.scope.mode === 'custom' && inScope(v, x)).map((v) => v.templateId)
+  // D-210: 전체 체크(전체 팀·전체 직급) 평가표는 더 좁게 고른 평가표가 없을 때만 — 이전 '모두에게 동일 적용'과 같은 순서
+  const hit = act.filter((v) => v.scope.mode === 'custom' && inScope(v, x))
+  const narrowHit = hit.filter((v) => !wideScope(v.scope))
+  const custom = (narrowHit.length ? narrowHit : hit).map((v) => v.templateId)
   if (custom.length === 1) return { templateId: custom[0], candidates: custom, conflict: false }
   if (custom.length > 1) {
     const pick = c.versionPicks?.[pickKey(custom)]
@@ -101,12 +104,12 @@ export function scopeErrors(c: Pick<Cycle, 'versions'>, templateId: ID, scope: V
     if (scope.employees && !scope.employees.length) e.push('적용할 사람을 한 명 이상 고르세요(또는 전체 팀).')
     else if (!scope.employees && scope.teams !== 'all' && !scope.teams.length) e.push('적용 팀을 고르세요(또는 전체 팀).')
     if (scope.positions !== 'all' && !scope.positions.length) e.push('적용 직급을 고르세요(또는 전체 직급).')
-  } else {
-    for (const v of liveVersions(c)) {
-      if (v.templateId === templateId || v.scope.mode !== 'all') continue
-      const dup = scope.rules.filter((r) => v.scope.rules.includes(r))
-      if (dup.length) e.push(`'${v.name}'이(가) 이미 ${dup.map((r) => RULE_TEXT[r]).join('·')}의 공통 기본입니다.`)
-    }
+  }
+  // 전체 체크는 평가 유형별로 하나만(이전 '공통 기본은 평가 유형별 하나', D-210)
+  if (wideScope(scope)) for (const v of liveVersions(c)) {
+    if (v.templateId === templateId || !wideScope(v.scope)) continue
+    const dup = scope.rules.filter((r) => v.scope.rules.includes(r))
+    if (dup.length) e.push(`'${v.name}'이(가) 이미 ${dup.map((r) => RULE_TEXT[r]).join('·')}에 전체로 적용돼 있습니다. 한쪽은 팀·직급·사람을 골라 주세요.`)
   }
   return e
 }
@@ -186,4 +189,26 @@ export function ensureVersions(c: Cycle): boolean {
   if (ids.length !== 1) return false
   c.versions = [{ templateId: ids[0], name: '공통 평가표', scope: ALL_SCOPE() }]
   return true
+}
+
+/** 전체(모든 팀·모든 직급, 사람 지정 없음)를 고른 범위 — 이전 '모두에게 동일 적용'도 포함(D-210) */
+export const wideScope = (sc: VersionScope) => sc.mode === 'all' || (sc.teams === 'all' && sc.positions === 'all' && !sc.employees)
+
+/**
+ * D-210: '모두에게 동일 적용 / 직접 선택하기' 구분 없앰 — 모든 평가표는 적용 평가·팀(사람)·직급을 체크해서 정한다.
+ * 이전 '모두에게 동일 적용'(mode 'all')은 '전체 체크'(custom, 전체 팀·전체 직급)로 바꾼다 — 누가 어떤 평가표를 받는지는 그대로
+ * (겹치면 더 좁게 고른 평가표가 먼저, D-125). 마감·확정 회차는 바꾸지 않음(화면에서 열면 전체 체크로 보임). 바꾼 버전 수
+ */
+export function scopesToCustom(c: Cycle): number {
+  if (!c.versions || (c.status !== '준비' && c.status !== '진행')) return 0
+  let n = 0
+  const fix = (sc: VersionScope): VersionScope => (sc.mode === 'all' ? (n++, { mode: 'custom', rules: sc.rules, teams: 'all', positions: 'all' }) : sc)
+  c.versions = c.versions.map((v) => ({ ...v, scope: fix(v.scope), ...(v.pending ? { pending: { ...v.pending, scope: fix(v.pending.scope) } } : {}) }))
+  return n
+}
+/** v29 → v30 (D-210): 준비·진행 회차의 '모두에게 동일 적용' 평가표를 '전체 체크'로. 배정·응답 그대로, 반복 안전 */
+export function versionScopesV30(s: AppState): string[] {
+  const notes: string[] = []
+  for (const c of s.cycles) { const n = scopesToCustom(c); if (n) notes.push(`${c.name}: '모두에게 동일 적용' 평가표 ${n}개 → 전체 체크(적용 대상 그대로)`) }
+  return notes
 }

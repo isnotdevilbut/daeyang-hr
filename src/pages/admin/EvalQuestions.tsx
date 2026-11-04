@@ -19,7 +19,7 @@ import { jobName, positionName, positionsOf } from '../../domain/catalog'
 import { activeTeams } from '../../domain/org'
 import { pointsErrors, usesPoints } from '../../domain/points'
 import { activeVersions, liveVersions, addVersion, applyVersion, applyVersions, blankTemplate, cloneTemplate, deleteVersion, pickKey, resolveVersion, saveVersionDraft, scopeTargets, versionUsed, type VersionProblem } from '../../domain/versions'
-import type { TemplateVersion, VersionScope } from '../../domain/types'
+import type { AppState, TemplateVersion, VersionScope } from '../../domain/types'
 
 /** 끌어서 옮길 자리: list = 영역 번호(영역을 옮길 때는 0), slot = 그 목록에서 끼워 넣을 자리(0 ~ 개수) */
 type DragPos = { list: number; slot: number }
@@ -723,7 +723,7 @@ function SectionRu({ sec, onChange }: { sec: Section; onChange: (fn: (s: Section
 
 /**
  * 평가표 버전 탭과 적용 범위 (D-082). 엑셀 시트처럼 용도별 평가표를 만들고 전환한다.
- * 범위는 버전 단위: 모두에게 동일 적용(공통 기본, 평가 유형별 하나) / 직접 선택(평가받는 대상자의 팀·직급 + 평가 유형).
+ * 범위는 버전 단위: 적용 평가 + 평가받는 대상자의 팀(사람)·직급을 체크(D-210 — 이전 '모두에게 동일 적용'은 전체 체크). 전체 체크는 평가 유형별 하나, 좁게 고른 평가표가 먼저.
  * 겹치면 임의로 고르지 않고 충돌 대상·버전을 보여 주고 적용 버전을 고르게 한다. 응답 있는 배정의 평가표는 바꾸지 않는다
  */
 function VersionBar({ cycle, selected, onSelect }: { cycle: Cycle; selected: string; onSelect: (id: string) => void }) {
@@ -779,7 +779,8 @@ function ScopeEditor({ cycle, v, onDup, onRemove, msg, setMsg }: { cycle: Cycle;
   // 편집 값 = 저장해 둔 초안(pending) → 없으면 지금 설정 (D-085)
   const stored = v.pending ?? { name: v.name, scope: v.scope }
   const [name, setName] = useState(stored.name)
-  const [scope, setScope] = useState<VersionScope>(structuredClone(stored.scope))
+  // D-210: 모든 평가표는 체크 방식 — 이전 '모두에게 동일 적용'(마감·확정 회차 등)은 전체 체크로 보여 줌
+  const [scope, setScope] = useState<VersionScope>(() => { const sc = structuredClone(stored.scope); return sc.mode === 'all' ? { mode: 'custom', rules: sc.rules, teams: 'all', positions: 'all' } : sc })
   const [picks, setPicks] = useState<Record<string, string>>({ ...(cycle.versionPicks ?? {}) })
   const [err, setErr] = useState<string[]>([])
   const [conf, setConf] = useState<VersionProblem[]>([]) // 적용을 눌렀을 때만 계산·표시
@@ -821,11 +822,7 @@ function ScopeEditor({ cycle, v, onDup, onRemove, msg, setMsg }: { cycle: Cycle;
     <div className="scope-editor">
       <div className="row scope-row">
         <label className="row scope-name">이름 <input type="text" aria-label="버전 이름" value={name} onChange={(e) => setName(e.target.value)} /></label>
-        <fieldset className="row scope-mode">
-          <legend className="sr-only">적용 방식</legend>
-          <label className="check"><input type="radio" name="scope-mode" checked={scope.mode === 'all'} onChange={() => setScope({ ...scope, mode: 'all', teams: 'all', positions: 'all', employees: undefined })} /> 모두에게 동일 적용</label>
-          <label className="check"><input type="radio" name="scope-mode" checked={scope.mode === 'custom'} onChange={() => setScope({ ...scope, mode: 'custom' })} /> 직접 선택하기</label>
-        </fieldset>
+        {/* D-210: '모두에게 동일 적용 / 직접 선택하기' 구분 없앰 — 아래 적용 평가·팀(사람)·직급을 체크 */}
         <span className="spacer" />
         <button className="btn small" onClick={onDup}>복제</button>
         <button className="btn small danger" onClick={onRemove}>삭제</button>
@@ -834,7 +831,7 @@ function ScopeEditor({ cycle, v, onDup, onRemove, msg, setMsg }: { cycle: Cycle;
         <fieldset className="scope-set"><legend>적용 평가</legend>
           {RULES.map((r) => <label key={r} className="check"><input type="checkbox" checked={scope.rules.includes(r)} onChange={(e) => setScope({ ...scope, rules: RULES.filter((x) => (x === r ? e.target.checked : scope.rules.includes(x))) })} /> {RULE_TEXT[r]}</label>)}
         </fieldset>
-        {scope.mode === 'custom' && <>
+        {<>
           <PeoplePicker scope={scope} setScope={setScope} />
           <fieldset className="scope-set"><legend>적용 직급 <span className="muted small">(평가받는 사람)</span></legend>
             <label className="check"><input type="checkbox" checked={scope.positions === 'all'} onChange={(e) => setScope({ ...scope, positions: e.target.checked ? 'all' : [] })} /> 전체 직급</label>
@@ -844,14 +841,14 @@ function ScopeEditor({ cycle, v, onDup, onRemove, msg, setMsg }: { cycle: Cycle;
       </div>
       {/* D-155: 공통 기본 평가표의 '이 평가표는 적용 평가 중 …' 안내는 표시하지 않음 */}
       {/* D-122: 팀·직급·사람 조건은 평가받는 사람 기준 — 팀원→팀장평가는 평가받는 사람이 팀장(평가하는 팀원이 아님) */}
-      {scope.mode === 'custom' && scope.rules.includes('upward') && <p className="muted small scope-hint">팀·직급·사람은 <b>평가받는 사람</b> 기준이에요. 상향평가는 평가받는 사람이 <b>팀장·임원</b>이라, 직급을 고를 때 '팀장'·'임원'을 넣어야 해요.</p>}
+      {scope.rules.includes('upward') && <p className="muted small scope-hint">팀·직급·사람은 <b>평가받는 사람</b> 기준이에요. 상향평가는 평가받는 사람이 <b>팀장·임원</b>이라, 직급을 고를 때 '팀장'·'임원'을 넣어야 해요.</p>}
       {preview.length > 0 && (
         <div className="feedback fail scope-preview" role="status">
-          ⚠ 이대로 적용하면 — {problemText(cycle, preview)}
-          <div className="muted small">팀·직급은 평가받는 사람 기준이라, 이 평가표가 맡던 평가 중 위 사람이 받는 평가에 쓸 평가표가 없어집니다. 그 사람(예: 팀장)도 직급에 넣으세요 — 팀장 자기평가는 더 좁게 지정한 '팀장 자기평가표'가 먼저 적용됩니다.</div>
+          ⚠ 이대로 적용하면 — {problemText(cycle, preview, s)}
+          <div className="muted small">이대로면 위 평가는 어느 평가표에도 체크되지 않아 '평가 미배치'가 돼요. 이 평가표에 다시 체크하거나, 그 평가를 맡을 다른 평가표에서 체크하세요(팀·직급·사람은 평가받는 사람 기준).</div>
         </div>
       )}
-      {scope.mode === 'custom' && (
+      {(
         <p className="scope-summary" role="status">
           <b>적용 대상(평가받는 사람) {scopeTargets(cycle, scope).length}명</b>
           <span className="muted"> · 이번 회차 참여자 중 {scope.employees ? `직접 선택 ${scope.employees.length}명` : scope.teams === 'all' ? '전체 팀' : `팀 ${scope.teams.length}개`}{scope.positions === 'all' ? '' : ` · 직급 ${scope.positions.length}개`} 조건을 모두 충족 · 적용 평가 {scope.rules.map((r) => RULE_TEXT[r]).join('·') || '없음'}</span>
@@ -953,27 +950,28 @@ function PeoplePicker({ scope, setScope }: { scope: VersionScope; setScope: (x: 
 
 /** 지금 회차에서 평가표를 연결할 수 없는 배정 — 충돌·평가표 없음·표시 문항 0개 (빈 평가는 제출 완료로 처리되지 않음) */
 // D-122: 어떤 평가(자기·팀원→팀장·팀장·임원)에서 생겼는지와 평가받는 사람을 함께 — 고칠 평가표를 바로 알 수 있게
-function problemPart(cycle: Cycle, ps: VersionProblem[]) {
-  const names = (list: VersionProblem[]) => [...new Set(list.map((p) => cycle.targets.find((t) => t.employeeId === p.a.targetId)?.name ?? '?'))]
+type Emps = Pick<AppState, 'employees'>
+function problemPart(cycle: Cycle, ps: VersionProblem[], st?: Emps) {
+  const names = (list: VersionProblem[]) => [...new Set(list.map((p) => st?.employees.find((e) => e.id === p.a.targetId)?.name ?? cycle.targets.find((t) => t.employeeId === p.a.targetId)?.name ?? '?'))]
   return RULES.map((r) => ({ r, list: ps.filter((p) => ctxFor(cycle, p.a).rule === r) })).filter((x) => x.list.length)
     .map(({ r, list }) => `${RULE_TEXT[r]} ${list.length}건 — 평가받는 사람 ${names(list).slice(0, 3).join(', ')}${names(list).length > 3 ? ' 등' : ''}`).join(' / ')
 }
-function problemText(cycle: Cycle, ps: VersionProblem[]) {
+function problemText(cycle: Cycle, ps: VersionProblem[], st?: Emps) {
   const none = ps.filter((p) => p.kind === 'none'), conf = ps.filter((p) => p.kind === 'conflict')
-  return [none.length ? `적용할 평가표 없음: ${problemPart(cycle, none)}` : '', conf.length ? `평가표 겹침: ${problemPart(cycle, conf)}` : ''].filter(Boolean).join(' · ')
+  return [none.length ? `평가 미배치: ${problemPart(cycle, none, st)}` : '', conf.length ? `평가표 겹침: ${problemPart(cycle, conf, st)}` : ''].filter(Boolean).join(' · ')
 }
 
 function Problems({ cycle }: { cycle: Cycle }) {
   const s = useAppState()
   const probs: VersionProblem[] = applyVersions(s, structuredClone(cycle))
   if (!probs.length) return null
-  const label = { conflict: '평가표 겹침(버전 선택 필요)', none: '적용할 평가표 없음', empty: '표시할 문항 0개' }
+  const label = { conflict: '평가표 겹침(버전 선택 필요)', none: '평가 미배치', empty: '표시할 문항 0개' } // D-210: 어느 평가표에도 체크되지 않은 평가 = 평가 미배치
   const by = (k: VersionProblem['kind']) => probs.filter((p) => p.kind === k)
-  const part = (ps: VersionProblem[]) => problemPart(cycle, ps)
+  const part = (ps: VersionProblem[]) => problemPart(cycle, ps, s)
   return (
     <div className="feedback fail version-problems" role="alert">
       <div>⚠ 평가표 확인 필요 — {(['conflict', 'none', 'empty'] as const).filter((k) => by(k).length).map((k) => `${label[k]}: ${part(by(k))}`).join(' · ')}</div>
-      {by('none').length > 0 && <div className="muted small">해당 평가에 쓸 평가표의 적용 범위를 확인하세요 — 팀·직급·사람 조건은 평가받는 사람 기준입니다(예: 상향평가는 팀장·임원). '모두에게 동일 적용'으로 두거나 조건에 그 사람을 넣고 적용하면 사라집니다.</div>}
+      {by('none').length > 0 && <div className="muted small">평가 미배치 = 어느 평가표에도 체크되지 않은 평가예요. 그 평가를 맡을 평가표에서 적용 평가·팀(사람)·직급에 그 사람을 체크하고 적용하면 사라져요 — 팀·직급·사람은 평가받는 사람 기준(예: 상향평가는 팀장·임원).</div>}
     </div>
   )
 }
