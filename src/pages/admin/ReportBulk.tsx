@@ -6,17 +6,17 @@ import type { Cycle } from '../../domain/types'
 import { byTierThenName } from '../../domain/catalog'
 import { Modal } from '../../components/ui'
 import { templateXlsx } from '../../domain/xlsx'
-import { csvCell, evalParts, REPORT_HEAD, ReportSheet, reportHtml, reportRows, saveFile, sheetModel } from './Report'
+import { csvCell, evalParts, REPORT_HEAD, ReportSheet, reportRows, saveFile, sheetModel } from './Report'
 
 /**
  * 결과·리포트 선택 항목 다운로드(D-167): 체크한 사람들의 개인 리포트를 한 파일로.
  * - 포함 항목은 평가 답변 묶음(자기평가·팀장평가·임원평가) 단위로 고름 — 개인 리포트와 같은 본문(기본 정보·점수·추가 기록은 항상)
- * - 형식: 인쇄·PDF 저장 / 엑셀(.xlsx) / 워드(.doc) / CSV — 개인 리포트와 같음. 엑셀·CSV는 맨 앞에 이름 열, 워드·인쇄는 사람마다 새 쪽
+ * - 형식: 인쇄·PDF 저장 / 엑셀(.xlsx) / CSV — 개인 리포트와 같음(워드는 제거, D-177). 엑셀·CSV는 맨 앞에 이름 열, 인쇄는 사람마다 새 쪽
  * - 브라우저 안에서 만들어 내려받기(외부 전송 없음)
  */
 const GROUPS = [{ key: 'self', label: '자기평가 답변' }, { key: 'lead', label: '팀장평가 답변·의견' }, { key: 'exec', label: '임원평가 답변·의견' }] as const
-type Kind = 'print' | 'xlsx' | 'doc' | 'csv'
-const KINDS: [Kind, string][] = [['print', '인쇄·PDF 저장'], ['xlsx', '엑셀(.xlsx)'], ['doc', '워드(.doc)'], ['csv', 'CSV']]
+type Kind = 'print' | 'xlsx' | 'csv'
+const KINDS: [Kind, string][] = [['print', '인쇄·PDF 저장'], ['xlsx', '엑셀(.xlsx)'], ['csv', 'CSV']]
 
 export function BulkDownload({ cycle, ids, onClose }: { cycle: Cycle; ids: string[]; onClose: () => void }) {
   const s = useAppState()
@@ -39,7 +39,6 @@ export function BulkDownload({ cycle, ids, onClose }: { cycle: Cycle; ids: strin
       window.print()
       return
     }
-    if (kind === 'doc') return saveFile(`${fileBase}.doc`, 'application/msword', reportHtml(a4s))
     const head = ['이름', ...REPORT_HEAD]
     const rows = a4s.flatMap((a4, i) => reportRows(a4).map((r) => [targets[i].name, ...r]))
     if (kind === 'xlsx') return saveFile(`${fileBase}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', templateXlsx('개인 리포트', head, rows))

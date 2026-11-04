@@ -93,10 +93,9 @@ function ReportBody({ s, cycle, t, from }: { s: AppState; cycle: Cycle; t: Targe
   const m = sheetModel(s, cycle, t, parts, on)
   const empty = m.empty
   const fileBase = `${t.name}_${cycleLabel(cycle)}_개인리포트`.replace(/[\\/:*?"<>|]/g, '_')
-  const download = (kind: 'xlsx' | 'doc' | 'csv') => {
+  const download = (kind: 'xlsx' | 'csv') => {
     const a4 = document.querySelector<HTMLElement>('.report-shell .a4')
     if (!a4) return
-    if (kind === 'doc') return saveFile(`${fileBase}.doc`, 'application/msword', reportHtml(a4))
     const rows = reportRows(a4)
     if (kind === 'xlsx') return saveFile(`${fileBase}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', templateXlsx('개인 리포트', REPORT_HEAD, rows))
     saveFile(`${fileBase}.csv`, 'text/csv;charset=utf-8', '\ufeff' + [REPORT_HEAD, ...rows].map((r) => r.map(csvCell).join(',')).join('\r\n') + '\r\n')
@@ -113,7 +112,6 @@ function ReportBody({ s, cycle, t, from }: { s: AppState; cycle: Cycle; t: Targe
           {/* D-176: 화면에서 리포트 본문 보기(인쇄 전 확인) — 포함 항목 선택 그대로 */}
           <button className="btn" disabled={empty} onClick={() => setPreview(true)}>미리보기</button>
           <button className="btn" disabled={empty} onClick={() => download('xlsx')}>엑셀(.xlsx)</button>
-          <button className="btn" disabled={empty} onClick={() => download('doc')}>워드(.doc)</button>
           <button className="btn" disabled={empty} onClick={() => download('csv')}>CSV</button>
         </div>
 
@@ -296,7 +294,7 @@ function Answers({ title, as, qs, s, cycle, showWho, name }: { title: string; as
 }
 
 // ── 리포트 파일 저장 (D-134) ─────────────────────────
-// 화면에 그린 리포트 본문(.a4 — 포함 항목 선택 반영)을 그대로 읽어 표(구분·항목·내용·비고)·워드 문서로 만든다
+// 화면에 그린 리포트 본문(.a4 — 포함 항목 선택 반영)을 그대로 읽어 표(구분·항목·내용·비고)로 만든다 — 워드 저장은 제거(D-177)
 const clean = (x: string) => x.replace(/\s+/g, ' ').trim()
 /** 열: 구분(리포트 소제목) · 항목 · 내용 · 값 · 비고 — 점수 표(단계·평가자·점수·등급)도 잘리지 않게 다섯 칸 */
 export const REPORT_HEAD = ['구분', '항목', '내용', '값', '비고']
@@ -312,17 +310,6 @@ export function reportRows(a4: HTMLElement): string[][] {
     out.push([section, ...cells, '', '', '', ''].slice(0, 5))
   })
   return out
-}
-/** 여러 명이면 사람마다 새 쪽에서 시작(D-167) */
-export function reportHtml(a4s: HTMLElement | HTMLElement[]): string {
-  const bodies = (Array.isArray(a4s) ? a4s : [a4s]).map((a4) => { const b = a4.cloneNode(true) as HTMLElement; b.querySelectorAll('img').forEach((img) => img.remove()); return b.innerHTML })
-  const body = { innerHTML: bodies.join('<br clear="all" style="page-break-before:always">') }
-  return `<html><head><meta charset="utf-8"><title>개인 인사평가 리포트</title><style>
-body{font-family:'Malgun Gothic','맑은 고딕',sans-serif;font-size:11pt;color:#1b1e4d}
-h1{font-size:18pt;margin:0 0 4pt} h3{font-size:12pt;margin:14pt 0 4pt}
-table{border-collapse:collapse;width:100%;margin:4pt 0} th,td{border:1px solid #c8cfdc;padding:4pt 6pt;text-align:left;vertical-align:top}
-th{background:#eef2f8} .watermark{color:#8a93a8;font-size:9pt} .muted,.rp-assume{color:#6b7385;font-size:9pt}
-</style></head><body>${body.innerHTML}</body></html>`
 }
 export const csvCell = (v: string) => (/[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v)
 export function saveFile(name: string, type: string, data: string | Uint8Array) {
