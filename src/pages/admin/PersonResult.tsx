@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { update, useAppState } from '../../data/store'
 import { useSelectedCycle } from '../../data/hooks'
-import { can, canFinalAdjust } from '../../domain/permissions'
+import { can } from '../../domain/permissions'
 import { cycleLabel } from '../../domain/cycle'
 import { fmt, fmtSigned, personResult, weightsFor } from '../../domain/scoring'
 import { activeWriteAssignments, appliedStages, assignmentCell, isActiveAssignment, personSnap, resultPerson, stageAssignments, STAGE_OF_RULE, statusOf, upwardAssignments, type CellStatus } from '../../domain/progress'
@@ -138,12 +138,10 @@ export default function PersonResultPage() {
           <dl className="score-sum">
             <div><dt>개인평가 기초 점수</dt><dd>{baseText}{baseHint && <small>{baseHint}</small>}</dd></div>
             <div><dt>팀 KPI 점수</dt><dd>{r.kpi === null ? '—' : fmt(r.kpi)}</dd></div>
-            <div><dt>팀 보정</dt><dd>{fmtSigned(r.dept)}</dd></div>
-            <div><dt>개인 보정</dt><dd>{fmtSigned(r.person)}</dd></div>
-            <div><dt>보정 후 점수</dt><dd>{r.combined.afterAdjust === null ? '—' : fmt(r.combined.afterAdjust)}</dd></div>
-            <div><dt>최종 지정 점수</dt><dd>{r.ceoScore === null ? '—' : fmt(r.ceoScore)}</dd></div>
+            {/* D-197: 팀 보정·보정 후 점수·최종 지정 점수 없앰 — 점수 보정 한 칸, 등급은 등급 인원 비율로 자동 */}
+            <div><dt>점수 보정</dt><dd>{fmtSigned(r.person)}</dd></div>
             <div className="total"><dt>최종 점수</dt><dd>{r.combined.final === null ? '—' : fmt(r.combined.final)}</dd></div>
-            {r.ceoGrade && <div className="total"><dt>최종 등급</dt><dd>{r.ceoGrade}</dd></div>}
+            <div className="total"><dt>최종 등급</dt><dd>{r.grade ?? '—'}{!r.grade && <small>최종 점수가 나오면 등급 인원 비율로 자동</small>}</dd></div>
           </dl>
         </section>
         </div>
@@ -364,13 +362,10 @@ function Adjusters({ cycle, targetId, current }: { cycle: Cycle; targetId: strin
   const role = s.session.role
   const by = '운영담당자'
   const [person, setPerson] = useState(current.person === null ? '' : String(current.person))
-  const [ceo, setCeo] = useState(current.ceoScore === null ? '' : String(current.ceoScore))
-  const [grade, setGrade] = useState(current.ceoGrade ?? '')
   const [reason, setReason] = useState('') // 선택 입력 — 비워도 저장 (D-068)
   const [msg, setMsg] = useState<Record<string, Msg>>({})
   const canAdjust = can(role, 'adjust')
-  const canFinal = canFinalAdjust(s.session)
-  if (!canAdjust && !canFinal) return null // 권한이 없으면 편집 영역 자체를 보이지 않음
+  if (!canAdjust) return null // 권한이 없으면 편집 영역 자체를 보이지 않음
 
   const apply = (key: string, kind: AdjustKind, value: number | string | null, prev: number | string | null) => {
     if (value === prev) return setMsg({ ...msg, [key]: { ok: true, text: '변경 사항이 없습니다.' } })
@@ -389,34 +384,15 @@ function Adjusters({ cycle, targetId, current }: { cycle: Cycle; targetId: strin
     <div className="detail-col">
     <h2 id="adjust-title" className="section-title">최종 점수 보정</h2>
     <section className="panel pad adjust" aria-labelledby="adjust-title">
+      {/* D-197: 점수 보정 한 칸(±점) — 최종 지정 점수·등급 선택 없앰, 등급은 바뀐 최종 점수로 등급 인원 비율에 따라 자동 */}
       {canAdjust && (
         <div className="adj-row">
-          <label className="field">개인 보정(점)
+          <label className="field">점수 보정(점)
             <input type="text" inputMode="decimal" value={person} placeholder="없음" onChange={(e) => setPerson(e.target.value)} />
           </label>
           <button className="btn" onClick={() => applyNum('person', 'person', person, -100, 100, current.person)}>적용</button>
           <Feedback k="person" />
         </div>
-      )}
-      {canFinal && (
-        <>
-          <div className="adj-row">
-            <label className="field">최종 지정 점수
-              <input type="text" inputMode="decimal" value={ceo} placeholder="없음" onChange={(e) => setCeo(e.target.value)} />
-            </label>
-            <button className="btn" onClick={() => applyNum('ceo', 'ceoScore', ceo, 0, 100, current.ceoScore)}>적용</button>
-            <Feedback k="ceo" />
-          </div>
-          <div className="adj-row">
-            <label className="field">최종 등급
-              <select value={grade} onChange={(e) => setGrade(e.target.value)}>
-                <option value="">없음</option>{['A', 'B', 'C', 'D'].map((g) => <option key={g}>{g}</option>)}
-              </select>
-            </label>
-            <button className="btn" onClick={() => apply('grade', 'ceoGrade', grade || null, current.ceoGrade)}>적용</button>
-            <Feedback k="grade" />
-          </div>
-        </>
       )}
       <label className="field adj-reason"><span>보정 사유 <span className="muted">(선택)</span></span>
         <input type="text" maxLength={200} value={reason} placeholder="적용할 때 변경 기록에 함께 남습니다" onChange={(e) => setReason(e.target.value)} />

@@ -193,7 +193,7 @@ export function sheetModel(s: AppState, cycle: Cycle, t: TargetSnapshot, parts: 
   const scoreRows = on('scores.base') || on('scores.kpi') || on('scores.final')
   const showNote = on('note') && !!noteText
   const empty = !info.length && !selfQ.length && !leadQ.length && !(execShown.length && execQ.length) && !on('scores.stage') && !scoreRows && !showNote
-  const complete = !r.combined.incomplete && r.ceoGrade !== null
+  const complete = !r.combined.incomplete && r.grade !== null
   return { r, info, selfQ, leadQ, execQ, execShown, history, scoreRows, showNote, noteText, empty, complete, on }
 }
 
@@ -239,11 +239,9 @@ export function ReportSheet({ s, cycle, parts, m }: { s: AppState; cycle: Cycle;
             {on('scores.base') && <tr><th>개인 평가 점수</th><td>{r.combined.base === null ? '미완료' : fmt(r.combined.base)}</td></tr>}
             {on('scores.kpi') && <tr><th>팀 KPI</th><td>{r.kpi === null ? '—' : fmt(r.kpi)}</td></tr>}
             {on('scores.final') && <>
-              <tr><th>팀 보정</th><td>{fmtSigned(r.dept)}</td></tr>
-              <tr><th>개인 보정</th><td>{fmtSigned(r.person)}</td></tr>
-              <tr><th>최종 지정</th><td>{fmt(r.ceoScore)}</td></tr>
+              <tr><th>점수 보정</th><td>{fmtSigned(r.person)}</td></tr>
               <tr><th>최종 점수</th><td><b>{fmt(r.combined.final)}</b></td></tr>
-              <tr><th>최종 등급</th><td><b>{r.ceoGrade ?? '미확정'}</b></td></tr>
+              <tr><th>최종 등급</th><td><b>{r.grade ?? '미확정'}</b></td></tr>
             </>}
           </tbody></table>
           {on('scores.final') && history.length > 0 && (

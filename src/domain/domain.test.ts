@@ -1200,10 +1200,10 @@ describe('네 팀 구조·자연스러운 가상 성명 (D-065)', () => {
       const a = personResult(oldV16, oldV16.cycles[0], t.employeeId)!, b = personResult(s, s.cycles[0], t.employeeId)!
       expect([b.combined.final, b.combined.base, b.dept, b.person, b.ceoScore, b.stages.map((x) => x.score)]).toEqual([a.combined.final, a.combined.base, a.dept, a.person, a.ceoScore, a.stages.map((x) => x.score)])
     }
-    // 새 팀에 팀 보정을 새로 넣으면 그 팀 기준이 우선
+    // D-197: 팀 보정은 점수에 쓰지 않음(기록만 보관) — 새로 넣어도 점수 그대로
+    const before = personResult(s, s.cycles[0], 'e18')!.combined.final
     s.adjustments.push({ id: 'n1', cycleId: s.cycles[0].id, kind: 'dept', targetKey: 'tm-prod2', value: 3, reason: '', by: 'x', at: '', before: null })
-    expect(personResult(s, s.cycles[0], 'e18')!.dept).toBe(3)
-    expect(personResult(s, s.cycles[0], 'e15')!.dept).toBe(1) // 생산팀(옛 생산부) 사람은 여전히 옛 보정
+    expect([personResult(s, s.cycles[0], 'e18')!.dept, personResult(s, s.cycles[0], 'e18')!.combined.final]).toEqual([null, before])
   })
   it('다시 실행해도 바뀌지 않음 (중복·재이동·재이름 없음)', () => {
     const s = migrate(v6())!.state
@@ -3260,4 +3260,40 @@ describe('결과·리포트 임원 포함 · 평가 삭제 (D-192)', async () =>
     expect(C.deleteCycle(s, copy.id)).toBe(false)
     expect(s.cycles).toHaveLength(1)
   })
+})
+
+describe('점수 보정 한 칸 · 등급 자동 (D-197)', async () => {
+  const S = await import('./scoring')
+  it('팀 보정·최종 지정 점수·지정 등급은 점수에 쓰지 않고, 점수 보정만 반영', () => {
+    const s = createSeed(); const c = s.cycles.find((x) => x.status === '진행')!
+    const t = c.targets.find((x) => personResult(s, c, x.employeeId)!.combined.final !== null)!
+    const f0 = personResult(s, c, t.employeeId)!.combined.final!
+    s.adjustments.push({ id: 'x1', cycleId: c.id, kind: 'dept', targetKey: t.departmentId, value: 5, reason: '', by: 'x', at: '', before: null })
+    s.adjustments.push({ id: 'x2', cycleId: c.id, kind: 'ceoScore', targetKey: t.employeeId, value: 10, reason: '', by: 'x', at: '', before: null })
+    expect(personResult(s, c, t.employeeId)!.combined.final).toBe(f0)
+    s.adjustments.push({ id: 'x3', cycleId: c.id, kind: 'person', targetKey: t.employeeId, value: 2, reason: '', by: 'x', at: '', before: null })
+    expect(personResult(s, c, t.employeeId)!.combined.final).toBeCloseTo(f0 + 2)
+  })
+  it('등급 = 최종 점수 순위 × 등급 인원 비율(누적 반올림), 같은 점수 같은 등급, 점수 없으면 등급 없음', () => {
+    const s = createSeed(); const c = s.cycles.find((x) => x.status === '진행')!
+    s.policy.gradeRatios = { A: 25, B: 25, C: 35, D: 15, E: 0 }
+    const g = S.cycleGrades(s, c)
+    const scored = P2(s, c)
+    const n = scored.length
+    expect(g.size).toBe(n)
+    const count = (x: string) => [...g.values()].filter((v) => v === x).length
+    const hasTies = new Set(scored.map((x) => x.v)).size < n
+    if (!hasTies) expect([count('A'), count('B'), count('C'), count('D')]).toEqual([Math.round(n * 0.25), Math.round(n * 0.5) - Math.round(n * 0.25), Math.round(n * 0.85) - Math.round(n * 0.5), n - Math.round(n * 0.85)])
+    // 높은 점수가 낮은 등급을 받지 않음
+    for (let i = 1; i < scored.length; i++) expect(g.get(scored[i - 1].id)! <= g.get(scored[i].id)!).toBe(true)
+    // 점수 보정으로 순위가 바뀌면 등급도
+    const last = scored[n - 1]
+    s.adjustments.push({ id: 'y', cycleId: c.id, kind: 'person', targetKey: last.id, value: 100, reason: '', by: 'x', at: '', before: null })
+    expect(personResult(s, c, last.id)!.grade).toBe('A')
+    const none = c.targets.find((t) => personResult(s, c, t.employeeId)!.combined.final === null)
+    if (none) expect(personResult(s, c, none.employeeId)!.grade).toBeNull()
+  })
+  function P2(s: AppState, c: Cycle) {
+    return c.targets.map((t) => ({ id: t.employeeId, v: personResult(s, c, t.employeeId)!.combined.final })).filter((x): x is { id: string; v: number } => x.v !== null).sort((a, b) => b.v - a.v)
+  }
 })

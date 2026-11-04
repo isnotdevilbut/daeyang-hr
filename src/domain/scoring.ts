@@ -1,6 +1,6 @@
 // ⚠ 개발용 가정 계산. 회사의 현재 산식이 아니다. (docs/scoring.md)
 import type { Adjustment, AppState, Cycle, Direction, Response, Template } from './types'
-import { appliedStages, pathFor, resultPerson, stageAssignments } from './progress'
+import { appliedStages, pathFor, resultPeople, resultPerson, stageAssignments } from './progress'
 import { applies, ctxFor, weightErrors, type QCtx } from './questions'
 import { applyBlend, deptKpi, type DeptKpi } from './kpi'
 import type { KpiBlend } from './types'
@@ -97,11 +97,43 @@ export interface PersonResult {
   dept: number | null
   person: number | null
   ceoScore: number | null
-  ceoGrade: string | null
+  /** 최종 등급(D-197): 최종 점수 순위 × 등급 인원 비율로 자동(관리자가 직접 고르지 않음). 최종 점수가 없으면 null */
+  grade: string | null
   combined: CombineResult
 }
 
 export function personResult(state: AppState, cycle: Cycle, targetId: string): PersonResult | null {
+  const r = baseResult(state, cycle, targetId)
+  return r && { ...r, grade: cycleGrades(state, cycle).get(targetId) ?? null }
+}
+
+/**
+ * 최종 등급 자동 계산(D-197): 이 회차에서 최종 점수가 있는 사람을 점수 높은 순으로 세워 등급 인원 비율(A~E, 모든 회차 공통)대로 자른다.
+ * n명 중 A = 앞에서 round(n × A%)명, B = 그다음 round(n × (A+B)%)까지 …(누적 비율로 반올림). 같은 점수는 같은 등급(앞 사람의 등급).
+ * 최종 점수가 없는 사람(미완료·1·2·3단계 없는 임원)은 등급 없음 — 완료자가 늘면 등급이 달라질 수 있음
+ */
+export function cycleGrades(state: AppState, cycle: Cycle): Map<string, string> {
+  const ratios = state.policy?.gradeRatios ?? { A: 0, B: 0, C: 0, D: 0, E: 0 }
+  const G = ['A', 'B', 'C', 'D', 'E'] as const
+  const list = resultPeople(state, cycle)
+    .map((t) => ({ id: t.employeeId, v: baseResult(state, cycle, t.employeeId)?.combined.final ?? null }))
+    .filter((x): x is { id: string; v: number } => x.v !== null)
+    .sort((a, b) => b.v - a.v)
+  const n = list.length
+  const cuts: number[] = []
+  let cum = 0
+  for (const g of G) { cum += ratios[g] ?? 0; cuts.push(Math.round((n * cum) / 100)) }
+  const out = new Map<string, string>()
+  list.forEach((x, i) => {
+    const prev = list[i - 1]
+    if (prev && prev.v === x.v) { out.set(x.id, out.get(prev.id)!); return }
+    const k = cuts.findIndex((c) => i < c)
+    out.set(x.id, G[k < 0 ? G.length - 1 : k])
+  })
+  return out
+}
+
+function baseResult(state: AppState, cycle: Cycle, targetId: string): Omit<PersonResult, 'grade'> | null {
   const target = resultPerson(state, cycle, targetId) // 대상자 + 참여 임원(D-192)
   if (!target) return null
   const nameOf = (id: string) => state.employees.find((e) => e.id === id)?.name ?? '(알 수 없음)'
@@ -139,14 +171,10 @@ export function personResult(state: AppState, cycle: Cycle, targetId: string): P
   const kpi = kpiDetail.score
   // D-194: '개인평가 반영' 설정을 없애 점수에 쓰지 않음(저장된 비율은 지우지 않고 보관) — 팀 KPI 반영은 직급별 최종 반영 비율로(보류)
   const kpiBlend = { ...(cycle.kpiBlend ?? { personal: null, kpi: null }), enabled: false }
-  // 팀 보정: 새 팀에 기록이 있으면 그것, 없으면 네 팀 정리 전 조직의 기록(D-065 — 정리 때문에 점수가 바뀌지 않게)
-  const deptRec = latestAdjustment(state.adjustments, cycle.id, 'dept', target.departmentId)
-    ?? (target.legacyUnitId ? latestAdjustment(state.adjustments, cycle.id, 'dept', target.legacyUnitId) : null)
-  const dept = num(deptRec)
+  // D-197: 점수 보정은 한 칸(개인 '점수 보정')만 — 팀 보정·최종 지정 점수·지정 등급은 화면에서 없애 점수에 쓰지 않음(기록은 변경 내역에 보관)
+  const dept = null
   const person = num(latestAdjustment(state.adjustments, cycle.id, 'person', targetId))
-  const ceoScore = num(latestAdjustment(state.adjustments, cycle.id, 'ceoScore', targetId))
-  const g = latestAdjustment(state.adjustments, cycle.id, 'ceoGrade', targetId)
-  const ceoGrade = g && typeof g.value === 'string' ? g.value : null
+  const ceoScore = null
   return {
     stages,
     kpi,
@@ -155,7 +183,6 @@ export function personResult(state: AppState, cycle: Cycle, targetId: string): P
     dept,
     person,
     ceoScore,
-    ceoGrade,
     combined: combine({ stages, dept, person, ceoScore, kpi: { blend: kpiBlend, deptScore: kpi }, weightError: weightErrors(pathFor(cycle, target), weightsFor(cycle, target))[0] ?? null }),
   }
 }
