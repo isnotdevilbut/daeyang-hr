@@ -1621,3 +1621,5 @@ body.drag-sorting, body.drag-sorting * { cursor: grabbing !important; user-selec
 /* D-195: 결과·리포트 상세 '응답 결과' 상자 폭을 줄여 토글이 제목 가까이에(펼친 내용도 옆 여백 없이) · KPI 관리 탭 바로 아래 직급별 비율 */
 .stage-group { max-width: 880px; }
 .tabs + .final-plan { margin-top: 0; }
+/* D-196: 업로드 제목 줄 — 양식 내려받기를 가장 오른쪽에(좁으면 다음 줄) */
+.upload-head { flex-wrap: wrap; row-gap: 8px; }

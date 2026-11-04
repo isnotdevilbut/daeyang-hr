@@ -647,11 +647,11 @@ function FillUpload() {
   }
   return (
     <section className="panel pad upload">
-      <div className="row"><h2 style={{ margin: 0 }}>칼럼 값 채우기</h2><span className="muted">이미 등록된 직원의 칼럼 값을 사번으로 한꺼번에</span></div>
+      {/* D-196: 양식 내려받기는 제목 줄 가장 오른쪽 */}
+      <div className="row upload-head"><h2 style={{ margin: 0 }}>칼럼 값 채우기</h2><span className="spacer" /><TemplateDownload name="칼럼값_채우기_양식" xlsx={() => fillXlsxBytes(s)} csv={() => fillCsvText(s)} /></div>
       <ul className="upload-guide">
-        <li><b>필수 열</b> 사번 또는 이름(직원 찾기) + 채울 칼럼</li>
+        <li><b>필수 열</b> 사번 또는 이름(직원 찾기) + 채울 칼럼 <span className="muted">— 이미 등록된 직원의 칼럼 값을 한꺼번에</span></li>
       </ul>
-      <TemplateDownload name="칼럼값_채우기_양식" xlsx={() => fillXlsxBytes(s)} csv={() => fillCsvText(s)} />
       <div className="row upload-pick">
         <label className="btn primary file-btn">
           파일 선택
@@ -743,14 +743,15 @@ function AddUpload() {
 
   return (
     <section className="panel pad upload">
-      <div className="row">
+      <div className="row upload-head">
         <h2 style={{ margin: 0 }}>직원 명단 업로드</h2>
+        <span className="spacer" />
+        <TemplateDownload name="직원명단_양식" xlsx={() => templateXlsxBytes(s)} csv={() => templateCsvText(s)} />
       </div>
       {/* D-172: 안내는 필수 열만 */}
       <ul className="upload-guide">
         <li><b>필수 열</b> 이름 · 사번 · 팀</li>
       </ul>
-      <TemplateDownload name="직원명단_양식" xlsx={() => templateXlsxBytes(s)} csv={() => templateCsvText(s)} />
       <div className="row upload-pick">
         <label className="btn primary file-btn">
           파일 선택
