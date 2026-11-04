@@ -172,13 +172,13 @@ export default function PersonResultPage() {
               )}
               {stage?.ungraded && <span className="chip draft">미채점</span>}
               {list.length === 1 && chip(list[0])}
-              <span className="toggle-ic" aria-hidden>▾</span>
+              <span className="toggle-ic" aria-hidden><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg></span>
             </summary>
             {list.length === 1 ? body(list[0]) : (
               <div className="stage-authors">
                 {list.map((a) => (
                   <details key={a.id} className="author-item">
-                    <summary><b>{name(a.evaluatorId)}</b><span className="spacer" />{chip(a)}<span className="toggle-ic" aria-hidden>▾</span></summary>
+                    <summary><b>{name(a.evaluatorId)}</b><span className="spacer" />{chip(a)}<span className="toggle-ic" aria-hidden><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg></span></summary>
                     {body(a)}
                   </details>
                 ))}

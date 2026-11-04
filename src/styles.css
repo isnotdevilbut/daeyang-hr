@@ -1450,7 +1450,7 @@ details[open] > summary > .toggle-ic { transform: rotate(180deg); }
 .author-item[open] > summary { border-bottom: 1px solid var(--line-soft); border-radius: 12px 12px 0 0; }
 .stage-group > summary:focus-visible, .author-item > summary:focus-visible { outline: 2px solid #20b8ca; outline-offset: -2px; }
 @media (prefers-reduced-motion: reduce) { .toggle-ic { transition: none; } }
-.toggle-ic { font-size: 18px; line-height: 1; width: 20px; text-align: center; color: var(--brand-navy); }
+.toggle-ic { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 50%; background: #e8edf6; color: var(--brand-navy); }
 /* D-133: 포함 항목 제목 줄 — 모두 선택·해제는 오른쪽 끝, 선택 칸과 넉넉한 간격 */
 .report-opts > summary.report-opts-head { display: flex; align-items: center; gap: 8px; list-style: none; padding: 6px 0; }
 .report-opts > summary.report-opts-head::-webkit-details-marker { display: none; }
