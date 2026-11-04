@@ -87,7 +87,7 @@ export default function EvalAssign({ cycle, part }: { cycle: Cycle; part: 'weigh
   /** '상향평가도 같은 임원으로'(D-207) — 바로 저장. 다시 켤 때 따로 정한 짝이 있으면 확인 */
   const toggleSame = (same: boolean) => {
     if (same && Object.keys(upDraft).length && !confirm('저장하지 않은 임원 상향평가 배정이 있습니다. 버리고 임원 평가 배정과 같게 할까요?')) return
-    if (same && !confirm('임원 상향평가를 임원 평가 배정과 같은 임원으로 맞춥니다. 따로 정한 배정은 지워지고, 이미 써 둔 상향평가는 지우지 않고 기록으로 남깁니다. 계속할까요?')) return
+    if (same && !confirm('임원 상향평가를 임원 평가 배정과 같은 임원으로 맞춥니다. 따로 정한 배정은 지워지고, 이미 써 둔 상향평가는 지우지 않고 평가받은 임원의 결과·리포트 상세 > 응답 결과 > \'이전 배정 · 집계 제외\'에 남깁니다(거기서 반려 가능). 계속할까요?')) return
     update((d) => { setUpwardSeparate(d, d.cycles.find((x) => x.id === cycle.id)!, !same) })
     setUpDraft({}); setMsgFor('up', null)
   }

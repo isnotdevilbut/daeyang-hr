@@ -386,3 +386,17 @@ export function deleteCycle(d: AppState, cycleId: string): boolean {
   if (d.adjustNotes) for (const k of Object.keys(d.adjustNotes)) if (k.startsWith(`${cycleId}|`)) delete d.adjustNotes[k]
   return true
 }
+
+/**
+ * 반려(D-209): 집계에서 빠진 이전 배정 기록(팀장·임원·참여·자기평가 설정이 바뀌기 전에 써 둔 평가)을 지운다 — 배정과 응답·채점값을 함께.
+ * 집계 제외 표시가 있는 배정만, 확정 회차는 지우지 않음. 되돌릴 수 없음(화면에서 확인 후 실행)
+ */
+export function rejectRecord(d: AppState, cycleId: string, assignmentId: string): boolean {
+  const c = d.cycles.find((x) => x.id === cycleId)
+  const a = c?.assignments.find((x) => x.id === assignmentId)
+  if (!c || !a || !a.excluded || c.status === '확정') return false
+  c.assignments = c.assignments.filter((x) => x !== a)
+  delete d.responses[a.id]
+  if (d.manualScores) delete d.manualScores[a.id]
+  return true
+}

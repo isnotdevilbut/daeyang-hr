@@ -3365,3 +3365,19 @@ describe('상향평가 시연 제출 늘림 (D-208)', async () => {
     expect(again).toEqual(s)
   })
 })
+
+describe('이전 배정 기록 반려 (D-209)', async () => {
+  const C = await import('./cycle')
+  it('집계 제외 배정만 반려(배정·응답·채점값 삭제), 활성 배정·확정 회차는 반려 안 함', () => {
+    const s = createSeed(); const c = s.cycles.find((x) => x.status === '진행')!
+    const act = c.assignments.find((a) => s.responses[a.id] && !a.excluded)!
+    expect(C.rejectRecord(s, c.id, act.id)).toBe(false)
+    act.excluded = 'leadChanged'; s.manualScores = { [act.id]: { q: 1 } }
+    const other = Object.keys(s.responses).filter((k) => k !== act.id)
+    c.status = '확정'; expect(C.rejectRecord(s, c.id, act.id)).toBe(false); c.status = '진행'
+    expect(C.rejectRecord(s, c.id, act.id)).toBe(true)
+    expect(c.assignments.some((a) => a.id === act.id)).toBe(false)
+    expect(s.responses[act.id]).toBeUndefined(); expect(s.manualScores[act.id]).toBeUndefined()
+    expect(Object.keys(s.responses).sort()).toEqual(other.sort())
+  })
+})

@@ -3,7 +3,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { update, useAppState } from '../../data/store'
 import { useSelectedCycle } from '../../data/hooks'
 import { can } from '../../domain/permissions'
-import { cycleLabel } from '../../domain/cycle'
+import { cycleLabel, rejectRecord } from '../../domain/cycle'
 import { fmt, fmtSigned, personResult, weightsFor } from '../../domain/scoring'
 import { activeWriteAssignments, appliedStages, assignmentCell, isActiveAssignment, personSnap, resultPerson, stageAssignments, STAGE_OF_RULE, statusOf, upwardAssignments, type CellStatus } from '../../domain/progress'
 import { UPWARD_KIND_TEXT, upwardKind } from '../../domain/upward'
@@ -80,7 +80,9 @@ export default function PersonResultPage() {
   }
   if (!cycle || !t) return <div className="page"><Link to={back.to}>← {back.label}</Link><p>대상자를 찾을 수 없습니다.</p></div>
   const r = personResult(s, cycle, t.employeeId)!
-  const staged = cycle.assignments.filter((a) => a.targetId === t.employeeId).sort((a, b) => a.stageOrder - b.stageOrder)
+  // D-209: 집계에서 빠진 이전 배정 기록은 응답 결과 맨 아래 '이전 배정 · 집계 제외'로 따로(x/y 완료에서도 뺌)
+  const staged = cycle.assignments.filter((a) => a.targetId === t.employeeId && !a.excluded).sort((a, b) => a.stageOrder - b.stageOrder)
+  const oldRecs = cycle.assignments.filter((a) => a.targetId === t.employeeId && a.excluded && s.responses[a.id])
   const name = (id: string) => s.employees.find((e) => e.id === id)?.name ?? '?'
   const history = s.adjustments.filter((a) => a.cycleId === cycle.id && (a.targetKey === t.employeeId || a.targetKey === t.departmentId || (!!t.legacyUnitId && a.targetKey === t.legacyUnitId)))
   const weights = weightsFor(cycle, t)
@@ -185,6 +187,8 @@ export default function PersonResultPage() {
           </details>
         )
       })}
+
+      {oldRecs.length > 0 && <OldRecords cycle={cycle} list={oldRecs} />}
 
       {history.length > 0 && (
         <details className="history">
@@ -415,4 +419,47 @@ function RuleText({ cycle, a }: { cycle: Cycle; a: Assignment }) {
   const rule = ctxFor(cycle, a).rule
   if (!rule) return null
   return <>{RULE_TEXT[rule]} <span className="stage-no">({rule === 'upward' ? UPWARD_KIND_TEXT[upwardKind(s, a)] : `${STAGE_OF_RULE[rule]}단계`})</span></>
+}
+
+/** 집계에서 빠진 이유(D-209) */
+const EXCLUDED_TEXT: Record<NonNullable<Assignment['excluded']>, string> = {
+  leadChanged: '팀장·임원·참여가 바뀌기 전에 쓴 평가',
+  reassigned: '담당 임원이 바뀌기 전에 쓴 평가',
+  selfOff: '자기평가를 끄기 전에 쓴 평가',
+  execSelf: '이전 임원 자기평가',
+}
+/**
+ * 이전 배정 · 집계 제외(D-209): 조직·배정이 바뀌어 점수·완료에 들어가지 않는 남은 기록. 내용 보기 + 반려(기록 지우기, 확인 후·되돌릴 수 없음).
+ * 확정된 평가는 반려하지 않음
+ */
+function OldRecords({ cycle, list }: { cycle: Cycle; list: Assignment[] }) {
+  const s = useAppState()
+  const name = (id: string) => s.employees.find((e) => e.id === id)?.name ?? '?'
+  const label = (a: Assignment) => { const rule = ctxFor(cycle, a).rule; return rule ? `${RULE_TEXT[rule]}${rule === 'upward' ? ` (${UPWARD_KIND_TEXT[upwardKind(s, a)]})` : ''}` : '' }
+  const reject = (a: Assignment) => {
+    if (!confirm(`${name(a.evaluatorId)}이(가) 쓴 '${label(a)}' 기록을 반려할까요?\n반려하면 이 기록이 지워지고 되돌릴 수 없어요.`)) return
+    update((d) => { rejectRecord(d, cycle.id, a.id) })
+  }
+  return (
+    <details className="panel stage-card stage-group old-records">
+      <summary className="stage-head">
+        <h3>이전 배정 · 집계 제외</h3>
+        <span className="muted"><b>{list.length}</b>건</span>
+        <span className="spacer" />
+        <span className="toggle-ic" aria-hidden><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg></span>
+      </summary>
+      <div className="stage-authors">
+        {list.map((a) => {
+          const st = statusOf(s.responses, a.id)
+          return (
+            <details key={a.id} className="author-item">
+              <summary><b>{name(a.evaluatorId)}</b><span className="muted small">{label(a)} · {EXCLUDED_TEXT[a.excluded!]}</span><span className="spacer" /><span className={`chip ${st === 'submitted' ? 'stage done' : 'stage todo'}`}>{st === 'submitted' ? '✓ 제출' : '작성 중'}</span><span className="toggle-ic" aria-hidden><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg></span></summary>
+              {cycle.status !== '확정' && <div className="row old-rec-act"><span className="muted small">점수·완료에 들어가지 않는 기록이에요.</span><span className="spacer" /><button type="button" className="btn small danger" onClick={() => reject(a)}>반려(기록 지우기)</button></div>}
+              {st === 'submitted' ? <AnswerList t={cycle.templates[a.templateId]} r={s.responses[a.id]} a={a} cycle={cycle} /> : <p className="muted stage-empty">제출 전(작성 중) 기록입니다.</p>}
+            </details>
+          )
+        })}
+      </div>
+    </details>
+  )
 }

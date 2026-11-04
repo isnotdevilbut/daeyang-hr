@@ -1649,3 +1649,7 @@ body.drag-sorting, body.drag-sorting * { cursor: grabbing !important; user-selec
 /* D-207: 임원 평가 배정 검색 줄 오른쪽 — 상향평가도 같은 임원으로 */
 .filters .up-same { margin-left: auto; font-weight: 700; white-space: nowrap; }
 .up-assign { margin-top: 14px; }
+/* D-209: 이전 배정 · 집계 제외 기록 */
+.old-records { border-style: dashed; }
+.old-records .author-item > summary .muted.small { margin-left: 8px; }
+.old-rec-act { padding: 8px 14px 0; gap: 8px; }
