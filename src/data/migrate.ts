@@ -13,7 +13,7 @@ import { syncCycle } from '../domain/cycleSync'
 import { v15 } from '../domain/demoV15'
 import { leadBlendV25, scoringV16 } from '../domain/scoringV16'
 import { execPerTeam } from '../domain/execTeamsV17'
-import { execUpwardFormV27, execUpwardPairsV28, upwardExecV26, upwardFormV22, upwardV18 } from '../domain/upward'
+import { execUpwardFormV27, execUpwardPairsV28, upwardDemoMoreV29, upwardExecV26, upwardFormV22, upwardV18 } from '../domain/upward'
 import { joinAllStaff } from '../domain/joinAllV19'
 import { leadUpwardOpen, moreDemo } from '../domain/demoV20'
 import { demoKpiV23 } from '../domain/demoV23'
@@ -265,7 +265,13 @@ export function migrate(raw: any): MigrationResult | null {
     s.schemaVersion = 28
   }
 
-  if (s.schemaVersion !== 28) return null
+  if (s.schemaVersion === 28) {
+    // v28 → v29 (D-208): 진행 중 평가의 응답 없는 상향평가에 시연 제출(시연 화면 정리) — 작성 중·사용자 응답·D-121 미제출 한 건 그대로
+    notes.push(...upwardDemoMoreV29(s))
+    s.schemaVersion = 29
+  }
+
+  if (s.schemaVersion !== 29) return null
   return { state: s as AppState, notes }
 }
 

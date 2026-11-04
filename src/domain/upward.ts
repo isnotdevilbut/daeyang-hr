@@ -294,3 +294,27 @@ export function execUpwardPairsV28(s: AppState): string[] {
   }
   return notes
 }
+
+/**
+ * v28 → v29 (D-208): 시연 화면(진행 현황 상향평가 칸)이 'x/y 완료' 글자로 가득하지 않게 — 진행 중 평가의 응답 없는 상향평가에 시연 제출을 넣는다.
+ * 그대로 두는 것: 시연 '작성 중'(임시저장), 사용자 응답, 장현우(e10)가 받는 팀원→팀장평가의 미제출 한 건(D-121 시연 구성), 준비·마감·확정 회차. 반복 실행 안전
+ */
+export function upwardDemoMoreV29(s: AppState): string[] {
+  const notes: string[] = []
+  const at = '2026-10-28T00:00:00.000Z'
+  const no = (id: string) => s.employees.find((e) => e.id === id)?.empNo ?? ''
+  for (const c of s.cycles) {
+    if (c.status !== '진행') continue
+    const ups = c.assignments.filter((a) => a.direction === 'up' && !a.excluded)
+    const toE10 = ups.filter((a) => a.targetId === 'e10').sort((a, b) => no(b.evaluatorId).localeCompare(no(a.evaluatorId), 'ko', { numeric: true }))
+    const keep = toE10.find((a) => !s.responses[a.id])?.id // D-121: 5/6처럼 한 건은 미제출로
+    let n = 0
+    for (const a of ups) {
+      if (s.responses[a.id] || a.id === keep) continue
+      s.responses[a.id] = { assignmentId: a.id, answers: demoAnswers(c, a), status: 'submitted', savedAt: at, submittedAt: at, lang: 'ko', demo: true }
+      n++
+    }
+    if (n) notes.push(`${c.name}: 응답 없는 상향평가 ${n}건 시연 제출(시연 화면 정리)`)
+  }
+  return notes
+}
