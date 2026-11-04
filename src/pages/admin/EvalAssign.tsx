@@ -292,7 +292,7 @@ function GradeRatios() {
     <section className="panel pad grade-ratio-panel">
       {/* 영역 제목 오른쪽에 이 영역만 저장(D-094) — 모든 회차 공통 값 */}
       <div className="sec-head">
-        <h2>등급 인원 비율 <span className="muted">모든 회차 공통 · 결과·리포트 최종 등급 자동 계산에 사용(최종 점수 순위대로)</span></h2>
+        <h2>등급 인원 비율</h2>
         <div className="sec-save">
           {msg && <span className={`feedback ${msg.ok ? 'ok' : 'fail'}`} role={msg.ok ? 'status' : 'alert'}>{msg.ok ? '✓' : '✕'} {msg.text}</span>}
           <button className="btn primary small" disabled={!dirty} onClick={save}>저장</button>

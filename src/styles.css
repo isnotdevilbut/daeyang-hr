@@ -1623,3 +1623,9 @@ body.drag-sorting, body.drag-sorting * { cursor: grabbing !important; user-selec
 .tabs + .final-plan { margin-top: 0; }
 /* D-196: 업로드 제목 줄 — 양식 내려받기를 가장 오른쪽에(좁으면 다음 줄) */
 .upload-head { flex-wrap: wrap; row-gap: 8px; }
+/* D-200: 직급별 비율 표 — 직급·반영 요소·활성 합계 세 칸 간격 일정(고정 폭), 반영 요소 머리글과 항목 묶음을 가운데 정렬 */
+.final-plan-tbl { table-layout: fixed; width: 100%; }
+.final-plan-tbl th:first-child, .final-plan-tbl td:first-child, .final-plan-tbl th:last-child, .final-plan-tbl td:last-child { width: 18%; }
+.final-plan-tbl th:nth-child(2), .final-plan-tbl td:nth-child(2) { text-align: center; }
+.final-plan-tbl .fp-items { justify-content: center; }
+@media (max-width: 1100px) { .final-plan-tbl { table-layout: auto; } .final-plan-tbl .fp-items { justify-content: center; } }
