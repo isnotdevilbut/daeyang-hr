@@ -623,7 +623,6 @@ function FillUpload() {
   const [readErr, setReadErr] = useState('')
   const [done, setDone] = useState('')
   const [inputKey, setInputKey] = useState(0)
-  const cfs = s.customFields ?? []
   const table = loaded?.sheets[loaded.sheet]?.rows ?? null
   const res = useMemo(() => (table ? checkRosterFill(table, s.employees, s) : null), [table, s.employees, s.customFields])
   const pick = async (f: File | undefined) => {
@@ -645,16 +644,7 @@ function FillUpload() {
     <section className="panel pad upload">
       <div className="row"><h2 style={{ margin: 0 }}>칼럼 값 채우기</h2><span className="muted">이미 등록된 직원의 칼럼 값을 사번으로 한꺼번에</span></div>
       <ul className="upload-guide">
-        <li><b>꼭 있어야 하는 열</b> 사번 또는 이름(직원 찾기) + 채울 칼럼</li>
-        <li><b>채울 수 있는 칼럼</b> {cfs.length ? cfs.map((f) => f.name).join(' · ') : "없음 — 직원 목록에서 '+ 칼럼 추가'로 먼저 만드세요"}</li>
-        <li><b>알아 둘 점</b>
-          <ul className="ug-points">
-            <li>열 순서는 상관없어요.</li>
-            <li>파일에서 빈 칸인 곳은 원래 값이 그대로 남아요.</li>
-            <li>파일에 있는 새로운 열이 칼럼을 자동으로 만드는 건 방지했어요.</li>
-            <li>팀·직급·직무는 여기서 바뀌지 않아요. 직원 목록의 '수정'에서 바꿔요.</li>
-          </ul>
-        </li>
+        <li><b>필수 열</b> 사번 또는 이름(직원 찾기) + 채울 칼럼</li>
       </ul>
       <div className="row upload-pick">
         <label className="btn primary file-btn">
@@ -720,7 +710,6 @@ function AddUpload() {
   const [inputKey, setInputKey] = useState(0)
   const table = loaded?.sheets[loaded.sheet]?.rows ?? null
   const res = useMemo(() => (table ? checkRoster(table, s.employees, activeTeams(s), mode, s) : null), [table, s.employees, s.teams, s.jobs, s.positions, s.customFields, mode])
-  const cfs = s.customFields ?? []
 
   const pick = async (f: File | undefined) => {
     setDone(''); setReadErr(''); setLoaded(null); setMode('error') // 새 파일마다 기본값(오류로 표시)으로
@@ -751,18 +740,9 @@ function AddUpload() {
       <div className="row">
         <h2 style={{ margin: 0 }}>직원 명단 업로드</h2>
       </div>
-      {/* D-145: 안내를 항목별로 — 꼭 필요한 열 / 있으면 좋은 열 / 순서·이름 규칙 */}
+      {/* D-172: 안내는 필수 열만 */}
       <ul className="upload-guide">
-        <li><b>꼭 있어야 하는 열</b> 이름 · 사번 · 팀</li>
-        <li><b>있으면 함께 등록</b> 직급 · 직무{cfs.length > 0 && <> · 추가한 칼럼({cfs.map((f) => f.name).join(' · ')})</>}</li>
-        <li><b>알아 둘 점</b>
-          <ul className="ug-points">
-            <li>직급 칸이 없거나 비어 있으면 <b className="em">사원(임시)</b>으로 등록돼요.</li>
-            <li>직무 칸이 없거나 비어 있으면 <b className="em">{activeJobs(s)[0]?.name ?? '첫 번째 직무'}(임시)</b>으로 등록돼요.</li>
-            <li>둘 다 나중에 직원 목록의 '수정'에서 바꿀 수 있어요.</li>
-            <li>열 순서는 상관없어요.</li>
-          </ul>
-        </li>
+        <li><b>필수 열</b> 이름 · 사번 · 팀</li>
       </ul>
       <div className="row upload-pick">
         <label className="btn primary file-btn">
