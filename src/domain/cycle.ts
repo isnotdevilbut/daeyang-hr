@@ -184,6 +184,7 @@ export function cloneCycle(s: AppState, src: Cycle, name: string): Cycle {
     ...(src.versions ? { versions: structuredClone(src.versions).filter((v) => !v.archived) } : {}), // 평가표 버전·선택도 함께 (D-082)
     ...(src.versionPicks ? { versionPicks: structuredClone(src.versionPicks) } : {}),
     ...(src.upwardToExec ? { upwardToExec: true } : {}),
+    ...(src.upwardExecSeparate ? { upwardExecSeparate: true, upwardExecPick: structuredClone(src.upwardExecPick ?? {}) } : {}),
     targets: s.employees.filter((e) => targetIds.includes(e.id)).map((e) => snapshotTarget(s, e)),
     assignments: [],
     createdAt: new Date().toISOString(),

@@ -20,6 +20,7 @@ export default function MyTasks() {
   const rowsOf = (pick: (a: Assignment) => boolean) => s.cycles.flatMap((c) =>
     c.assignments
       .filter((a) => a.evaluatorId === me && pick(a))
+      .filter((a) => cycleClosed(c) || !!s.employees.find((e) => e.id === a.targetId)?.active) // D-207: 진행 중 평가는 퇴사 처리된 사람을 평가하는 일을 바로 뺌(기록은 그대로)
       .map((a) => ({ c, a, t: personSnap(s, c, a.targetId)!, cell: assignmentCell(c, s.responses, a) })) // 상향평가 대상 임원은 대상자 명단에 없을 수 있음(D-187)
       .filter((r) => !!r.t),
   )

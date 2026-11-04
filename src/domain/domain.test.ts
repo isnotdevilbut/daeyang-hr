@@ -3311,3 +3311,28 @@ describe('퇴사자는 참여 인원·결과에서 뺌 (D-205)', async () => {
     expect(P.resultPeople(s, c).some((t) => t.employeeId === gone.employeeId)).toBe(true)
   })
 })
+
+describe('임원 상향평가 따로 배정 · 퇴사자 (D-207)', async () => {
+  const U = await import('./upward')
+  const E = await import('./execPlan')
+  const toExec = (s: AppState, c: Cycle, id: string) => c.assignments.filter((a) => a.direction === 'up' && !a.excluded && a.evaluatorId === id && s.employees.find((e) => e.id === a.targetId)!.isExecutive).map((a) => a.targetId)
+  it('끄면 지금 짝 그대로 시작 → 따로 바꾸면 임원평가 담당과 별개, 다시 켜면 임원평가 담당 기준', () => {
+    const s = createSeed(); const c = s.cycles.find((x) => x.status === '진행')!
+    const t = c.targets.find((x) => !x.isExecutive && E.execAssignment(c, x))!
+    const ex = E.execAssignment(c, t)!.evaluatorId
+    const before = JSON.stringify(c.assignments)
+    U.setUpwardSeparate(s, c, true)
+    expect(c.upwardExecSeparate).toBe(true)
+    expect(JSON.stringify(c.assignments)).toBe(before) // 시작값 = 지금 짝 → 배정 그대로
+    for (const a of c.assignments.filter((a) => a.direction === 'up' && a.evaluatorId === t.employeeId)) delete s.responses[a.id]
+    const other = s.employees.find((e) => e.active && e.isExecutive && e.id !== ex)!.id
+    U.applyUpwardPicks(s, c, { [t.employeeId]: other })
+    expect(toExec(s, c, t.employeeId)).toEqual([other])
+    expect(E.execAssignment(c, t)!.evaluatorId).toBe(ex) // 임원평가 담당은 그대로
+    U.applyUpwardPicks(s, c, { [t.employeeId]: '' })
+    expect(toExec(s, c, t.employeeId)).toEqual([]) // 미지정 = 임원 상향평가 없음
+    U.setUpwardSeparate(s, c, false)
+    expect(c.upwardExecSeparate).toBeUndefined(); expect(c.upwardExecPick).toBeUndefined()
+    expect(toExec(s, c, t.employeeId)).toEqual([ex])
+  })
+})

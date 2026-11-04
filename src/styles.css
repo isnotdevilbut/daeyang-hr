@@ -1646,3 +1646,6 @@ body.drag-sorting, body.drag-sorting * { cursor: grabbing !important; user-selec
 .exec-team-n.on { color: var(--brand-blue); font-weight: 800; }
 /* D-206: 임원 총 인원(머리)을 아래 팀별 인원 숫자와 같은 세로줄에(펼치기 ▾ 자리만큼 안쪽) */
 .exec-col-head { padding-right: 19px; }
+/* D-207: 임원 평가 배정 검색 줄 오른쪽 — 상향평가도 같은 임원으로 */
+.filters .up-same { margin-left: auto; font-weight: 700; white-space: nowrap; }
+.up-assign { margin-top: 14px; }

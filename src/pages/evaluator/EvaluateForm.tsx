@@ -19,6 +19,7 @@ export default function EvaluateForm() {
   const [lang] = useLang()
   if (!can(s.session.role, 'evaluate') || !a || a.evaluatorId !== s.session.personaId || a.excluded) return <Forbidden lang={lang} reason={tr('ev.onlyMine', lang)} />
   if (a.direction === 'self') return <Navigate to={`/eval/self/${a.id}`} replace />
+  if (!cycleClosed(cycle) && !s.employees.find((e) => e.id === a.targetId)?.active) return <Navigate to="/eval" replace /> // D-207: 퇴사 처리된 사람 평가는 열지 않음
   // 이미 제출한 평가는 앞 단계가 나중에 추가됐어도(D-079) 제출 내용 확인 가능
   // 마감 회차는 잠금과 관계없이 읽기 전용으로(새 작성·제출 없음)
   if (!cycleClosed(cycle) && !isUnlocked(cycle!, s.responses, a) && statusOf(s.responses, a.id) !== 'submitted') return <Forbidden lang={lang} reason={tr('ev.locked', lang)} />

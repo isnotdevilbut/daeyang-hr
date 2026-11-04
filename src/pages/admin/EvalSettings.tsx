@@ -25,9 +25,8 @@ export default function EvalSettings({ cycle, onCreate, onSelect, part }: { cycl
   const [ps, pe] = splitPeriod(cycle.period)
   const emp = (id: string) => s.employees.find((e) => e.id === id)
   // 참여자 후보 = 재직 중인 평가 대상 직원 + 재직 임원 + 이미 이 회차에 들어 있는 사람 (직원 ID 기준 한 번씩)
-  // D-205: 재직 중인 사람만 보이고 셈(진행 현황 전체 대상자와 같게). 퇴사 처리된 이전 대상자는 숨기되 회차 기록·응답은 그대로(저장·모두 선택/해제에서도 건드리지 않음)
+  // D-205: 재직 중인 사람만 보이고 셈(진행 현황 전체 대상자와 같게). 퇴사 처리된 이전 대상자는 숨기되 회차 기록·응답은 그대로(저장에서도 건드리지 않음)
   const people = s.employees.filter((e) => e.active && (isEvalTarget(e) || e.isExecutive || cycle.targets.some((t) => t.employeeId === e.id)))
-  const shownIds = new Set(people.map((e) => e.id))
   /** 자기평가 스위치 = 현재 직급(조직 관리 기준)이 팀장·임원인 사람만 (D-077). 사원은 스위치 없이 자기평가 필수 */
   const configurable = (e: Employee) => tierOf(s, e) !== '사원'
   const selfNow = (e: Employee) => {
@@ -147,9 +146,7 @@ export default function EvalSettings({ cycle, onCreate, onSelect, part }: { cycl
           {/* D-202: 큰 토글 — 처음엔 접힘, 제목이나 화살표를 누르면 아래 목록 */}
           <h2 style={{ margin: 0 }}><button type="button" className="sec-title-btn" onClick={() => setPeopleOpen(!peopleOpen)}>평가 참여자 <span className="muted">{f.join.filter((id) => people.some((e) => e.id === id)).length}명</span></button></h2>
           <span className="spacer" />
-          {/* 참여 체크에만 적용 — 자기평가 설정은 그대로 */}
-          <button className="btn small" disabled={locked} onClick={() => setF({ ...f, join: [...f.join.filter((id) => !shownIds.has(id)), ...people.map((e) => e.id)] })}>모두 선택</button>
-          <button className="btn small" disabled={locked} onClick={() => setF({ ...f, join: f.join.filter((id) => !shownIds.has(id)) })}>모두 해제</button>
+          {/* D-207: 모두 선택·모두 해제 버튼 없앰(팀 체크·사람 체크로) */}
           {part === 'people' && <div className="sec-save">
             {msg && <span className={`feedback ${msg.ok ? 'ok' : 'fail'}`} role={msg.ok ? 'status' : 'alert'}>{msg.ok ? '✓' : '✕'} {msg.text}</span>}
             <button className="btn primary small" disabled={!dirty} onClick={save}>저장</button>

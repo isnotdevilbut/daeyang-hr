@@ -64,9 +64,10 @@ function Body({ cycle, me, filter, setFilter, lang }: { cycle: Cycle; me: string
   const rows: Row[] = useMemo(
     () => cycle.assignments
       .filter((a) => a.evaluatorId === me && a.direction !== 'self' && isActiveAssignment(a))
+      .filter((a) => closed || !!s.employees.find((e) => e.id === a.targetId)?.active) // D-207: 퇴사 처리된 대상자는 바로 뺌(기록은 그대로)
       .map((a) => ({ a, t: cycle.targets.find((x) => x.employeeId === a.targetId)!, cell: assignmentCell(cycle, s.responses, a) }))
       .filter((r) => r.t),
-    [cycle, me, s.responses],
+    [cycle, me, s.responses, s.employees, closed],
   )
   // 본인 자기평가 — 이 회차에서 켜진 경우만 (D-068). 평가자로서의 작성(3단계)과는 별개로 잠기지 않는다
   const self = cycle.assignments.find((a) => a.evaluatorId === me && a.targetId === me && a.direction === 'self' && isActiveAssignment(a))
