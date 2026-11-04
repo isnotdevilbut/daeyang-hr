@@ -8,6 +8,7 @@ import { syncUpward } from '../../domain/upward'
 import { pathFor, STAGE_OF_RULE, statusOf } from '../../domain/progress'
 import { cycleHasResponses, weightErrors, weightSum } from '../../domain/questions'
 import { type Cycle, type EvaluatorRule } from '../../domain/types'
+import { SecToggle } from '../../components/ui'
 import { targetPosition } from '../../domain/catalog'
 
 type PathKey = 'member' | 'lead'
@@ -145,6 +146,7 @@ export default function EvalAssign({ cycle, part }: { cycle: Cycle; part: 'weigh
  */
 function Assignments({ cycle, locked, execDraft, setExecDraft, onSave, msg }: { cycle: Cycle; locked: boolean; execDraft: Record<string, string>; setExecDraft: (x: Record<string, string>) => void; onSave: () => void; msg: { ok: boolean; text: string } | null }) {
   const s = useAppState()
+  const [secOpen, setSecOpen] = useState(false) // D-202: 처음엔 접힘
   const [q, setQ] = useState('')
   const [team, setTeam] = useState('')
   const [note, setNote] = useState('') // 팀 전체 선택이 제출된 평가 때문에 일부만 반영됐을 때 짧은 안내
@@ -188,14 +190,16 @@ function Assignments({ cycle, locked, execDraft, setExecDraft, onSave, msg }: { 
   return (
     <section className="panel exec-assign" aria-labelledby="exec-assign-title">
       <div className="panel-head row">
-        <h2 id="exec-assign-title" style={{ margin: 0 }}>임원 평가 배정 <span className="muted">{rows.length}명</span></h2>
+        <h2 id="exec-assign-title" style={{ margin: 0 }}><button type="button" className="sec-title-btn" onClick={() => setSecOpen(!secOpen)}>임원 평가 배정 <span className="muted">{rows.length}명</span></button></h2>
         <span className="spacer" />
         {unassigned.length > 0 && <span className="exec-load warn">미지정 {unassigned.length}명</span>}
         <div className="sec-save">
           {msg && <span className={`feedback ${msg.ok ? 'ok' : 'fail'}`} role={msg.ok ? 'status' : 'alert'}>{msg.ok ? '✓' : '✕'} {msg.text}</span>}
           <button className="btn primary small" disabled={locked || Object.keys(execDraft).length === 0} onClick={onSave}>저장</button>
         </div>
+        <SecToggle open={secOpen} onClick={() => setSecOpen(!secOpen)} label="임원 평가 배정" />
       </div>
+      {secOpen && <>
       <div className="filters">
         <input type="search" placeholder="이름·팀 검색" aria-label="임원 평가 배정 대상자 검색" value={q} onChange={(e) => setQ(e.target.value)} />
         <select aria-label="임원 평가 배정 팀" value={team} onChange={(e) => setTeam(e.target.value)}>
@@ -268,6 +272,7 @@ function Assignments({ cycle, locked, execDraft, setExecDraft, onSave, msg }: { 
           )
         })}
       </div>
+      </>}
     </section>
   )
 }

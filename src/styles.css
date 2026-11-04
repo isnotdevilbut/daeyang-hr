@@ -1629,3 +1629,10 @@ body.drag-sorting, body.drag-sorting * { cursor: grabbing !important; user-selec
 .final-plan-tbl th:nth-child(2), .final-plan-tbl td:nth-child(2) { text-align: center; }
 .final-plan-tbl .fp-items { justify-content: center; }
 @media (max-width: 1100px) { .final-plan-tbl { table-layout: auto; } .final-plan-tbl .fp-items { justify-content: center; } }
+/* D-202: 평가자 배정 — 평가 참여자·임원 평가 배정 영역 큰 토글(처음엔 접힘, 제목을 눌러도 펼침) */
+.sec-toggle { border: 0; cursor: pointer; flex: none; }
+.sec-toggle.open { transform: rotate(180deg); }
+.sec-toggle:hover { background: #dbe3f1; }
+.sec-toggle:focus-visible { outline: 2px solid #20b8ca; outline-offset: 2px; }
+.sec-title-btn { all: unset; cursor: pointer; }
+.sec-title-btn:focus-visible { outline: 2px solid #20b8ca; outline-offset: 2px; border-radius: 6px; }

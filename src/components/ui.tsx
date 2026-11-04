@@ -63,3 +63,12 @@ export function Forbidden({ reason, lang = 'ko' }: { reason?: string; lang?: Lan
 export function Empty({ children }: { children: ReactNode }) {
   return <div className="card muted" style={{ textAlign: 'center', padding: 30 }}>{children}</div>
 }
+
+/** 영역 접기·펼치기 큰 토글(D-202) — 응답 결과 토글과 같은 동그라미 화살표. 펼치면 화살표가 위로 */
+export function SecToggle({ open, onClick, label }: { open: boolean; onClick: () => void; label: string }) {
+  return (
+    <button type="button" className={`toggle-ic sec-toggle ${open ? 'open' : ''}`} aria-expanded={open} aria-label={`${label} ${open ? '접기' : '펼치기'}`} onClick={onClick}>
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M6 9l6 6 6-6" /></svg>
+    </button>
+  )
+}

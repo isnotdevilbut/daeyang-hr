@@ -6,7 +6,7 @@ import { applyParticipation, assignmentProblems, cloneCycle, cycleLabel, deleteC
 import { selfApplies } from '../../domain/progress'
 import { isEvalTarget, tierOf, TIERS } from '../../domain/org'
 import type { Cycle, CycleStatus, Employee } from '../../domain/types'
-import { Modal } from '../../components/ui'
+import { Modal, SecToggle } from '../../components/ui'
 import { positionName } from '../../domain/catalog'
 import { syncCycle } from '../../domain/cycleSync'
 
@@ -44,6 +44,7 @@ export default function EvalSettings({ cycle, onCreate, onSelect, part }: { cycl
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [cloning, setCloning] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [peopleOpen, setPeopleOpen] = useState(false)
   // 저장 완료 메시지는 잠시 뒤 사라짐(오류·일부만 저장 안내는 다음 동작까지 유지)
   useEffect(() => { if (!msg?.ok) return; const t = setTimeout(() => setMsg(null), 3500); return () => clearTimeout(t) }, [msg])
   // 고정 위치 = 상단 내비게이션 바로 아래 (헤더 높이는 화면 폭에 따라 다름)
@@ -140,7 +141,8 @@ export default function EvalSettings({ cycle, onCreate, onSelect, part }: { cycl
 
       {part === 'people' && <section className="panel pad">
         <div className="row">
-          <h2 style={{ margin: 0 }}>평가 참여자 <span className="muted">{f.join.filter((id) => people.some((e) => e.id === id)).length}명</span></h2>
+          {/* D-202: 큰 토글 — 처음엔 접힘, 제목이나 화살표를 누르면 아래 목록 */}
+          <h2 style={{ margin: 0 }}><button type="button" className="sec-title-btn" onClick={() => setPeopleOpen(!peopleOpen)}>평가 참여자 <span className="muted">{f.join.filter((id) => people.some((e) => e.id === id)).length}명</span></button></h2>
           <span className="spacer" />
           {/* 참여 체크에만 적용 — 자기평가 설정은 그대로 */}
           <button className="btn small" disabled={locked} onClick={() => setF({ ...f, join: people.map((e) => e.id) })}>모두 선택</button>
@@ -149,7 +151,9 @@ export default function EvalSettings({ cycle, onCreate, onSelect, part }: { cycl
             {msg && <span className={`feedback ${msg.ok ? 'ok' : 'fail'}`} role={msg.ok ? 'status' : 'alert'}>{msg.ok ? '✓' : '✕'} {msg.text}</span>}
             <button className="btn primary small" disabled={!dirty} onClick={save}>저장</button>
           </div>}
+          <SecToggle open={peopleOpen} onClick={() => setPeopleOpen(!peopleOpen)} label="평가 참여자" />
         </div>
+        {peopleOpen && <>
         {locked && <p className="muted">확정된 평가라 참여자를 바꿀 수 없습니다.</p>}
         {/* 실제 담당자가 없는 평가(팀장 없는 팀 등) — 임의 담당자를 만들지 않고 짧게 알림 (D-081) */}
         {missing.length > 0 && (
@@ -186,6 +190,7 @@ export default function EvalSettings({ cycle, onCreate, onSelect, part }: { cycl
             </div>
           ))}
         </div>
+        </>}
       </section>}
 
       {deleting && <DeleteModal cycle={cycle} onClose={() => setDeleting(false)} onDone={(id) => { setDeleting(false); if (id) onSelect(id) }} />}
