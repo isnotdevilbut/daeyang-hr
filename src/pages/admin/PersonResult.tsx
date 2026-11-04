@@ -127,7 +127,7 @@ export default function PersonResultPage() {
                 const w = weights[st.order]
                 return (
                   <tr key={st.order}>
-                    <td><b>{st.order}단계</b></td>
+                    <td><b className="stage-no">{st.order}단계</b></td>
                     <td>{st.label}</td>
                     <td className="num">{st.submitted ? (st.score === null ? '—' : fmt(st.score)) : <span className="chip stage todo">미제출</span>}</td>
                     <td className="num">{typeof w === 'number' ? `${w}%` : '미입력'}</td>
@@ -152,7 +152,7 @@ export default function PersonResultPage() {
       </div>
 
       <h2 className="section-title">단계별 응답</h2>
-      {/* D-132: 평가 유형별 토글(1단계 자기평가 · 1단계 팀원→팀장평가 · 2단계 팀장평가 · 3단계 임원평가). 작성자가 여럿이면 작성자마다 토글 — 처음엔 접힘 */}
+      {/* D-132: 평가 유형별 토글(1단계 자기평가 · 상향평가(단계 표시 없음, D-188) · 2단계 팀장평가 · 3단계 임원평가). 작성자가 여럿이면 작성자마다 토글 — 처음엔 접힘 */}
       {(['self', 'upward', 'teamLead', 'executive'] as const).map((rule) => {
         const list = staged.filter((a) => ctxFor(cycle, a).rule === rule)
         if (!list.length) return null
@@ -166,7 +166,7 @@ export default function PersonResultPage() {
         return (
           <details className="panel stage-card stage-group" key={rule}>
             <summary className="stage-head">
-              <h3>{order}단계 · {RULE_TEXT[rule]}{rule === 'upward' && <span className="muted"> ({[...new Set(list.map((a) => UPWARD_KIND_TEXT[upwardKind(s, a)]))].join('·')})</span>}</h3>
+              <h3>{rule !== 'upward' && <><span className="stage-no">{order}단계</span> · </>}{RULE_TEXT[rule]}{rule === 'upward' && <span className="muted"> ({[...new Set(list.map((a) => UPWARD_KIND_TEXT[upwardKind(s, a)]))].join('·')})</span>}</h3>
               {list.length === 1 ? <span className="muted">작성자 <b>{name(list[0].evaluatorId)}</b></span> : <span className="muted">작성자 {list.length}명 · 제출 <b>{sub}</b></span>}
               <span className="spacer" />
               {stage && sub > 0 && (stage.score !== null || stage.grade) && (
@@ -242,7 +242,7 @@ function RecvList({ cycle, targetId }: { cycle: Cycle; targetId: string }) {
           <tbody>
             {rows.map((r) => (
               <tr key={r.key}>
-                <td>{RULE_TEXT[r.stage.rule]}{r.kind && <> · {r.kind}</>} <span className="muted">({r.stage.order}단계)</span></td>
+                <td>{RULE_TEXT[r.stage.rule]}{r.kind ? <> · {r.kind}</> : <> <span className="stage-no">({r.stage.order}단계)</span></>}</td>
                 <td>{r.who}</td>
                 <td><span className={`chip ${r.status === 'submitted' ? 'stage done' : r.status === 'unassigned' ? 'danger' : r.status}`}>{RECV_LABEL[r.status]}</span></td>
               </tr>

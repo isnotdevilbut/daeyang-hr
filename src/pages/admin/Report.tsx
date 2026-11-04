@@ -226,7 +226,7 @@ export function ReportSheet({ s, cycle, parts, m }: { s: AppState; cycle: Cycle;
             <thead><tr><th style={{ width: '24%' }}>단계</th><th>평가자</th><th style={{ width: '14%' }}>점수</th><th style={{ width: '10%' }}>등급</th></tr></thead>
             <tbody>
               {r.stages.map((st) => (
-                <tr key={st.order}><td>{st.order}단계 {st.label}{st.evaluators.length > 1 && <div className="muted">{st.evaluators.length}명 평균</div>}</td><td>{st.evaluators.join(', ')}</td><td>{st.submitted ? fmt(st.score) : '미제출'}</td><td>{st.submitted ? st.grade?.slice(0, 1) ?? '—' : '—'}</td></tr>
+                <tr key={st.order}><td><span className="stage-no">{st.order}단계</span> {st.label}{st.evaluators.length > 1 && <div className="muted">{st.evaluators.length}명 평균</div>}</td><td>{st.evaluators.join(', ')}</td><td>{st.submitted ? fmt(st.score) : '미제출'}</td><td>{st.submitted ? st.grade?.slice(0, 1) ?? '—' : '—'}</td></tr>
               ))}
             </tbody>
           </table>

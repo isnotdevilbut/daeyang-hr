@@ -357,7 +357,7 @@ function BlendPanel({ cycle, editable }: { cycle: Cycle; editable: boolean }) {
 
 /**
  * 직급별 최종 반영 비율(D-103, 자문 예시) — 요소별 켜기·비율 입력·활성 합계 100% 검증·저장만 한다.
- * 점수에는 아직 적용하지 않음: 사원 '자기평가 80%'의 의미 미정(기존 계산 유지). 상향평가 — 팀장: 팀원→팀장평가(D-114), 임원: 사원·팀장 → 임원 상향평가의 평균(D-187) — 점수 반영은 아직
+ * 점수에는 아직 적용하지 않음: 사원 '자기평가 80%' = 본인이 쓴 자기평가만(하향평가 합산 아님, D-188 회사 답변). 상향평가 — 팀장: 팀원→팀장평가(D-114), 임원: 사원·팀장 → 임원 상향평가의 평균(D-187) — 점수 반영은 아직
  */
 const PART_TEXT: Record<FinalPart, string> = { personal: '자기평가', self: '자기평가', kpi: '팀 KPI', upward: '상향평가' }
 /** D-153: 팀장(팀원→팀장평가)·임원(사원·팀장 → 임원, D-187) 모두 '상향평가'로 표시 */
@@ -393,7 +393,7 @@ function FinalPlan({ cycle, editable }: { cycle: Cycle; editable: boolean }) {
                 <td>
                   <div className="fp-items">
                     {d[tier].map((it, i) => (
-                      <label key={it.key} className="fp-item" style={{ gridColumn: FP_COL[it.key] }}>
+                      <label key={it.key} className="fp-item" style={{ gridColumn: FP_COL[it.key] }} title={it.key === 'personal' ? '본인이 쓴 자기평가만(팀장·임원평가 합산 아님)' : it.key === 'upward' ? '1·2·3단계와 별개인 상향평가(여러 명이면 평균)' : undefined}>
                         <input type="checkbox" checked={it.on} disabled={!editable} onChange={(e) => setItem(tier, i, { on: e.target.checked })} />
                         {partLabel(tier, it.key)}
                         <input type="text" inputMode="decimal" aria-label={`${TIER_TEXT[tier]} ${PART_TEXT[it.key]} 비율`} disabled={!editable} value={it.pct ?? ''} onChange={(e) => setItem(tier, i, { pct: e.target.value === '' ? null : Number(e.target.value) })} />%

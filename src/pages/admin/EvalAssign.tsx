@@ -33,7 +33,7 @@ export default function EvalAssign({ cycle, part }: { cycle: Cycle; part: 'weigh
   useDirty(secDirty('member') || secDirty('lead') || execDirty) // 저장하지 않은 변경이 있으면 회차·화면 이동 시 확인(기존 보호)
   const rulesChanged = (k: PathKey) => draft.path[k].map((x) => x.rule).join() !== initial.path[k].map((x) => x.rule).join()
 
-  const upErr = () => (draft.up.weight === null || Number.isNaN(draft.up.weight) ? '1단계(팀원→팀장평가) 비율을 입력하세요.' : draft.up.weight < 0 || draft.up.weight > 100 ? '1단계(팀원→팀장평가) 비율은 0~100 사이여야 합니다.' : '')
+  const upErr = () => (draft.up.weight === null || Number.isNaN(draft.up.weight) ? '상향평가 비율을 입력하세요.' : draft.up.weight < 0 || draft.up.weight > 100 ? '상향평가 비율은 0~100 사이여야 합니다.' : '')
   const errs = (k: PathKey) => [...weightErrors(draft.path[k], draft.weights[k]), ...(k === 'lead' && upErr() ? [upErr()] : [])]
   const setLabel = (k: PathKey, r: EvaluatorRule, v: string) => {
     const next = structuredClone(draft)
@@ -92,11 +92,11 @@ export default function EvalAssign({ cycle, part }: { cycle: Cycle; part: 'weigh
                     // 팀장이 받는 팀원→팀장평가(D-114): 1단계로 분류. D-162 — 다른 단계처럼 이름·반영 비율 입력(기본 0). 비율은 저장만, 합계·점수에는 아직 넣지 않음(반영 방식 보류)
                     if (r === 'upward') return (
                       <tr key={r}>
-                        <td><b>1단계</b></td>
-                        <td><span className="path-who">소속 팀원 (팀원→팀장평가)</span></td>
-                        <td><input type="text" aria-label={`${PATH_TITLE[k]} 1단계 팀원→팀장평가 이름`} disabled={hasResp} value={draft.up.label} onChange={(ev) => { setDraft({ ...draft, up: { ...draft.up, label: ev.target.value } }); setMsgFor(k, null) }} /></td>
+                        <td><span className="muted" title="상향평가는 1·2·3단계와 별개">—</span></td>
+                        <td><span className="path-who">소속 팀원 (상향평가)</span></td>
+                        <td><input type="text" aria-label={`${PATH_TITLE[k]} 상향평가 이름`} disabled={hasResp} value={draft.up.label} onChange={(ev) => { setDraft({ ...draft, up: { ...draft.up, label: ev.target.value } }); setMsgFor(k, null) }} /></td>
                         <td className="num">
-                          <input type="number" inputMode="decimal" className="weight no-spin" min={0} max={100} step={0.1} onWheel={(ev) => ev.currentTarget.blur()} aria-label={`${PATH_TITLE[k]} 1단계 팀원→팀장평가 반영 비율`}
+                          <input type="number" inputMode="decimal" className="weight no-spin" min={0} max={100} step={0.1} onWheel={(ev) => ev.currentTarget.blur()} aria-label={`${PATH_TITLE[k]} 상향평가 반영 비율`}
                             value={draft.up.weight ?? ''} placeholder="입력" onChange={(ev) => { setDraft({ ...draft, up: { ...draft.up, weight: ev.target.value === '' ? null : Number(ev.target.value) } }); setMsgFor(k, null) }} />
                         </td>
                       </tr>
@@ -105,7 +105,7 @@ export default function EvalAssign({ cycle, part }: { cycle: Cycle; part: 'weigh
                     const order = STAGE_OF_RULE[r]
                     return (
                       <tr key={r} className={st ? '' : 'stage-off'}>
-                        <td><b>{order}단계</b></td>
+                        <td><b className="stage-no">{order}단계</b></td>
                         <td>
                           {/* 평가자는 고정 정보 — 체크박스 없이 글자만 (D-087). 단계 사용 여부·배정은 그대로 */}
                           <span className="path-who">{r === 'self' ? '본인 (자기평가)' : r === 'teamLead' ? '소속 팀장' : '담당 임원'}</span>

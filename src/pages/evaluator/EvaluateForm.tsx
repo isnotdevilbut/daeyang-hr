@@ -46,7 +46,7 @@ function Form({ cycle, aid }: { cycle: Cycle; aid: string }) {
     <div className="page" style={{ maxWidth: 860 }}>
       <div className="row ev-top"><Link to="/eval">{tr('form.backMy', lang)}</Link><span className="spacer" /><LangSelect lang={lang} onChange={setLang} /></div>
       {/* 이름·팀 이름은 번역하지 않음. 직급·평가 유형만 선택 언어로 */}
-      <h1 style={{ marginTop: 10 }}>{tr('ev.title', lang, { name: t.name })} <span className="muted" style={{ fontSize: 17 }}>{t.teamName} · {tierText(targetPosition(s, cycle, t), lang)} · {s.session.role === 'exec' ? tr(`rule.${rule ?? 'executive'}`, lang) : `${tr('stage.n', lang, { n: a.stageOrder })} · ${tr(`rule.${rule ?? 'teamLead'}`, lang)}`}</span></h1>
+      <h1 style={{ marginTop: 10 }}>{tr('ev.title', lang, { name: t.name })} <span className="muted" style={{ fontSize: 17 }}>{t.teamName} · {tierText(targetPosition(s, cycle, t), lang)} · {s.session.role === 'exec' ? tr(`rule.${rule ?? 'executive'}`, lang) : rule === 'upward' ? tr('rule.upward', lang) : <><span className="stage-no">{tr('stage.n', lang, { n: a.stageOrder })}</span> · {tr(`rule.${rule ?? 'teamLead'}`, lang)}</>}</span></h1>
       <div>
         <div className="card" style={{ fontSize: 18 }}>
           {ed.closed && <p className="ev-closed"><span className="chip locked">{tr('status.closed', lang)}</span> {tr('ev.closed', lang)}</p>}
