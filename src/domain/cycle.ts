@@ -382,5 +382,6 @@ export function deleteCycle(d: AppState, cycleId: string): boolean {
   d.adjustments = d.adjustments.filter((a) => a.cycleId !== cycleId)
   d.tokens = (d.tokens ?? []).filter((t) => t.cycleId !== cycleId)
   if (d.reportNotes) for (const k of Object.keys(d.reportNotes)) if (k.startsWith(`${cycleId}|`)) delete d.reportNotes[k]
+  if (d.adjustNotes) for (const k of Object.keys(d.adjustNotes)) if (k.startsWith(`${cycleId}|`)) delete d.adjustNotes[k]
   return true
 }

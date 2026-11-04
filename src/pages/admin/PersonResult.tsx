@@ -198,7 +198,7 @@ export default function PersonResultPage() {
                   <tr key={h.id}>
                     <td>{h.at ? new Date(h.at).toLocaleString('ko-KR') : '—'}</td>
                     <td>{h.by || '—'}</td>
-                    <td>{KIND_TEXT[h.kind]}{h.reason && <div className="muted">사유: {h.reason}</div>}</td>
+                    <td>{KIND_TEXT[h.kind]}</td>
                     <td>{show(h.before)} → {show(h.value)}</td>
                   </tr>
                 ))}
@@ -362,15 +362,23 @@ function Adjusters({ cycle, targetId, current }: { cycle: Cycle; targetId: strin
   const role = s.session.role
   const by = '운영담당자'
   const [person, setPerson] = useState(current.person === null ? '' : String(current.person))
-  const [reason, setReason] = useState('') // 선택 입력 — 비워도 저장 (D-068)
+  // D-199: 보정 사유는 이 칸에만 기록(선택, 비워도 됨) — 변경 내역에 넣지 않고, 칸에 그대로 남음. 칸을 벗어나거나 적용하면 저장
+  const noteKey = `${cycle.id}|${targetId}`
+  const savedReason = s.adjustNotes?.[noteKey] ?? ''
+  const [reason, setReason] = useState(savedReason)
+  const saveReason = () => {
+    const v = reason.trim()
+    if (v === savedReason) return
+    update((d) => { const m = { ...(d.adjustNotes ?? {}) }; if (v) m[noteKey] = v; else delete m[noteKey]; d.adjustNotes = m })
+  }
   const [msg, setMsg] = useState<Record<string, Msg>>({})
   const canAdjust = can(role, 'adjust')
   if (!canAdjust) return null // 권한이 없으면 편집 영역 자체를 보이지 않음
 
   const apply = (key: string, kind: AdjustKind, value: number | string | null, prev: number | string | null) => {
+    saveReason()
     if (value === prev) return setMsg({ ...msg, [key]: { ok: true, text: '변경 사항이 없습니다.' } })
-    addAdjustment(cycle.id, kind, targetId, value, reason.trim(), by) // 변경자·시각·전후 값은 자동 기록, 사유는 선택
-    setReason('')
+    addAdjustment(cycle.id, kind, targetId, value, '', by) // 변경자·시각·전후 값은 자동 기록(사유는 넣지 않음, D-199)
     setMsg({ ...msg, [key]: { ok: true, text: value === null ? '지정을 해제했습니다.' : '적용했습니다.' } })
   }
   const applyNum = (key: string, kind: AdjustKind, raw: string, min: number, max: number, prev: number | null) => {
@@ -395,7 +403,7 @@ function Adjusters({ cycle, targetId, current }: { cycle: Cycle; targetId: strin
         </div>
       )}
       <label className="field adj-reason"><span>보정 사유 <span className="muted">(선택)</span></span>
-        <input type="text" maxLength={200} value={reason} placeholder="적용할 때 변경 기록에 함께 남습니다" onChange={(e) => setReason(e.target.value)} />
+        <input type="text" maxLength={200} value={reason} placeholder="필요하면 적어 두세요" onChange={(e) => setReason(e.target.value)} onBlur={saveReason} />
       </label>
     </section>
     </div>

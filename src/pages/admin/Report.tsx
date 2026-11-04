@@ -246,8 +246,8 @@ export function ReportSheet({ s, cycle, parts, m }: { s: AppState; cycle: Cycle;
           </tbody></table>
           {on('scores.final') && history.length > 0 && (
             <table className="rp-hist">
-              <thead><tr><th style={{ width: '24%' }}>보정 항목</th><th style={{ width: '18%' }}>값</th><th>사유</th></tr></thead>
-              <tbody>{history.map((h) => <tr key={h.id}><td>{KIND_TEXT[h.kind]}</td><td>{h.value === null || h.value === '' ? '없음' : String(h.value)}</td><td className="ans">{h.reason || '—'}</td></tr>)}</tbody>
+              <thead><tr><th style={{ width: '40%' }}>보정 항목</th><th>값</th></tr></thead>
+              <tbody>{history.map((h) => <tr key={h.id}><td>{KIND_TEXT[h.kind]}</td><td>{h.value === null || h.value === '' ? '없음' : String(h.value)}</td></tr>)}</tbody>
             </table>
           )}
         </div>

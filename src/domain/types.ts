@@ -352,6 +352,8 @@ export interface AppState {
   memos?: Record<ID, string>
   /** 개인 리포트 추가 기록 (D-081): 키 = `${회차 ID}|${직원 ID}`. 직원 메모·평가 의견·보정 사유와 별개, 점수·응답에 영향 없음 */
   reportNotes?: Record<string, string>
+  /** 결과 상세 '보정 사유'(D-199): 키 = `${회차 ID}|${직원 ID}`. 선택 입력 — 그 칸에만 기록(변경 내역·리포트에 넣지 않음), 점수에 영향 없음 */
+  adjustNotes?: Record<string, string>
   /** 직무·직급 목록 (D-080) */
   jobs?: JobDef[]
   positions?: PositionDef[]
