@@ -170,7 +170,7 @@ export default function EvalSettings({ cycle, onCreate, onSelect, part }: { cycl
                         <input type="checkbox" checked={on} disabled={locked} aria-label={`${e.name} 참여`} onChange={(x) => setJoin(e.id, x.target.checked)} />
                         <span className="p-name">{e.name}</span>
                         <span className="muted p-tier">{positionName(s, e)}</span>
-                        {mismatch && <span className="chip draft tag">배정 확인</span>}
+                        {mismatch && <span className="chip draft tag" title="지금 직급과 맞지 않는 평가 업무가 남아 있어요(직급·팀장을 바꾸기 전에 써 둔 평가)">⚠ 배정 확인 필요</span>}
                       </label>
                       {can && (
                         <button type="button" role="switch" aria-checked={!!f.self[e.id]} aria-label={`${e.name} 자기평가`} className={`p-switch ${f.self[e.id] ? 'on' : ''}`}

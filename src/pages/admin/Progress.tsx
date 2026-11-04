@@ -160,7 +160,7 @@ function Body({ s, cycle }: { s: AppState; cycle: Cycle }) {
                     <span className="cell-in name-grp">
                       <b>{r.t.name}</b>
                       {(nameCount.get(r.t.name) ?? 0) > 1 && <span className="muted">({r.t.empNo})</span>}
-                      {r.mismatch && <span className="chip draft tag">배정 확인</span>}
+                      {r.mismatch && <span className="chip draft tag" title="지금 직급과 맞지 않는 평가 업무가 남아 있어요(직급·팀장을 바꾸기 전에 써 둔 평가)">⚠ 배정 확인 필요</span>}
                     </span>
                   </td>
                   {/* 열 순서: 자기평가 · 팀원→팀장평가(1단계 분류, D-114) · 팀장평가 · 임원평가 */}
