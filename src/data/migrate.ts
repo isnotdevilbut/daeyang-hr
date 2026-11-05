@@ -15,6 +15,7 @@ import { leadBlendV25, scoringV16 } from '../domain/scoringV16'
 import { execPerTeam } from '../domain/execTeamsV17'
 import { versionScopesV30, versionSlotsV32 } from '../domain/versions'
 import { purgeInactiveV33 } from '../domain/org'
+import { stripVirtualV34 } from '../domain/demoV34'
 import { execUpwardFormV27, execUpwardPairsV28, upwardDemoMoreV29, upwardExecV26, upwardFormV22, upwardPairedV31, upwardV18 } from '../domain/upward'
 import { joinAllStaff } from '../domain/joinAllV19'
 import { leadUpwardOpen, moreDemo } from '../domain/demoV20'
@@ -299,7 +300,13 @@ export function migrate(raw: any, opts: { until?: number } = {}): MigrationResul
     s.schemaVersion = 33
   }
 
-  if (s.schemaVersion !== 33) return null
+  if (s.schemaVersion === 33) {
+    // v33 → v34 (D-218): 시연 응답·KPI 지표 이름·보정 사유의 '(가상)' 표시 떼기
+    notes.push(...stripVirtualV34(s))
+    s.schemaVersion = 34
+  }
+
+  if (s.schemaVersion !== 34) return null
   return { state: s as AppState, notes }
 }
 

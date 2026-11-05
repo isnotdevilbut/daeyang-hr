@@ -202,7 +202,7 @@ export function ReportSheet({ s, cycle, parts, m }: { s: AppState; cycle: Cycle;
   const { r, info, selfQ, leadQ, execQ, execShown, scoreRows, showNote, noteText, complete, on } = m
   return (
     <div className="a4">
-      <div className="watermark">{complete ? '검토용 초안 · 가상 데이터' : '미완료 초안 · 가상 데이터'}</div>
+      <div className="watermark">{complete ? '검토용 초안' : '미완료 초안'}</div>
       <div className="row" style={{ marginBottom: 6 }}>
         <img src={logoKo} alt="ROLLENT 대양롤랜트(주)" style={{ height: 34 }} />
       </div>
@@ -252,7 +252,7 @@ export function ReportSheet({ s, cycle, parts, m }: { s: AppState; cycle: Cycle;
           <div className="rp-note ans">{noteText}</div>
         </div>
       )}
-      <p className="muted rp-foot">출력 시각 {new Date().toLocaleString('ko-KR')} · 계산 정책 {s.policy.name} · 이 문서는 가상 데이터로 만든 시연용입니다.</p>
+      <p className="muted rp-foot">출력 시각 {new Date().toLocaleString('ko-KR')}</p>
     </div>
   )
 }
