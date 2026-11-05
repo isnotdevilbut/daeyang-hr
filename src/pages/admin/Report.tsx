@@ -207,11 +207,10 @@ export function ReportSheet({ s, cycle, parts, m }: { s: AppState; cycle: Cycle;
   return (
     <div className="a4">
       <div className="watermark">{complete ? '검토용 초안' : '미완료 초안'}</div>
-      {/* D-226: 머리 부분을 한 줄로 — 로고 · 제목 · 비공개 표시 */}
+      {/* D-226·D-228: 머리 부분을 한 줄로 — 로고 · 제목(비공개 안내 문구 없음) */}
       <div className="rp-head">
         <img src={logoKo} alt="ROLLENT 대양롤랜트(주)" />
         <h1>개인 인사평가 리포트</h1>
-        <span className="muted">내부 보관 자료 · 직원 비공개</span>
       </div>
       {m.empty && <p className="report-empty">포함한 항목이 없습니다.</p>}
       {/* 평가 회차·기간 = 인적 사항 표 위 캡션, 인적 사항 = 가로 한 줄(머리글 + 값) */}

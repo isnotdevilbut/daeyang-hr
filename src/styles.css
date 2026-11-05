@@ -1705,3 +1705,5 @@ body.drag-sorting, body.drag-sorting * { cursor: grabbing !important; user-selec
 .a4 .watermark { top: 10mm; right: 13mm; font-size: 12px; padding: 2px 7px; }
 .a4 .rp-eval th { width: 42%; }
 .a4 h3 .rp-who-inline { margin-left: 8px; font-size: 13px; font-weight: 700; color: var(--text); }
+/* D-228: 평가 회차·기간 캡션은 오른쪽 */
+.a4 .rp-caption { justify-content: flex-end; }
