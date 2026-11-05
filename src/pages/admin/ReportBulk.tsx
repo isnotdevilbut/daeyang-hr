@@ -48,11 +48,11 @@ export function BulkDownload({ cycle, ids, onClose }: { cycle: Cycle; ids: strin
   return (
     <Modal title="선택 항목 다운로드" onClose={onClose}>
       <div className="bulk-dl">
-        <p className="muted small bulk-who">{targets.map((t) => t.name).join(', ')}</p>
+        {/* D-219: 전체를 고르면 이름 대신 '전체' */}
+        <p className="muted small bulk-who">{targets.length === resultPeople(s, cycle).length ? '전체' : targets.map((t) => t.name).join(', ')}</p>
         <fieldset className="bulk-set">
           <legend>포함 항목</legend>
           {GROUPS.map((g) => <label key={g.key} className="check"><input type="checkbox" checked={inc[g.key]} onChange={(e) => setInc({ ...inc, [g.key]: e.target.checked })} /> {g.label}</label>)}
-          <span className="muted small">기본 정보·점수·추가 기록은 항상 들어가요</span>
         </fieldset>
         <fieldset className="bulk-set">
           <legend>다운로드 형식</legend>
