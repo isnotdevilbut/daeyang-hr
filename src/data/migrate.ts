@@ -14,6 +14,7 @@ import { v15 } from '../domain/demoV15'
 import { leadBlendV25, scoringV16 } from '../domain/scoringV16'
 import { execPerTeam } from '../domain/execTeamsV17'
 import { versionScopesV30, versionSlotsV32 } from '../domain/versions'
+import { purgeInactiveV33 } from '../domain/org'
 import { execUpwardFormV27, execUpwardPairsV28, upwardDemoMoreV29, upwardExecV26, upwardFormV22, upwardPairedV31, upwardV18 } from '../domain/upward'
 import { joinAllStaff } from '../domain/joinAllV19'
 import { leadUpwardOpen, moreDemo } from '../domain/demoV20'
@@ -292,7 +293,13 @@ export function migrate(raw: any, opts: { until?: number } = {}): MigrationResul
     s.schemaVersion = 32
   }
 
-  if (s.schemaVersion !== 32) return null
+  if (s.schemaVersion === 32) {
+    // v32 → v33 (D-216): 퇴사 처리로 남아 있던 직원과 그 평가 기록을 모든 곳에서 지움(직원 삭제 = 모두 사라짐)
+    notes.push(...purgeInactiveV33(s))
+    s.schemaVersion = 33
+  }
+
+  if (s.schemaVersion !== 33) return null
   return { state: s as AppState, notes }
 }
 

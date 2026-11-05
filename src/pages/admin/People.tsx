@@ -249,7 +249,9 @@ function EmployeeModal({ emp, onClose }: { emp: Employee; onClose: () => void })
     onClose()
   }
   const remove = () => {
-    if (!confirm(`'${emp.name}' 직원을 삭제할까요?`)) return
+    // D-216: 삭제하면 모든 곳에서 사라짐 — 기록이 전부 지워진다는 확인 + 필요하면 먼저 리포트를 받아 두라는 안내
+    const recs = s.cycles.reduce((n, c) => n + c.assignments.filter((a) => (a.targetId === emp.id || a.evaluatorId === emp.id) && s.responses[a.id]).length, 0)
+    if (!confirm(`'${emp.name}' 직원을 삭제할까요?\n\n삭제하면 이 직원의 기록이 전부 사라지고 되돌릴 수 없어요.\n(받은 평가·쓴 평가${recs ? ` ${recs}건` : ''}, 점수·보정, 메모 — 모든 평가에서)\n\n남겨 둘 내용이 있으면 취소한 뒤, 먼저 결과·리포트에서 이 직원의 리포트를 내려받아 두세요.`)) return
     update((d) => { deleteEmployee(d, emp.id); syncOpenCycles(d) })
     onClose()
   }

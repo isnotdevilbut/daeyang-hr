@@ -88,15 +88,38 @@ export function hasEvalRecords(s: AppState, id: string): boolean {
 }
 
 /**
- * 직원 삭제 (D-053). 조직 목록에서 빠진다.
- *  - 현재 조직의 팀장 연결은 해제(공석) — 없는 직원을 팀장으로 가리키지 않게
- *  - 평가 기록이 있으면 직원 데이터를 지우지 않고 재직 해제로 보존 → 회차의 대상자·배정·응답·보정이 그대로 이어짐
- *  - 기록이 없으면 데이터에서도 지운다
+ * 직원 삭제 (D-053 → D-216). 삭제하는 순간 모든 곳에서 사라진다(퇴사 보존 없음 — 헷갈리지 않게):
+ * 직원·메모, 팀장 연결(공석), 모든 회차의 대상자·그 사람이 받거나 쓴 배정과 응답·채점값, 보정·보정 사유·리포트 기록, 임원 참여·자기평가 설정,
+ * 평가표 범위의 사람 지정. 되돌릴 수 없음 — 화면에서 확인(필요하면 먼저 리포트를 받아 두라는 안내) 후 실행
  */
 export function deleteEmployee(d: AppState, id: string) {
   d.teams.forEach((t) => { if (t.leadId === id) t.leadId = null })
-  if (hasEvalRecords(d, id)) d.employees = d.employees.map((e) => (e.id === id ? { ...e, active: false } : e))
-  else { d.employees = d.employees.filter((e) => e.id !== id); if (d.memos) delete d.memos[id] } // 데이터에서 지울 때만 메모도 정리
+  d.employees = d.employees.filter((e) => e.id !== id)
+  if (d.memos) delete d.memos[id]
+  for (const c of d.cycles) {
+    const gone = c.assignments.filter((a) => a.targetId === id || a.evaluatorId === id)
+    for (const a of gone) { delete d.responses[a.id]; if (d.manualScores) delete d.manualScores[a.id] }
+    c.assignments = c.assignments.filter((a) => !gone.includes(a))
+    c.targets = c.targets.filter((t) => t.employeeId !== id)
+    if (c.execOff) { c.execOff = c.execOff.filter((x) => x !== id); if (!c.execOff.length) delete c.execOff }
+    if (c.execUnassigned) { c.execUnassigned = c.execUnassigned.filter((x) => x !== id); if (!c.execUnassigned.length) delete c.execUnassigned }
+    if (c.selfEval) delete c.selfEval[id]
+    if (c.upwardExecPick) delete c.upwardExecPick[id]
+    const drop = (sc: { employees?: string[] }) => { if (sc.employees) sc.employees = sc.employees.filter((x) => x !== id) }
+    for (const v of c.versions ?? []) { drop(v.scope); if (v.pending) drop(v.pending.scope) }
+    const key = `${c.id}|${id}`
+    if (d.reportNotes) delete d.reportNotes[key]
+    if (d.adjustNotes) delete d.adjustNotes[key]
+  }
+  d.adjustments = d.adjustments.filter((a) => a.targetKey !== id)
+  d.tokens = (d.tokens ?? []).filter((t) => t.employeeId !== id)
+}
+
+/** v32 → v33 (D-216): 이전에 퇴사 처리로 남겨 둔 직원(재직 해제)을 모든 곳에서 지운다 — 직원 삭제와 같은 함수. 반복 안전 */
+export function purgeInactiveV33(d: AppState): string[] {
+  const gone = d.employees.filter((e) => !e.active)
+  for (const e of gone) deleteEmployee(d, e.id)
+  return gone.length ? [`퇴사 처리로 남아 있던 직원 ${gone.length}명(${gone.map((e) => e.name).join(', ')})과 그 평가 기록을 지움`] : []
 }
 
 // ── 팀 관리 (D-064) ─────────────────────────────────────
