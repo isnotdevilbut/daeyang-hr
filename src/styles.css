@@ -1669,3 +1669,4 @@ body.drag-sorting, body.drag-sorting * { cursor: grabbing !important; user-selec
 .slot-btn.free .slot-state { color: #a3141c; }
 .slot-btn:focus-visible { outline: 2px solid #20b8ca; outline-offset: 2px; }
 @media (max-width: 640px) { .slot-row { grid-template-columns: 1fr; gap: 6px; } .slot-btn { min-width: 0; flex: 1 1 100%; } }
+.slot-btn.taken { justify-content: center; }

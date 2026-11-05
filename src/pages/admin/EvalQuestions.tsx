@@ -978,7 +978,7 @@ function Problems({ cycle }: { cycle: Cycle }) {
 
 /**
  * 평가자 → 평가대상 화살표(D-211): 이 평가표가 맡을 평가를 누른다. 한 화살표는 평가표 하나만 —
- * 다른 평가표가 맡은 화살표를 누르면 적용할 때 이 평가표로 옮겨 오고, 아무 평가표도 맡지 않은 화살표는 '평가 미배치'
+ * 다른 평가표가 맡은 화살표(회색, 글자 없음 — D-213)를 누르면 적용할 때 이 평가표로 옮겨 오고, 아무 평가표도 맡지 않은 화살표는 '평가 미배치'
  */
 const SLOT_GROUPS: { title: React.ReactNode; keys: SlotKey[] }[] = [
   { title: <><span className="stage-no">1단계</span> 자기평가</>, keys: ['self-member', 'self-lead', 'self-exec'] },
@@ -1003,7 +1003,8 @@ function SlotPicker({ cycle, v, scope, setScope }: { cycle: Cycle; v: TemplateVe
               return (
                 <button key={k} type="button" className={`slot-btn ${on ? 'on' : o ? 'taken' : 'free'}`} aria-pressed={on} onClick={() => flip(k)} title={`${sl.from}이(가) ${sl.to === '본인' ? '본인을' : `${sl.to}을(를)`} 평가`}>
                   <span className="slot-arrow"><b>{sl.from}</b> → <b>{sl.to}</b></span>
-                  <span className="slot-state">{on ? (o ? `✓ ${o.name}에서 옮겨 옴` : '✓ 이 평가표') : o ? `${o.name} 사용 중` : '평가 미배치'}</span>
+                  {/* D-213: 다른 평가표가 맡은 화살표는 어디서 쓰는지 글자 없이(회색만) — 이 평가표·평가 미배치만 글자 */}
+                  {(on || !o) && <span className="slot-state">{on ? '✓ 이 평가표' : '평가 미배치'}</span>}
                 </button>
               )
             })}
