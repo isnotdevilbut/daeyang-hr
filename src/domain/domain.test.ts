@@ -3312,7 +3312,7 @@ describe('점수 보정 한 칸 · 등급 자동 (D-197)', async () => {
   })
   it('등급 = 최종 점수 순위 × 등급 인원 비율(누적 반올림), 같은 점수 같은 등급, 점수 없으면 등급 없음', () => {
     const s = createSeed(); const c = s.cycles.find((x) => x.status === '진행')!
-    s.policy.gradeRatios = { A: 25, B: 25, C: 35, D: 15, E: 0 }
+    s.policy.gradeRatios = { A: 25, B: 25, C: 35, D: 15, E: 0 }; s.policy.gradeMode = 'ratio' // D-217: 등급 비율 방식
     const g = S.cycleGrades(s, c)
     const scored = P2(s, c)
     const n = scored.length
@@ -3486,5 +3486,21 @@ describe('임원 기초 점수 = 상향평가 평균 (D-215)', async () => {
     const avg = S.execUpwardAverage(s, c, ex.id)
     const r = personResult(s, c, ex.id)!
     expect(r.combined.base).toBe(avg)
+  })
+})
+
+describe('등급 방식: 절대평가(기본) / 등급 비율 (D-217)', async () => {
+  const S = await import('./scoring')
+  it('절대평가: 최종 점수가 기준 점수 이상이면 그 등급(기본 90·80·70·60, 나머지 E), 기준을 바꾸면 따라감', () => {
+    const s = createSeed(); const c = s.cycles.find((x) => x.status === '진행')!
+    expect(s.policy.gradeMode ?? 'absolute').toBe('absolute')
+    const g = S.cycleGrades(s, c)
+    for (const t of c.targets) {
+      const f = personResult(s, c, t.employeeId)!.combined.final
+      if (f === null) { expect(g.has(t.employeeId)).toBe(false); continue }
+      expect(g.get(t.employeeId)).toBe(f >= 90 ? 'A' : f >= 80 ? 'B' : f >= 70 ? 'C' : f >= 60 ? 'D' : 'E')
+    }
+    s.policy.gradeCuts = { A: 0.3, B: 0.2, C: 0.1, D: 0 }
+    expect([...S.cycleGrades(s, c).values()].every((x) => x === 'A')).toBe(true)
   })
 })

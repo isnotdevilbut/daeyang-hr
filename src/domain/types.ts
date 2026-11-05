@@ -303,6 +303,10 @@ export interface CalcPolicy {
   kpiMode?: string
   adjustMode: 'additive'
   gradeRatios: { A: number; B: number; C: number; D: number; E: number } // 참고값
+  /** 최종 등급 방식(D-217): absolute = 절대평가(최종 점수가 기준 점수 이상이면 그 등급, 기본), ratio = 등급 비율(순위 × 인원 비율, D-197). 없으면 absolute */
+  gradeMode?: 'absolute' | 'ratio'
+  /** 절대평가 기준 점수(이상): A·B·C·D, 그 아래는 E. 없으면 90·80·70·60 */
+  gradeCuts?: { A: number; B: number; C: number; D: number }
 }
 
 export type AdjustKind = 'dept' | 'person' | 'ceoScore' | 'ceoGrade'

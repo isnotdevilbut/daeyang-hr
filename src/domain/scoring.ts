@@ -112,6 +112,7 @@ export function personResult(state: AppState, cycle: Cycle, targetId: string): P
  * n명 중 A = 앞에서 round(n × A%)명, B = 그다음 round(n × (A+B)%)까지 …(누적 비율로 반올림). 같은 점수는 같은 등급(앞 사람의 등급).
  * 최종 점수가 없는 사람(미완료·1·2·3단계 없는 임원)은 등급 없음 — 완료자가 늘면 등급이 달라질 수 있음
  */
+export const GRADE_CUTS_DEFAULT = { A: 90, B: 80, C: 70, D: 60 }
 export function cycleGrades(state: AppState, cycle: Cycle): Map<string, string> {
   const ratios = state.policy?.gradeRatios ?? { A: 0, B: 0, C: 0, D: 0, E: 0 }
   const G = ['A', 'B', 'C', 'D', 'E'] as const
@@ -119,6 +120,11 @@ export function cycleGrades(state: AppState, cycle: Cycle): Map<string, string> 
     .map((t) => ({ id: t.employeeId, v: baseResult(state, cycle, t.employeeId)?.combined.final ?? null }))
     .filter((x): x is { id: string; v: number } => x.v !== null)
     .sort((a, b) => b.v - a.v)
+  // D-217: 절대평가(기본) — 최종 점수가 기준 점수 이상이면 그 등급(A ≥ 90 · B ≥ 80 · C ≥ 70 · D ≥ 60 · 나머지 E, 기준은 가중치·등급에서)
+  if ((state.policy?.gradeMode ?? 'absolute') === 'absolute') {
+    const cut = { ...GRADE_CUTS_DEFAULT, ...(state.policy?.gradeCuts ?? {}) }
+    return new Map(list.map((x) => [x.id, x.v >= cut.A ? 'A' : x.v >= cut.B ? 'B' : x.v >= cut.C ? 'C' : x.v >= cut.D ? 'D' : 'E']))
+  }
   const n = list.length
   const cuts: number[] = []
   let cum = 0

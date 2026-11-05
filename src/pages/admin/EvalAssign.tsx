@@ -5,6 +5,7 @@ import { buildAssignments, cycleExecs } from '../../domain/cycle'
 import { applyVersions } from '../../domain/versions'
 import { applyExecDraft, distributeExecs, execAssignment, execOrder } from '../../domain/execPlan'
 import { syncUpward } from '../../domain/upward'
+import { GRADE_CUTS_DEFAULT } from '../../domain/scoring'
 import { pathFor, STAGE_OF_RULE, statusOf } from '../../domain/progress'
 import { cycleHasResponses, weightErrors, weightSum } from '../../domain/questions'
 import { type Cycle, type EvaluatorRule } from '../../domain/types'
@@ -283,38 +284,70 @@ function Assignments({ cycle, locked, execDraft, setExecDraft, onSave, msg }: { 
 
 /** 등급 인원 비율 — 평가자 화면 "내 등급 배정 현황"의 기준값(경고만). 모든 회차 공통 저장값을 그대로 편집 */
 function GradeRatios() {
+  // D-217: 최종 등급 방식 두 가지 — 절대평가(기본, 최종 점수가 기준 점수 이상이면 그 등급) / 등급 비율(순위 × 인원 비율, D-197). 동그라미로 고름
   const s = useAppState()
   const saved = s.policy.gradeRatios
+  const savedMode = s.policy.gradeMode ?? 'absolute'
+  const savedCuts = { ...GRADE_CUTS_DEFAULT, ...(s.policy.gradeCuts ?? {}) }
   const G = ['A', 'B', 'C', 'D', 'E'] as const // E 등급(D-160)
+  const C = ['A', 'B', 'C', 'D'] as const
+  const [mode, setMode] = useState<'absolute' | 'ratio'>(savedMode)
   const [d, setD] = useState<Record<string, string>>(() => Object.fromEntries(G.map((g) => [g, String(saved[g] ?? 0)])))
+  const [cuts, setCuts] = useState<Record<string, string>>(() => Object.fromEntries(C.map((g) => [g, String(savedCuts[g])])))
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const vals = G.map((g) => Number(d[g]))
   const sum = vals.reduce((a, v) => a + (Number.isFinite(v) ? v : 0), 0)
-  const dirty = G.some((g) => d[g] !== String(saved[g] ?? 0))
+  const cutVals = C.map((g) => Number(cuts[g]))
+  const dirty = mode !== savedMode || G.some((g) => d[g] !== String(saved[g] ?? 0)) || C.some((g) => cuts[g] !== String(savedCuts[g]))
   const save = () => {
-    if (G.some((g) => d[g].trim() === '' || !Number.isFinite(Number(d[g])) || Number(d[g]) < 0 || Number(d[g]) > 100)) return setMsg({ ok: false, text: '각 비율은 0~100 사이 숫자로 입력하세요.' })
-    if (Math.abs(sum - 100) > 0.001) return setMsg({ ok: false, text: `합계가 ${+sum.toFixed(2)}%입니다. 100%가 되어야 합니다.` })
-    update((x) => { G.forEach((g, i) => { x.policy.gradeRatios[g] = vals[i] }) })
+    if (mode === 'ratio') {
+      if (G.some((g) => d[g].trim() === '' || !Number.isFinite(Number(d[g])) || Number(d[g]) < 0 || Number(d[g]) > 100)) return setMsg({ ok: false, text: '각 비율은 0~100 사이 숫자로 입력하세요.' })
+      if (Math.abs(sum - 100) > 0.001) return setMsg({ ok: false, text: `합계가 ${+sum.toFixed(2)}%입니다. 100%가 되어야 합니다.` })
+    } else {
+      if (C.some((g) => cuts[g].trim() === '' || !Number.isFinite(Number(cuts[g])) || Number(cuts[g]) < 0 || Number(cuts[g]) > 100)) return setMsg({ ok: false, text: '기준 점수는 0~100 사이 숫자로 입력하세요.' })
+      if (cutVals.some((v, i) => i > 0 && v >= cutVals[i - 1])) return setMsg({ ok: false, text: 'A > B > C > D 순서로 기준 점수가 낮아져야 합니다.' })
+    }
+    update((x) => {
+      x.policy.gradeMode = mode
+      if (mode === 'ratio') G.forEach((g, i) => { x.policy.gradeRatios[g] = vals[i] })
+      else x.policy.gradeCuts = { A: cutVals[0], B: cutVals[1], C: cutVals[2], D: cutVals[3] }
+    })
     setMsg({ ok: true, text: '저장했습니다.' })
   }
+  const pick = (m: 'absolute' | 'ratio') => { setMode(m); setMsg(null) }
   return (
     <section className="panel pad grade-ratio-panel">
       {/* 영역 제목 오른쪽에 이 영역만 저장(D-094) — 모든 회차 공통 값 */}
       <div className="sec-head">
-        <h2>등급 인원 비율</h2>
+        <h2>등급</h2>
         <div className="sec-save">
           {msg && <span className={`feedback ${msg.ok ? 'ok' : 'fail'}`} role={msg.ok ? 'status' : 'alert'}>{msg.ok ? '✓' : '✕'} {msg.text}</span>}
           <button className="btn primary small" disabled={!dirty} onClick={save}>저장</button>
         </div>
       </div>
-      <div className="row grade-ratio">
-        {G.map((g) => (
-          <label key={g} className="field">{g} (%)
-            <input type="text" inputMode="decimal" className="no-spin" value={d[g]} onChange={(e) => { setD({ ...d, [g]: e.target.value }); setMsg(null) }} />
-          </label>
-        ))}
-        <b className={Math.abs(sum - 100) < 0.001 ? 'good' : 'bad'}>합계 {+sum.toFixed(2)}%</b>
+      <div className="row grade-mode" role="radiogroup" aria-label="등급 방식">
+        <label className="check"><input type="radio" name="grade-mode" checked={mode === 'absolute'} onChange={() => pick('absolute')} /> 절대평가 <span className="muted small">(점수 기준)</span></label>
+        <label className="check"><input type="radio" name="grade-mode" checked={mode === 'ratio'} onChange={() => pick('ratio')} /> 등급 비율 <span className="muted small">(인원 비율)</span></label>
       </div>
+      {mode === 'absolute' ? (
+        <div className="row grade-ratio grade-cuts">
+          {C.map((g) => (
+            <label key={g} className="field">{g} (점 이상)
+              <input type="text" inputMode="decimal" className="no-spin" value={cuts[g]} onChange={(e) => { setCuts({ ...cuts, [g]: e.target.value }); setMsg(null) }} />
+            </label>
+          ))}
+          <span className="grade-e">E <span className="muted">{Number.isFinite(cutVals[3]) ? `${cutVals[3]}점 미만` : ''}</span></span>
+        </div>
+      ) : (
+        <div className="row grade-ratio">
+          {G.map((g) => (
+            <label key={g} className="field">{g} (%)
+              <input type="text" inputMode="decimal" className="no-spin" value={d[g]} onChange={(e) => { setD({ ...d, [g]: e.target.value }); setMsg(null) }} />
+            </label>
+          ))}
+          <b className={Math.abs(sum - 100) < 0.001 ? 'good' : 'bad'}>합계 {+sum.toFixed(2)}%</b>
+        </div>
+      )}
     </section>
   )
 }
