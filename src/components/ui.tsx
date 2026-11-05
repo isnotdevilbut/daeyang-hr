@@ -27,7 +27,7 @@ export function NotBuilt({ children = '미구현 · 실서비스 단계' }: { ch
 /** lang을 주면 평가 참여자 화면 언어로 (관리자 화면은 한국어 그대로) */
 export function StatusChip({ status, lang }: { status: CellStatus; lang?: Lang }) {
   return (
-    <span className={`chip ${status}`} title={lang ? undefined : CELL_HELP[status]}>
+    <span className={`chip ${status}${status === 'locked' ? ' stage' : ''}`} title={lang ? undefined : CELL_HELP[status]}>{/* '대기'는 완료·미완료와 같은 크기(D-220) */}
       <span aria-hidden>{CELL_ICON[status]}</span> {lang ? t(`status.${status}`, lang) : CELL_LABEL[status]}
     </span>
   )
