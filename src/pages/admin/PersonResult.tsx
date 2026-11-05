@@ -376,7 +376,7 @@ function Adjusters({ cycle, targetId, current }: { cycle: Cycle; targetId: strin
       {/* D-197·D-215: 보정 칸 하나 — 기초 점수를 이 값으로 바꿈(비우고 적용하면 해제), 최종 점수·등급은 자동 */}
       {canAdjust && (
         <div className="adj-row">
-          <label className="field">보정 점수 <span className="muted small">(기초 점수 대신, 0~100)</span>
+          <label className="field">보정 점수
             <input type="text" inputMode="decimal" value={person} placeholder="없음" onChange={(e) => setPerson(e.target.value)} />
           </label>
           <button className="btn" onClick={() => applyNum('person', 'person', person, 0, 100, current.person)}>적용</button>
