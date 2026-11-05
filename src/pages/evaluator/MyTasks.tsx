@@ -84,7 +84,6 @@ function TaskTable({ rows, lang }: { rows: TaskRow[]; lang: Lang }) {
               <td className="tk-st">
                 {closed && cell !== 'submitted' ? <span className="chip locked">{tr('status.closed', lang)}</span> : <StatusChip status={cell} lang={lang} />}
                 {closed && cell === 'submitted' && <span className="chip na tag">{tr('status.closed', lang)}</span>}
-                {!closed && cell === 'locked' && <span className="muted tk-wait">{tr('list.afterPrev', lang)}</span>}
               </td>
               <td className="tk-act">{cell !== 'locked' && (!closed || cell === 'submitted') && <Link className={`btn small ${cell === 'submitted' ? '' : 'primary'}`} to={`/eval/${a.id}`}>{cell === 'submitted' ? tr('btn.viewSubmitted', lang) : tr('btn.evaluate', lang)}</Link>}</td>
             </tr>

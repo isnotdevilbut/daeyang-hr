@@ -20,7 +20,7 @@ const save = (me: string, v: Saved) => { try { sessionStorage.setItem(`${KEY}:${
 
 const STATUS: Record<'notStarted' | 'draft' | 'locked' | 'submitted', { chip: string; label: TKey; btn?: TKey }> = {
   notStarted: { chip: 'stage todo', label: 'status.open', btn: 'btn.evaluate' },
-  draft: { chip: 'draft', label: 'status.draft', btn: 'btn.continue' },
+  draft: { chip: 'stage draft', label: 'status.draft', btn: 'btn.continue' },
   locked: { chip: 'stage locked', label: 'status.locked' }, // 선행 평가가 끝나지 않음 → 작성 버튼 없음. 크기는 완료·미완료와 같게(D-220)
   submitted: { chip: 'stage done', label: 'status.submitted', btn: 'btn.viewSubmitted' },
 }

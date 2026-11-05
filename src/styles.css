@@ -1681,3 +1681,4 @@ body.drag-sorting, body.drag-sorting * { cursor: grabbing !important; user-selec
 .grade-e { align-self: flex-end; padding-bottom: 11px; }
 /* D-220: 대기 — 색·글자는 그대로, 크기·모양은 완료·미완료(.chip.stage)와 같게 */
 .chip.stage.locked { background: #eef0f4; color: #464d58; border-color: #d5d9e1; }
+.chip.stage.draft { background: var(--warn-bg); color: var(--warn); border-color: #f0c770; }

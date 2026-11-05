@@ -12,7 +12,7 @@ export const CELL_LABEL: Record<CellStatus, string> = {
   na: '해당 없음',
   unassigned: '평가자 미지정',
   locked: '대기',
-  notStarted: '미시작',
+  notStarted: '미완료', // D-221: 미시작도 '미완료'로
   draft: '작성 중',
   submitted: '완료',
 }
@@ -341,7 +341,7 @@ export function cycleCounts(cycle: Cycle, responses: Responses, employees: Emplo
 }
 
 export type TodoStatus = 'notStarted' | 'draft' | 'locked'
-export const TODO_LABEL: Record<TodoStatus, string> = { notStarted: '미시작', draft: '작성 중', locked: '선행 단계 대기' }
+export const TODO_LABEL: Record<TodoStatus, string> = { notStarted: '미완료', draft: '작성 중', locked: '대기' }
 
 /**
  * 한 직원이 "평가자로서" 아직 제출하지 않은 평가 (관리자 상세의 "미완료 평가", D-050).
