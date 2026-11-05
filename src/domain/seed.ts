@@ -2,7 +2,7 @@
 import { LEAD_BLEND_OLD, scoringV16 } from './scoringV16'
 import { execPerTeam } from './execTeamsV17'
 import { versionScopesV30 } from './versions'
-import { EXEC_BLEND_OLD, execUpwardFormV27, execUpwardPairsV28, upwardDemoMoreV29, upwardExecV26, upwardV18 } from './upward'
+import { EXEC_BLEND_OLD, execUpwardFormV27, execUpwardPairsV28, upwardDemoMoreV29, upwardExecV26, upwardPairedV31, upwardV18 } from './upward'
 import { joinAllStaff } from './joinAllV19'
 import { leadUpwardOpen, moreDemo } from './demoV20'
 import { demoKpiV23 } from './demoV23'
@@ -22,7 +22,7 @@ import { createCycle, DEFAULT_TEMPLATE_BY_JOB, eligibleTargets } from './cycle'
 import { isUnlocked } from './progress'
 
 // v2: 상향평가 제외 / v3: 단계 반영 비율 회차별 / v4: KPI 지표·개인평가 반영. 이전 저장본은 data/migrate.ts에서 변환
-export const SCHEMA_VERSION = 30
+export const SCHEMA_VERSION = 31
 
 function rng(seed: number) {
   return () => {
@@ -232,5 +232,7 @@ export function createSeed(opts: { legacy?: boolean; until?: number } = {}): App
   upwardDemoMoreV29(state) // 상향평가 시연 제출 늘림(시연 화면) (D-208) — 저장 데이터 변환과 같은 함수
   if ((opts.until ?? SCHEMA_VERSION) < 30) { state.schemaVersion = opts.until!; return state }
   versionScopesV30(state) // 평가표 범위 = 체크 방식(모두에게 동일 적용 → 전체 체크) (D-210) — 저장 데이터 변환과 같은 함수
+  if ((opts.until ?? SCHEMA_VERSION) < 31) { state.schemaVersion = opts.until!; return state }
+  upwardPairedV31(state) // 임원 상향평가 따로 배정 없앰(쌍방) (D-212) — 새 시드는 바뀌는 것 없음
   return state
 }

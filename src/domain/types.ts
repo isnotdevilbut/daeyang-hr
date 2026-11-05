@@ -213,7 +213,7 @@ export interface Cycle {
   upwardStage?: { label: string; weight: number | null }
   /** 상향평가에 팀원→임원·팀장→임원도 포함(D-187, v26 변환·새 회차에서 켬). 없으면 팀원→팀장만 */
   upwardToExec?: boolean
-  /** 임원 상향평가를 임원 평가 배정과 따로 정함(D-207, 평가자 배정 '상향평가도 같은 임원으로' 체크 해제). 없거나 false면 임원평가 담당 임원 = 상향평가 대상(D-191) */
+  /** (이전 데이터) 임원 상향평가 따로 배정(D-207) — D-212에서 없앰, v31 변환에서 지움. 임원평가 담당 임원 = 상향평가 대상(D-191) */
   upwardExecSeparate?: boolean
   /** 따로 정할 때 평가자(사원·팀장) → 상향평가할 임원('' = 미지정). 없는 사람은 임원평가 담당 임원 */
   upwardExecPick?: Record<ID, ID | ''>

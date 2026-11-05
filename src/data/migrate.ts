@@ -14,7 +14,7 @@ import { v15 } from '../domain/demoV15'
 import { leadBlendV25, scoringV16 } from '../domain/scoringV16'
 import { execPerTeam } from '../domain/execTeamsV17'
 import { versionScopesV30 } from '../domain/versions'
-import { execUpwardFormV27, execUpwardPairsV28, upwardDemoMoreV29, upwardExecV26, upwardFormV22, upwardV18 } from '../domain/upward'
+import { execUpwardFormV27, execUpwardPairsV28, upwardDemoMoreV29, upwardExecV26, upwardFormV22, upwardPairedV31, upwardV18 } from '../domain/upward'
 import { joinAllStaff } from '../domain/joinAllV19'
 import { leadUpwardOpen, moreDemo } from '../domain/demoV20'
 import { demoKpiV23 } from '../domain/demoV23'
@@ -278,7 +278,13 @@ export function migrate(raw: any): MigrationResult | null {
     s.schemaVersion = 30
   }
 
-  if (s.schemaVersion !== 30) return null
+  if (s.schemaVersion === 30) {
+    // v30 → v31 (D-212): 임원 상향평가 따로 배정 없앰 — 임원평가 담당 임원과 같은 짝(쌍방)으로
+    notes.push(...upwardPairedV31(s))
+    s.schemaVersion = 31
+  }
+
+  if (s.schemaVersion !== 31) return null
   return { state: s as AppState, notes }
 }
 

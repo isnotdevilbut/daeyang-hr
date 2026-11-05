@@ -4,7 +4,7 @@ import { useDirty } from '../../data/dirty'
 import { buildAssignments, cycleExecs } from '../../domain/cycle'
 import { applyVersions } from '../../domain/versions'
 import { applyExecDraft, distributeExecs, execAssignment, execOrder } from '../../domain/execPlan'
-import { applyUpwardPicks, setUpwardSeparate, syncUpward, upwardExecOf } from '../../domain/upward'
+import { syncUpward } from '../../domain/upward'
 import { pathFor, STAGE_OF_RULE, statusOf } from '../../domain/progress'
 import { cycleHasResponses, weightErrors, weightSum } from '../../domain/questions'
 import { type Cycle, type EvaluatorRule } from '../../domain/types'
@@ -26,13 +26,12 @@ export default function EvalAssign({ cycle, part }: { cycle: Cycle; part: 'weigh
   const [draft, setDraft] = useState(initial)
   // 임원 담당 변경(D-086): 대상자 ID → 임원 ID. 저장 전에는 이 화면에만, 저장·되돌리기는 위 공통 버튼으로
   const [execDraft, setExecDraft] = useState<Record<string, string>>({})
-  const [upDraft, setUpDraft] = useState<Record<string, string>>({}) // D-207: 임원 상향평가 따로 배정(평가자 → 임원)
   // 영역별 저장(D-094): 사원·팀장이 받는 평가·임원 평가 배정이 각자 저장 버튼·결과 표시. 한 영역 저장이 다른 영역 편집값을 건드리지 않음
   type Msg = { ok: boolean; text: string } | null
-  const [msgs, setMsgs] = useState<Record<'member' | 'lead' | 'exec' | 'up', Msg>>({ member: null, lead: null, exec: null, up: null })
-  const setMsgFor = (k: 'member' | 'lead' | 'exec' | 'up', m: Msg) => setMsgs((x) => ({ ...x, [k]: m }))
+  const [msgs, setMsgs] = useState<Record<'member' | 'lead' | 'exec', Msg>>({ member: null, lead: null, exec: null })
+  const setMsgFor = (k: 'member' | 'lead' | 'exec', m: Msg) => setMsgs((x) => ({ ...x, [k]: m }))
   const secDirty = (k: PathKey) => JSON.stringify(draft.path[k]) !== JSON.stringify(initial.path[k]) || JSON.stringify(draft.weights[k] ?? {}) !== JSON.stringify(initial.weights[k] ?? {}) || (k === 'lead' && JSON.stringify(draft.up) !== JSON.stringify(initial.up))
-  const execDirty = Object.keys(execDraft).length > 0 || Object.keys(upDraft).length > 0
+  const execDirty = Object.keys(execDraft).length > 0
   useDirty(secDirty('member') || secDirty('lead') || execDirty) // 저장하지 않은 변경이 있으면 회차·화면 이동 시 확인(기존 보호)
   const rulesChanged = (k: PathKey) => draft.path[k].map((x) => x.rule).join() !== initial.path[k].map((x) => x.rule).join()
 
@@ -77,29 +76,9 @@ export default function EvalAssign({ cycle, part }: { cycle: Cycle; part: 'weigh
     </div>
   )
 
-  /** 임원 상향평가 따로 배정 저장(D-207) */
-  const saveUp = () => {
-    update((d) => { applyUpwardPicks(d, d.cycles.find((x) => x.id === cycle.id)!, upDraft) })
-    setUpDraft({})
-    setMsgFor('up', { ok: true, text: '저장했습니다.' })
-  }
-  const separate = !!live.upwardExecSeparate
-  /** '상향평가도 같은 임원으로'(D-207) — 바로 저장. 다시 켤 때 따로 정한 짝이 있으면 확인 */
-  const toggleSame = (same: boolean) => {
-    if (same && Object.keys(upDraft).length && !confirm('저장하지 않은 임원 상향평가 배정이 있습니다. 버리고 임원 평가 배정과 같게 할까요?')) return
-    if (same && !confirm('임원 상향평가를 임원 평가 배정과 같은 임원으로 맞춥니다. 따로 정한 배정은 지워지고, 이미 써 둔 상향평가는 지우지 않고 평가받은 임원의 결과·리포트 상세 > 응답 결과 > \'이전 배정 · 집계 제외\'에 남깁니다(거기서 반려 가능). 계속할까요?')) return
-    update((d) => { setUpwardSeparate(d, d.cycles.find((x) => x.id === cycle.id)!, !same) })
-    setUpDraft({}); setMsgFor('up', null)
-  }
   const locked = rulesChanged('member') || rulesChanged('lead')
-  if (part === 'exec') return (
-    <>
-      <Assignments cycle={live} locked={locked} execDraft={execDraft} setExecDraft={(x) => { setExecDraft(x); setMsgFor('exec', null) }} onSave={saveExec} msg={msgs.exec}
-        extra={live.upwardToExec && <label className="check up-same" title="체크하면 임원평가 담당 임원을 그 사람이 상향평가해요(서로 평가하는 짝이 같음)"><input type="checkbox" checked={!separate} disabled={live.status === '확정'} onChange={(e) => toggleSame(e.target.checked)} /> 상향평가도 같은 임원으로</label>} />
-      {/* D-207: 체크를 끄면 임원 상향평가를 따로 배정 — 임원 평가 배정과 같은 모양 */}
-      {live.upwardToExec && separate && <Assignments mode="up" cycle={live} locked={locked} execDraft={upDraft} setExecDraft={(x) => { setUpDraft(x); setMsgFor('up', null) }} onSave={saveUp} msg={msgs.up} />}
-    </>
-  )
+  // D-212: 임원평가와 임원 상향평가는 항상 같은 짝(쌍방) — '상향평가도 같은 임원으로' 체크·임원 상향평가 따로 배정(D-207) 없앰
+  if (part === 'exec') return <Assignments cycle={live} locked={locked} execDraft={execDraft} setExecDraft={(x) => { setExecDraft(x); setMsgFor('exec', null) }} onSave={saveExec} msg={msgs.exec} />
   return (
     <>
       <div className="grid path-grid">
@@ -167,10 +146,9 @@ export default function EvalAssign({ cycle, part }: { cycle: Cycle; part: 'weigh
  * 팀 머리글의 펼치기와 팀 전체 선택은 따로. 체크 해제 = 미지정(자동으로 채우지 않음, 완료로 세지 않음). 제출된 평가는 체크 고정·'제출' 표시.
  * 자기평가·팀장평가는 자동 연결이라 여기 나오지 않음. 저장·되돌리기는 화면 아래 공통 저장 바
  */
-function Assignments({ cycle, locked, execDraft, setExecDraft, onSave, msg, mode = 'exec', extra }: { cycle: Cycle; locked: boolean; execDraft: Record<string, string>; setExecDraft: (x: Record<string, string>) => void; onSave: () => void; msg: { ok: boolean; text: string } | null; mode?: 'exec' | 'up'; extra?: React.ReactNode }) {
-  // D-207: mode 'up' = 임원 상향평가 배정(평가자 사원·팀장 → 상향평가할 임원) — 임원 평가 배정과 같은 모양, 제목·대상만 다름
-  const up = mode === 'up'
-  const title = up ? '임원 상향평가 배정' : '임원 평가 배정'
+function Assignments({ cycle, locked, execDraft, setExecDraft, onSave, msg }: { cycle: Cycle; locked: boolean; execDraft: Record<string, string>; setExecDraft: (x: Record<string, string>) => void; onSave: () => void; msg: { ok: boolean; text: string } | null }) {
+  const mode = 'exec'
+  const title = '임원 평가 배정'
   const s = useAppState()
   const [secOpen, setSecOpen] = useState(false) // D-202: 처음엔 접힘
   const [q, setQ] = useState('')
@@ -179,16 +157,14 @@ function Assignments({ cycle, locked, execDraft, setExecDraft, onSave, msg, mode
   const [open, setOpen] = useState<Record<string, boolean>>({}) // `${임원}|${팀}` → 펼침 (선택과 무관)
   const execs = cycleExecs(s, cycle)
   const name = (id: string) => s.employees.find((e) => e.id === id)?.name ?? '?'
-  const execIdSet = new Set(execs.map((x) => x.id))
-  const upOf = (t: Cycle['targets'][number]) => cycle.assignments.find((x) => x.direction === 'up' && !x.excluded && x.evaluatorId === t.employeeId && execIdSet.has(x.targetId))
   const rows = cycle.targets
-    .filter((t) => { const e = s.employees.find((x) => x.id === t.employeeId); return !!e && e.active && !e.evalExcluded && !t.isExecutive && (up || execOrder(cycle, t) !== undefined) })
+    .filter((t) => { const e = s.employees.find((x) => x.id === t.employeeId); return !!e && e.active && !e.evalExcluded && !t.isExecutive && execOrder(cycle, t) !== undefined })
     .map((t) => {
-      const a = up ? upOf(t) : execAssignment(cycle, t)
+      const a = execAssignment(cycle, t)
       const st = a ? statusOf(s.responses, a.id) : 'notStarted'
       const leadStage = pathFor(cycle, t).find((x) => x.rule === 'teamLead')
-      const noLead = !up && !!leadStage && !cycle.assignments.some((x) => x.targetId === t.employeeId && x.stageOrder === leadStage.order && !x.excluded)
-      const orig = (up ? upwardExecOf(cycle, t) : a?.evaluatorId) ?? ''
+      const noLead = !!leadStage && !cycle.assignments.some((x) => x.targetId === t.employeeId && x.stageOrder === leadStage.order && !x.excluded)
+      const orig = a?.evaluatorId ?? ''
       return { t, a, st, orig, cur: execDraft[t.employeeId] ?? orig, noLead }
     })
     .sort((x, y) => x.t.teamName.localeCompare(y.t.teamName, 'ko') || Number(y.t.isTeamLead) - Number(x.t.isTeamLead) || x.t.name.localeCompare(y.t.name, 'ko'))
@@ -216,7 +192,7 @@ function Assignments({ cycle, locked, execDraft, setExecDraft, onSave, msg, mode
     return true
   }
   return (
-    <section className={`panel exec-assign ${up ? 'up-assign' : ''}`} aria-labelledby={`${mode}-assign-title`}>
+    <section className="panel exec-assign" aria-labelledby={`${mode}-assign-title`}>
       <div className="panel-head row">
         <h2 id={`${mode}-assign-title`} style={{ margin: 0 }}><button type="button" className="sec-title-btn" onClick={() => setSecOpen(!secOpen)}>{title} <span className="muted">{rows.length}명</span></button></h2>
         <span className="spacer" />
@@ -235,9 +211,8 @@ function Assignments({ cycle, locked, execDraft, setExecDraft, onSave, msg, mode
           {teams.map((x) => <option key={x}>{x}</option>)}
         </select>
         {/* D-166: '미지정만' 거르기 제거 */}
-        {extra}
       </div>
-      {unassigned.length > 0 && <p className="exec-free-note">미지정: {unassigned.map((r) => r.t.name).join(', ')} <span className="muted">{up ? '— 임원을 체크하기 전까지 임원 상향평가 없음' : '— 담당 임원을 체크하기 전까지 임원평가 미완료'}</span></p>}
+      {unassigned.length > 0 && <p className="exec-free-note">미지정: {unassigned.map((r) => r.t.name).join(', ')} <span className="muted">— 담당 임원을 체크하기 전까지 임원평가 미완료</span></p>}
       {note && <p className="exec-free-note exec-note" role="status">{note}</p>}
       <div className="exec-cols">
         {execs.map((ex) => {

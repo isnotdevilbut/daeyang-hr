@@ -35,30 +35,23 @@ export function upwardExecs(s: Pick<AppState, 'employees'>, c: Pick<Cycle, 'exec
   return s.employees.filter((e) => e.active && e.isExecutive && !e.isCeo && !off.has(e.id))
 }
 
-/** 이 사람이 상향평가할 임원(D-191·D-207): 따로 정하면 그 값(''=미지정), 아니면 임원평가 담당 임원 */
+/** 이 사람이 상향평가할 임원(D-191) = 그 사람을 임원평가하는 담당 임원(쌍방, D-212 — 따로 배정 없음) */
 export function upwardExecOf(c: Cycle, t: Cycle['targets'][number]): string | undefined {
-  const pick = c.upwardExecSeparate ? c.upwardExecPick?.[t.employeeId] : undefined
-  if (pick !== undefined) return pick || undefined
   return execAssignment(c, t)?.evaluatorId
 }
 
 /**
- * '상향평가도 같은 임원으로' 켜기·끄기(D-207). 끄면 지금 짝(임원평가 담당)을 그대로 시작값으로 적어 두고 따로 배정, 켜면 다시 임원평가 담당 기준.
- * 짝이 바뀌는 배정은 syncUpward 규칙대로(응답 없으면 새 짝, 응답 있으면 보존·집계 제외). 확정 회차는 바꾸지 않음
+ * v30 → v31 (D-212): 임원 상향평가 따로 배정(D-207) 없앰 — 준비·진행 회차의 따로 배정 표시를 지우고 임원평가 담당 기준으로 맞춘다
+ * (짝이 바뀌는 배정: 응답 없으면 새 짝, 응답 있으면 보존·집계 제외). 반복 안전
  */
-export function setUpwardSeparate(s: AppState, c: Cycle, separate: boolean): string[] {
-  if (c.status === '확정') return []
-  if (separate) {
-    c.upwardExecPick = Object.fromEntries(c.targets.filter((t) => !t.isExecutive).map((t) => [t.employeeId, execAssignment(c, t)?.evaluatorId ?? '']))
-    c.upwardExecSeparate = true
-  } else { delete c.upwardExecSeparate; delete c.upwardExecPick }
-  return syncUpward(s, c)
-}
-/** 임원 상향평가 따로 배정 저장(D-207): 평가자 → 임원('' = 미지정) */
-export function applyUpwardPicks(s: AppState, c: Cycle, draft: Record<string, string>): string[] {
-  if (c.status === '확정' || !c.upwardExecSeparate) return []
-  c.upwardExecPick = { ...(c.upwardExecPick ?? {}), ...draft }
-  return syncUpward(s, c)
+export function upwardPairedV31(s: AppState): string[] {
+  const notes: string[] = []
+  for (const c of s.cycles) {
+    if (!open(c) || (!c.upwardExecSeparate && !c.upwardExecPick)) continue
+    delete c.upwardExecSeparate; delete c.upwardExecPick
+    notes.push(`${c.name}: 임원 상향평가를 임원 평가 배정과 같은 짝으로(따로 배정 없앰)`, ...syncUpward(s, c))
+  }
+  return notes
 }
 
 /** 상향평가 종류(D-187): 대상자가 임원이면 팀원→임원·팀장→임원(평가자의 현재 직급), 아니면 팀원→팀장 */
