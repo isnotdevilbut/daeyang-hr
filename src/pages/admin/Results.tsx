@@ -106,7 +106,7 @@ function ResultRow({ cycle, t, r, pick }: { cycle: Cycle; t: TargetSnapshot; r: 
     <tr className={pick?.on ? 'picked' : ''}>
       {pick && <td className="c-pick"><input type="checkbox" aria-label={`${t.name} 선택`} checked={pick.on} onChange={(e) => pick.set(e.target.checked)} /></td>}
       <td>{t.teamName}</td><td>{targetPosition(s, cycle, t)}</td><td><b>{t.name}</b></td>
-      <td className="num">{c.base !== null ? fmt(c.base) : !r.stages.length ? <span className="muted" title="임원: 팀 KPI·상향평가 반영 방식 보류">—</span> : <Pending text={baseState} />}</td>{/* 1·2·3단계 없는 임원(D-192) */}
+      <td className="num">{c.base !== null ? fmt(c.base) : <Pending text={r.stages.length ? baseState : '미완료'} />}</td>{/* 임원 = 상향평가 평균(D-215) */}
       <td className="num final">{c.final !== null ? fmt(c.final) : <span className="muted">—</span>}</td>
       <td className="center"><b>{r.grade ?? '—'}</b></td>
       <td><Link className="btn small" to={`/admin/results/${t.employeeId}?from=results`}>상세</Link></td>

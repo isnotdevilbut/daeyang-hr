@@ -3,7 +3,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { update, useAppState } from '../../data/store'
 import { useSelectedCycle } from '../../data/hooks'
 import { can } from '../../domain/permissions'
-import { fmt, fmtSigned, personResult } from '../../domain/scoring'
+import { fmt, personResult } from '../../domain/scoring'
 import { jobName, targetPosition } from '../../domain/catalog'
 import { ctxFor } from '../../domain/questions'
 import { isActiveAssignment, pathFor, resultPerson } from '../../domain/progress'
@@ -12,7 +12,7 @@ import { visibleSections } from '../../components/QuestionView'
 import { Forbidden, Modal } from '../../components/ui'
 import { templateXlsx } from '../../domain/xlsx'
 import { cycleLabel } from '../../domain/cycle'
-import { answerText, KIND_TEXT } from './PersonResult'
+import { answerText } from './PersonResult'
 import logoKo from '../../assets/logo-ko.png'
 
 /**
@@ -199,7 +199,7 @@ export function sheetModel(s: AppState, cycle: Cycle, t: TargetSnapshot, parts: 
 
 /** 리포트 본문(A4 한 장 분량 — 길면 다음 쪽으로) */
 export function ReportSheet({ s, cycle, parts, m }: { s: AppState; cycle: Cycle; t: TargetSnapshot; parts: ReturnType<typeof evalParts>; m: ReturnType<typeof sheetModel> }) {
-  const { r, info, selfQ, leadQ, execQ, execShown, history, scoreRows, showNote, noteText, complete, on } = m
+  const { r, info, selfQ, leadQ, execQ, execShown, scoreRows, showNote, noteText, complete, on } = m
   return (
     <div className="a4">
       <div className="watermark">{complete ? '검토용 초안 · 가상 데이터' : '미완료 초안 · 가상 데이터'}</div>
@@ -239,17 +239,11 @@ export function ReportSheet({ s, cycle, parts, m }: { s: AppState; cycle: Cycle;
             {on('scores.base') && <tr><th>개인 평가 점수</th><td>{r.combined.base === null ? '미완료' : fmt(r.combined.base)}</td></tr>}
             {on('scores.kpi') && <tr><th>팀 KPI</th><td>{r.kpi === null ? '—' : fmt(r.kpi)}</td></tr>}
             {on('scores.final') && <>
-              <tr><th>점수 보정</th><td>{fmtSigned(r.person)}</td></tr>
+              <tr><th>보정 점수</th><td>{r.person === null ? '—' : fmt(r.person)}</td></tr>
               <tr><th>최종 점수</th><td><b>{fmt(r.combined.final)}</b></td></tr>
               <tr><th>최종 등급</th><td><b>{r.grade ?? '미확정'}</b></td></tr>
             </>}
           </tbody></table>
-          {on('scores.final') && history.length > 0 && (
-            <table className="rp-hist">
-              <thead><tr><th style={{ width: '40%' }}>보정 항목</th><th>값</th></tr></thead>
-              <tbody>{history.map((h) => <tr key={h.id}><td>{KIND_TEXT[h.kind]}</td><td>{h.value === null || h.value === '' ? '없음' : String(h.value)}</td></tr>)}</tbody>
-            </table>
-          )}
         </div>
       )}
       {showNote && (

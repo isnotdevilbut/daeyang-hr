@@ -386,12 +386,16 @@ describe('회차', () => {
     expect(cycleLabel({ name: '2026 하반기 인사평가 (가상 회차)' })).toBe('2026 하반기 인사평가')
     expect(cycleLabel({ name: '2027 상반기 (재평가)' })).toBe('2027 상반기 (재평가)')
   })
-  it('결과 계산은 KPI를 더하지 않는다', () => {
+  it('최종 점수 = (보정 점수 또는 기초 점수) × (100 − 직급별 팀 KPI%) + 팀 KPI × 팀 KPI% (D-215, 팀 KPI 없으면 기초 그대로)', () => {
     const s = createSeed()
     const c = s.cycles[0]
+    const pct = (t: any) => c.finalBlendPlan![t.isExecutive ? 'exec' : t.isTeamLead ? 'lead' : 'member'].find((x) => x.key === 'kpi' && x.on)?.pct ?? 0
     for (const t of c.targets) {
       const r = personResult(s, c, t.employeeId)!
-      if (!r.combined.incomplete) expect(r.combined.afterAdjust).toBeCloseTo(r.combined.base! + (r.dept ?? 0) + (r.person ?? 0))
+      if (r.combined.incomplete) continue
+      const used = r.person ?? r.combined.base!
+      const k = pct(t)
+      expect(r.combined.final).toBeCloseTo(r.kpi === null || !k ? used : used * (100 - k) / 100 + r.kpi * k / 100)
     }
   })
 })
@@ -845,7 +849,7 @@ describe('부서 KPI (목업 제안 정책, 회사 승인 산식 아님)', () =>
     expect([r.afterKpi, r.afterAdjust, r.final, r.kpiApplied, r.incomplete]).toEqual([80, 81, 81, false, false])
     expect(combine2({ stages: [{ score: 80, weight: 100, submitted: true }], dept: null, person: null, ceoScore: 70, kpi: { blend: on, deptScore: null } }).final).toBe(70)
   })
-  it('KPI 상태 구분: 없음 / 정상 / 설정 미완료 — 결과 점수에는 KPI를 섞지 않음(D-194 개인평가 반영 없앰)', async () => {
+  it('KPI 상태 구분: 없음 / 정상 / 설정 미완료 — 정상 KPI만 직급별 팀 KPI %로 섞음(D-215)', async () => {
     const { kpiState } = await import('./kpi')
     const s = createSeed({ until: 22 }); const c = s.cycles[0]
     c.kpiBlend = { enabled: true, personal: 80, kpi: 20 }
@@ -867,7 +871,9 @@ describe('부서 KPI (목업 제안 정책, 회사 승인 산식 아님)', () =>
     expect(kpiState(deptKpi(s, c.id, dept))).toBe('ok')
     r = personResult(s, c, t.employeeId)!
     // D-194: '개인평가 반영' 설정을 없애 저장된 반영 값(켬 80/20)이 있어도 점수에 섞지 않음 — KPI 점수는 표시만
-    expect([r.kpi, r.combined.kpiApplied, r.combined.afterKpi]).toEqual([90, false, r.combined.base])
+    expect([r.kpi, r.combined.kpiApplied]).toEqual([90, true]) // D-215: 직급별 비율의 팀 KPI %로 반영
+    const k = r.kpiBlend.kpi! / 100
+    expect(r.combined.afterKpi).toBeCloseTo(r.combined.base! * (1 - k) + 90 * k)
     expect(c.kpiBlend).toEqual({ enabled: true, personal: 80, kpi: 20 }) // 저장값은 그대로
     expect(applyBlend(r.combined.base, c.kpiBlend, 90).afterKpi).toBeCloseTo(r.combined.base! * 0.8 + 90 * 0.2) // 계산 함수 자체는 그대로
   })
@@ -1212,7 +1218,7 @@ describe('네 팀 구조·자연스러운 가상 성명 (D-065)', () => {
     const oldV16: any = structuredClone(old); scoringV16(oldV16) // v16(D-103) 배점·비율 변화는 이 비교(네 팀 정리)와 무관 — 같은 변환을 한 이전 데이터와 비교
     for (const t of old.cycles[0].targets.filter((x) => !d079.has(x.employeeId))) {
       const a = personResult(oldV16, oldV16.cycles[0], t.employeeId)!, b = personResult(s, s.cycles[0], t.employeeId)!
-      expect([b.combined.final, b.combined.base, b.dept, b.person, b.ceoScore, b.stages.map((x) => x.score)]).toEqual([a.combined.final, a.combined.base, a.dept, a.person, a.ceoScore, a.stages.map((x) => x.score)])
+      expect([b.combined.base, b.dept, b.person, b.ceoScore, b.stages.map((x) => x.score)]).toEqual([a.combined.base, a.dept, a.person, a.ceoScore, a.stages.map((x) => x.score)]) // 최종 점수는 팀 KPI(조직 정리로 단위가 바뀜)가 섞여 비교에서 뺌(D-215)
     }
     // D-197: 팀 보정은 점수에 쓰지 않음(기록만 보관) — 새로 넣어도 점수 그대로
     const before = personResult(s, s.cycles[0], 'e18')!.combined.final
@@ -3285,8 +3291,10 @@ describe('점수 보정 한 칸 · 등급 자동 (D-197)', async () => {
     s.adjustments.push({ id: 'x1', cycleId: c.id, kind: 'dept', targetKey: t.departmentId, value: 5, reason: '', by: 'x', at: '', before: null })
     s.adjustments.push({ id: 'x2', cycleId: c.id, kind: 'ceoScore', targetKey: t.employeeId, value: 10, reason: '', by: 'x', at: '', before: null })
     expect(personResult(s, c, t.employeeId)!.combined.final).toBe(f0)
-    s.adjustments.push({ id: 'x3', cycleId: c.id, kind: 'person', targetKey: t.employeeId, value: 2, reason: '', by: 'x', at: '', before: null })
-    expect(personResult(s, c, t.employeeId)!.combined.final).toBeCloseTo(f0 + 2)
+    // D-215: 보정 점수 = 기초 점수를 바꾸는 값 → 그 값으로 팀 KPI와 섞음
+    s.adjustments.push({ id: 'x3', cycleId: c.id, kind: 'person', targetKey: t.employeeId, value: 50, reason: '', by: 'x', at: '', before: null })
+    const r = personResult(s, c, t.employeeId)!
+    expect(r.combined.final).toBeCloseTo(r.kpi !== null && r.kpiBlend.enabled ? 50 * (100 - r.kpiBlend.kpi!) / 100 + r.kpi * r.kpiBlend.kpi! / 100 : 50)
   })
   it('등급 = 최종 점수 순위 × 등급 인원 비율(누적 반올림), 같은 점수 같은 등급, 점수 없으면 등급 없음', () => {
     const s = createSeed(); const c = s.cycles.find((x) => x.status === '진행')!
@@ -3449,5 +3457,20 @@ describe('평가 화살표 (D-211)', async () => {
     const probs = V.applyVersions(s, structuredClone(c)).filter((p) => p.kind === 'none')
     expect(probs.length).toBeGreaterThan(0)
     expect(probs.every((p) => p.a.direction === 'self')).toBe(true)
+  })
+})
+
+describe('임원 기초 점수 = 상향평가 평균 (D-215)', async () => {
+  const S = await import('./scoring')
+  it('받은 상향평가가 모두 제출되면 평균, 하나라도 남으면 미완료', () => {
+    const s = createSeed(); const c = s.cycles.find((x) => x.status === '진행')!
+    const ex = s.employees.find((e) => e.isExecutive && e.active)!
+    const ups = c.assignments.filter((a) => a.direction === 'up' && !a.excluded && a.targetId === ex.id)
+    for (const a of ups) if (!s.responses[a.id]) s.responses[a.id] = { assignmentId: a.id, answers: {}, status: 'draft', savedAt: '', submittedAt: null, lang: 'ko' }
+    expect(S.execUpwardAverage(s, c, ex.id)).toBeNull()
+    for (const a of ups) { const r = s.responses[a.id]; if (r.status !== 'submitted') { s.responses[a.id] = { ...r, status: 'submitted', answers: s.responses[ups.find((x) => s.responses[x.id]?.status === 'submitted' && x.id !== a.id)?.id ?? a.id]?.answers ?? {} } } }
+    const avg = S.execUpwardAverage(s, c, ex.id)
+    const r = personResult(s, c, ex.id)!
+    expect(r.combined.base).toBe(avg)
   })
 })

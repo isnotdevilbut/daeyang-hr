@@ -4,7 +4,7 @@ import { update, useAppState } from '../../data/store'
 import { useSelectedCycle } from '../../data/hooks'
 import { can } from '../../domain/permissions'
 import { cycleLabel, rejectRecord } from '../../domain/cycle'
-import { fmt, fmtSigned, personResult, weightsFor } from '../../domain/scoring'
+import { fmt, personResult, weightsFor } from '../../domain/scoring'
 import { activeWriteAssignments, appliedStages, assignmentCell, isActiveAssignment, personSnap, resultPerson, stageAssignments, STAGE_OF_RULE, statusOf, upwardAssignments, type CellStatus } from '../../domain/progress'
 import { UPWARD_KIND_TEXT, upwardKind } from '../../domain/upward'
 import { displayAnswer } from '../../domain/seed'
@@ -84,12 +84,11 @@ export default function PersonResultPage() {
   const staged = cycle.assignments.filter((a) => a.targetId === t.employeeId && !a.excluded).sort((a, b) => a.stageOrder - b.stageOrder)
   const oldRecs = cycle.assignments.filter((a) => a.targetId === t.employeeId && a.excluded && s.responses[a.id])
   const name = (id: string) => s.employees.find((e) => e.id === id)?.name ?? '?'
-  const history = s.adjustments.filter((a) => a.cycleId === cycle.id && (a.targetKey === t.employeeId || a.targetKey === t.departmentId || (!!t.legacyUnitId && a.targetKey === t.legacyUnitId)))
   const weights = weightsFor(cycle, t)
   const anyUnsubmitted = r.stages.some((x) => !x.submitted)
   const anyUngraded = r.stages.some((x) => x.ungraded) // 배점 있는 서술형 미채점(D-103) — 0점이 아닌 미완료
-  const noStages = r.stages.length === 0 // 자기평가를 끈 임원(D-192): 1·2·3단계 없음 — 임원 점수(팀 KPI·상향평가)는 반영 보류(D-103)
-  const baseText = r.combined.base !== null ? fmt(r.combined.base) : noStages ? '—' : anyUnsubmitted || anyUngraded ? '미완료' : '계산 안 됨'
+  const noStages = r.stages.length === 0 // 자기평가를 끈 임원(D-192): 1·2·3단계 없음 — 기초 점수 = 상향평가 평균(D-215)
+  const baseText = r.combined.base !== null ? fmt(r.combined.base) : noStages ? '미완료' : anyUnsubmitted || anyUngraded ? '미완료' : '계산 안 됨'
 
   return (
     <div className="page detail-page">
@@ -137,10 +136,10 @@ export default function PersonResultPage() {
             </tbody>
           </table>}
           <dl className="score-sum">
-            <div><dt>개인평가 기초 점수</dt><dd>{baseText}</dd>{/* D-201: 안내 문구 없음 */}</div>
-            <div><dt>팀 KPI 점수</dt><dd>{r.kpi === null ? '—' : fmt(r.kpi)}</dd></div>
-            {/* D-197: 팀 보정·보정 후 점수·최종 지정 점수 없앰 — 점수 보정 한 칸, 등급은 등급 인원 비율로 자동 */}
-            <div><dt>점수 보정</dt><dd>{fmtSigned(r.person)}</dd></div>
+            <div><dt>{noStages ? '상향평가 평균(기초 점수)' : '개인평가 기초 점수'}</dt><dd>{baseText}</dd>{/* D-201: 안내 문구 없음 */}</div>
+            {/* D-215: 팀 KPI는 직급별 비율의 팀 KPI %로 반영, 보정 점수는 기초 점수를 바꾸는 값 */}
+            <div><dt>팀 KPI 점수{r.kpiBlend.enabled && <small className="muted"> (반영 {r.kpiBlend.kpi}%)</small>}</dt><dd>{r.kpi === null ? '—' : fmt(r.kpi)}</dd></div>
+            <div><dt>보정 점수</dt><dd>{r.person === null ? '—' : fmt(r.person)}</dd></div>
             <div className="total"><dt>최종 점수</dt><dd>{r.combined.final === null ? '—' : fmt(r.combined.final)}</dd></div>
             <div className="total"><dt>최종 등급</dt><dd>{r.grade ?? '—'}</dd></div>
           </dl>
@@ -190,26 +189,7 @@ export default function PersonResultPage() {
 
       {oldRecs.length > 0 && <OldRecords cycle={cycle} list={oldRecs} />}
 
-      {history.length > 0 && (
-        <details className="history">
-          <summary>변경 내역 <span className="muted">{history.length}건</span></summary>
-          <div className="table-wrap">
-            <table className="tbl">
-              <thead><tr><th>시각</th><th>변경자</th><th>항목</th><th>변경 전 → 후</th></tr></thead>
-              <tbody>
-                {[...history].reverse().map((h) => (
-                  <tr key={h.id}>
-                    <td>{h.at ? new Date(h.at).toLocaleString('ko-KR') : '—'}</td>
-                    <td>{h.by || '—'}</td>
-                    <td>{KIND_TEXT[h.kind]}</td>
-                    <td>{show(h.before)} → {show(h.value)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </details>
-      )}
+      {/* D-215: 변경 내역은 화면에 보이지 않음(기록은 데이터에 그대로) */}
       </>}
     </div>
   )
@@ -346,8 +326,6 @@ function ManualScores({ cycle, aid }: { cycle: Cycle; aid: string }) {
   )
 }
 
-export const KIND_TEXT: Record<AdjustKind, string> = { dept: '팀 보정', person: '개인 보정', ceoScore: '최종 지정 점수', ceoGrade: '최종 등급' }
-const show = (v: number | string | null) => (v === null || v === undefined || v === '' ? '없음' : String(v))
 
 type Msg = { ok: boolean; text: string } | null
 
@@ -395,13 +373,13 @@ function Adjusters({ cycle, targetId, current }: { cycle: Cycle; targetId: strin
     <div className="detail-col">
     <h2 id="adjust-title" className="section-title">최종 점수 보정</h2>
     <section className="panel pad adjust" aria-labelledby="adjust-title">
-      {/* D-197: 점수 보정 한 칸(±점) — 최종 지정 점수·등급 선택 없앰, 등급은 바뀐 최종 점수로 등급 인원 비율에 따라 자동 */}
+      {/* D-197·D-215: 보정 칸 하나 — 기초 점수를 이 값으로 바꿈(비우고 적용하면 해제), 최종 점수·등급은 자동 */}
       {canAdjust && (
         <div className="adj-row">
-          <label className="field">점수 보정(점)
+          <label className="field">보정 점수 <span className="muted small">(기초 점수 대신, 0~100)</span>
             <input type="text" inputMode="decimal" value={person} placeholder="없음" onChange={(e) => setPerson(e.target.value)} />
           </label>
-          <button className="btn" onClick={() => applyNum('person', 'person', person, -100, 100, current.person)}>적용</button>
+          <button className="btn" onClick={() => applyNum('person', 'person', person, 0, 100, current.person)}>적용</button>
           <Feedback k="person" />
         </div>
       )}
