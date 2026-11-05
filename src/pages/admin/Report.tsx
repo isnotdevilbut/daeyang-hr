@@ -58,6 +58,7 @@ export function evalParts(s: AppState, cycle: Cycle, t: TargetSnapshot) {
 
 function ReportBody({ s, cycle, t, from }: { s: AppState; cycle: Cycle; t: TargetSnapshot; from: string }) {
   const parts = useMemo(() => evalParts(s, cycle, t), [s, cycle, t])
+  const stageList = personResult(s, cycle, t.employeeId)?.stages ?? []
   const qItems = (prefix: string, qs: Question[]): Item[] => qs.map((q) => ({ key: `${prefix}:q:${q.id}`, label: q.title }))
   // 포함 항목 = 평가 답변(자기·팀장·임원평가)만 고름(D-128). 기본 정보·평가 회차·점수는 항상, 추가 기록은 저장한 경우 항상 리포트에 들어감
   const groups: Group[] = [
@@ -70,6 +71,8 @@ function ReportBody({ s, cycle, t, from }: { s: AppState; cycle: Cycle; t: Targe
         { label: '문항', items: qItems('exec', parts.execQ) },
       ],
     }] : []),
+    // D-225: 단계별 점수도 단계마다 골라서(평가자가 준 점수를 본인에게 보이지 않게 뺄 수 있게)
+    ...(stageList.length ? [{ key: 'stage', label: '단계별 점수', items: stageList.map((st) => ({ key: `stage:${st.order}`, label: `${st.order}단계 ${st.label}` })) }] : []),
   ]
   const itemsOf = (g: Group) => [...g.items, ...(g.sub ?? []).flatMap((x) => x.items)]
   const allKeys = groups.flatMap(itemsOf).map((i) => i.key)
@@ -192,9 +195,10 @@ export function sheetModel(s: AppState, cycle: Cycle, t: TargetSnapshot, parts: 
   const history = s.adjustments.filter((a) => a.cycleId === cycle.id && (a.targetKey === t.employeeId || a.targetKey === t.departmentId || (!!t.legacyUnitId && a.targetKey === t.legacyUnitId)))
   const scoreRows = on('scores.base') || on('scores.kpi') || on('scores.final')
   const showNote = on('note') && !!noteText
-  const empty = !info.length && !selfQ.length && !leadQ.length && !(execShown.length && execQ.length) && !on('scores.stage') && !scoreRows && !showNote
+  const stagesShown = r.stages.filter((st) => on(`stage:${st.order}`)) // D-225: 단계마다 포함 여부
+  const empty = !info.length && !selfQ.length && !leadQ.length && !(execShown.length && execQ.length) && !stagesShown.length && !scoreRows && !showNote
   const complete = !r.combined.incomplete && r.grade !== null
-  return { r, info, selfQ, leadQ, execQ, execShown, history, scoreRows, showNote, noteText, empty, complete, on }
+  return { r, info, selfQ, leadQ, execQ, execShown, history, scoreRows, showNote, noteText, empty, complete, on, stagesShown }
 }
 
 /** 리포트 본문(A4 한 장 분량 — 길면 다음 쪽으로) */
@@ -219,13 +223,13 @@ export function ReportSheet({ s, cycle, parts, m }: { s: AppState; cycle: Cycle;
       {selfQ.length > 0 && <Answers title="자기평가" as={parts.self} qs={selfQ} s={s} cycle={cycle} />}
       {leadQ.length > 0 && <Answers title="팀장평가" as={parts.lead} qs={leadQ} s={s} cycle={cycle} showWho name={parts.name} />}
       {execShown.length > 0 && execQ.length > 0 && <Answers title="임원평가" as={execShown} qs={execQ} s={s} cycle={cycle} showWho name={parts.name} />}
-      {on('scores.stage') && (
+      {m.stagesShown.length > 0 && (
         <div className="rp-block">
           <h3>단계별 점수 <span className="rp-assume">※ 개발용 가정 계산 · 회사 산식 아님</span></h3>
           <table>
             <thead><tr><th style={{ width: '24%' }}>단계</th><th>평가자</th><th style={{ width: '14%' }}>점수</th><th style={{ width: '10%' }}>등급</th></tr></thead>
             <tbody>
-              {r.stages.map((st) => (
+              {m.stagesShown.map((st) => (
                 <tr key={st.order}><td><span className="stage-no">{st.order}단계</span> {st.label}{st.evaluators.length > 1 && <div className="muted">{st.evaluators.length}명 평균</div>}</td><td>{st.evaluators.join(', ')}</td><td>{st.submitted ? fmt(st.score) : '미제출'}</td><td>{st.submitted ? st.grade?.slice(0, 1) ?? '—' : '—'}</td></tr>
               ))}
             </tbody>

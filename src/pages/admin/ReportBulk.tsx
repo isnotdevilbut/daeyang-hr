@@ -16,14 +16,16 @@ import { csvCell, evalParts, REPORT_HEAD, ReportSheet, reportRows, saveFile, she
  * - 브라우저 안에서 만들어 내려받기(외부 전송 없음)
  */
 const GROUPS = [{ key: 'self', label: '자기평가 답변' }, { key: 'lead', label: '팀장평가 답변·의견' }, { key: 'exec', label: '임원평가 답변·의견' }] as const
+/** D-225: 단계별 점수도 단계마다 골라서 */
+const STAGE_KEYS = [{ key: 'stage:1', label: '1단계 자기평가 점수' }, { key: 'stage:2', label: '2단계 팀장평가 점수' }, { key: 'stage:3', label: '3단계 임원평가 점수' }] as const
 type Kind = 'print' | 'xlsx' | 'csv'
 const KINDS: [Kind, string][] = [['print', '인쇄·PDF 저장'], ['xlsx', '엑셀(.xlsx)'], ['csv', 'CSV']]
 
 export function BulkDownload({ cycle, ids, onClose }: { cycle: Cycle; ids: string[]; onClose: () => void }) {
   const s = useAppState()
-  const [inc, setInc] = useState<Record<string, boolean>>({ self: true, lead: true, exec: true })
+  const [inc, setInc] = useState<Record<string, boolean>>({ self: true, lead: true, exec: true, 'stage:1': true, 'stage:2': true, 'stage:3': true })
   const [kind, setKind] = useState<Kind>('xlsx')
-  const on = (k: string) => { const g = k.split(':')[0]; return g in inc ? inc[g] : true }
+  const on = (k: string) => { if (k in inc) return inc[k]; const g = k.split(':')[0]; return g in inc ? inc[g] : true }
   // 파일 안 순서 = 결과 화면과 같은 고정 순서(팀 가나다 → 직급 → 이름, D-169)
   const targets = useMemo(() => {
     const order = byTierThenName(s, cycle)
@@ -53,6 +55,7 @@ export function BulkDownload({ cycle, ids, onClose }: { cycle: Cycle; ids: strin
         <fieldset className="bulk-set">
           <legend>포함 항목</legend>
           {GROUPS.map((g) => <label key={g.key} className="check"><input type="checkbox" checked={inc[g.key]} onChange={(e) => setInc({ ...inc, [g.key]: e.target.checked })} /> {g.label}</label>)}
+          {STAGE_KEYS.map((g) => <label key={g.key} className="check"><input type="checkbox" checked={inc[g.key]} onChange={(e) => setInc({ ...inc, [g.key]: e.target.checked })} /> {g.label}</label>)}
         </fieldset>
         <fieldset className="bulk-set">
           <legend>다운로드 형식</legend>
