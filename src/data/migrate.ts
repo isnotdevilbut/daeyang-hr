@@ -16,6 +16,7 @@ import { execPerTeam } from '../domain/execTeamsV17'
 import { versionScopesV30, versionSlotsV32 } from '../domain/versions'
 import { purgeInactiveV33 } from '../domain/org'
 import { stripVirtualV34 } from '../domain/demoV34'
+import { gradeQNoExecV35 } from '../domain/gradeQV35'
 import { execUpwardFormV27, execUpwardPairsV28, upwardDemoMoreV29, upwardExecV26, upwardFormV22, upwardPairedV31, upwardV18 } from '../domain/upward'
 import { joinAllStaff } from '../domain/joinAllV19'
 import { leadUpwardOpen, moreDemo } from '../domain/demoV20'
@@ -306,7 +307,13 @@ export function migrate(raw: any, opts: { until?: number } = {}): MigrationResul
     s.schemaVersion = 34
   }
 
-  if (s.schemaVersion !== 34) return null
+  if (s.schemaVersion === 34) {
+    // v34 → v35 (D-223): 임원평가에서 '종합 등급' 문항 빼기(팀장평가에는 그대로)
+    notes.push(...gradeQNoExecV35(s))
+    s.schemaVersion = 35
+  }
+
+  if (s.schemaVersion !== 35) return null
   return { state: s as AppState, notes }
 }
 
