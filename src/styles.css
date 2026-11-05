@@ -1682,3 +1682,9 @@ body.drag-sorting, body.drag-sorting * { cursor: grabbing !important; user-selec
 /* D-220: 대기 — 색·글자는 그대로, 크기·모양은 완료·미완료(.chip.stage)와 같게 */
 .chip.stage.locked { background: #eef0f4; color: #464d58; border-color: #d5d9e1; }
 .chip.stage.draft { background: var(--warn-bg); color: var(--warn); border-color: #f0c770; }
+/* D-224: 내 평가 목록(팀원 평가·상향평가) — 팀·대상자·상태·버튼 모두 칸 가운데, 칸 폭 같게(PC). 휴대폰 묶음 배치는 그대로 */
+@media (min-width: 641px) {
+  .task-tbl { table-layout: fixed; width: 100%; }
+  .task-tbl th, .task-tbl td { text-align: center !important; }
+  .task-tbl .tk-act { text-align: center; }
+}
