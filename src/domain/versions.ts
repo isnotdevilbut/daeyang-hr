@@ -4,7 +4,7 @@
 // - 한 배정에는 평가표 하나: 조건에 맞는 지정 버전이 하나면 그것, 없으면 공통 기본, 지정 버전이 둘 이상이면
 //   관리자가 고른 버전(versionPicks)이 없는 한 바꾸지 않고 "충돌"로 알린다(임의 우선순위 없음). 문항은 합치지 않는다
 // - 응답(작성 중·제출)이 있는 배정의 평가표는 조용히 바꾸지 않는다. 확정 회차는 다루지 않는다
-import type { AppState, Assignment, Cycle, EvaluatorRule, ID, Template, TemplateVersion, VersionScope } from './types'
+import type { AppState, Assignment, Cycle, EvaluatorRule, ID, SlotKey, Template, TemplateVersion, VersionScope } from './types'
 import { cloneQuestion, ctxFor, RULES, RULE_TEXT, applies } from './questions'
 import { pathFor } from './progress'
 import { templateFor } from './catalog'
@@ -17,7 +17,31 @@ export const activeVersions = (c: Pick<Cycle, 'versions'>) => (c.versions ?? [])
 export const liveVersions = (c: Pick<Cycle, 'versions'>) => activeVersions(c).filter((v) => !v.draft && v.scope.rules.length > 0)
 export const pickKey = (ids: ID[]) => [...ids].sort().join('|')
 
-export interface VersionCtx { rule: EvaluatorRule; teamId?: ID; positionId?: ID; employeeId?: ID }
+export type Tier = '사원' | '팀장' | '임원'
+export interface VersionCtx { rule: EvaluatorRule; teamId?: ID; positionId?: ID; employeeId?: ID; /** 평가받는 사람의 직급 구분(화살표 판단, D-211) */ tier?: Tier }
+
+// ── 평가 화살표 (D-211) ─────────────────────────────
+/** 화살표 8개: 평가하는 사람 → 평가받는 사람. 순서 = 화면 순서(1·2·3단계 → 상향평가) */
+export const SLOTS: { key: SlotKey; rule: EvaluatorRule; tier: Tier; from: string; to: string }[] = [
+  { key: 'self-member', rule: 'self', tier: '사원', from: '사원', to: '본인' },
+  { key: 'self-lead', rule: 'self', tier: '팀장', from: '팀장', to: '본인' },
+  { key: 'self-exec', rule: 'self', tier: '임원', from: '임원', to: '본인' },
+  { key: 'lead-member', rule: 'teamLead', tier: '사원', from: '팀장', to: '사원' },
+  { key: 'exec-member', rule: 'executive', tier: '사원', from: '임원', to: '사원' },
+  { key: 'exec-lead', rule: 'executive', tier: '팀장', from: '임원', to: '팀장' },
+  { key: 'up-lead', rule: 'upward', tier: '팀장', from: '사원', to: '팀장' },
+  { key: 'up-exec', rule: 'upward', tier: '임원', from: '사원·팀장', to: '임원' },
+]
+export const slotOf = (rule: EvaluatorRule, tier?: Tier): SlotKey | undefined => SLOTS.find((x) => x.rule === rule && x.tier === tier)?.key
+/** 화살표로 정하는 회차(D-211) — 버전 중 하나라도 slots가 있으면 */
+export const slotMode = (c: Pick<Cycle, 'versions'>) => (c.versions ?? []).some((v) => !!v.scope.slots)
+/** 화살표 목록으로 범위 만들기 — 평가 종류는 화살표에서, 팀·직급은 전체 */
+export const slotScope = (slots: SlotKey[]): VersionScope => {
+  const ks = SLOTS.filter((x) => slots.includes(x.key))
+  return { mode: 'custom', rules: [...new Set(ks.map((x) => x.rule))], teams: 'all', positions: 'all', slots: ks.map((x) => x.key) }
+}
+/** 이 화살표를 맡은 적용 중 평가표(없으면 undefined = 평가 미배치) */
+export const slotOwner = (c: Pick<Cycle, 'versions'>, key: SlotKey) => liveVersions(c).find((v) => v.scope.slots?.includes(key))
 export interface Resolution { templateId: ID | null; candidates: ID[]; conflict: boolean }
 
 /** 평가받는 사람 조건: 직접 선택한 사람(employees) 또는 팀, 그리고 직급 (D-087) */
@@ -39,6 +63,12 @@ export function narrower(a: VersionScope, b: VersionScope): boolean {
 export function resolveVersion(c: Pick<Cycle, 'versions' | 'versionPicks' | 'templateByJob'>, x: VersionCtx & { jobType?: string }): Resolution {
   if (!c.versions?.length) return { templateId: x.jobType ? templateFor(c, x.jobType) : templateFor(c, 'office'), candidates: [], conflict: false }
   const act = liveVersions(c)
+  // D-211: 화살표 방식 — 그 화살표를 맡은 평가표 하나(겹치지 않음). 맡은 평가표가 없으면 평가 미배치
+  if (slotMode(c)) {
+    const key = slotOf(x.rule, x.tier)
+    const own = key ? act.filter((v) => v.scope.slots?.includes(key)).map((v) => v.templateId) : []
+    return { templateId: own.length === 1 ? own[0] : null, candidates: own, conflict: own.length > 1 }
+  }
   // D-210: 전체 체크(전체 팀·전체 직급) 평가표는 더 좁게 고른 평가표가 없을 때만 — 이전 '모두에게 동일 적용'과 같은 순서
   const hit = act.filter((v) => v.scope.mode === 'custom' && inScope(v, x))
   const narrowHit = hit.filter((v) => !wideScope(v.scope))
@@ -61,7 +91,9 @@ export function resolveVersion(c: Pick<Cycle, 'versions' | 'versionPicks' | 'tem
 export function assignmentCtx(c: Cycle, a: Assignment): VersionCtx & { jobType?: string } {
   const t = c.targets.find((x) => x.employeeId === a.targetId)
   const rule: EvaluatorRule = a.direction === 'self' ? 'self' : a.direction === 'up' ? 'upward' : (t ? pathFor(c, t).find((st) => st.order === a.stageOrder)?.rule : undefined) ?? 'teamLead'
-  return { rule, teamId: t?.departmentId || undefined, positionId: t?.positionId, employeeId: a.targetId, jobType: t?.jobType }
+  // 평가받는 사람의 직급 구분: 회차 기록 기준. 대상자 명단에 없는 상향평가 대상은 임원(D-187)
+  const tier: Tier | undefined = t ? (t.isExecutive ? '임원' : t.isTeamLead ? '팀장' : '사원') : a.direction === 'up' ? '임원' : undefined
+  return { rule, teamId: t?.departmentId || undefined, positionId: t?.positionId, employeeId: a.targetId, jobType: t?.jobType, tier }
 }
 
 export type VersionProblem = { kind: 'conflict' | 'none' | 'empty'; a: Assignment; candidates: ID[] }
@@ -87,6 +119,10 @@ export const visibleCount = (t: Template, c: Cycle, a: Assignment) => t.sections
 /** 이번 회차 참여 대상자 중 이 범위(사람·팀·직급)에 드는 사람 — 최종 적용 인원 표시·빈 대상 검사 (D-087) */
 /** 대상자 명단에 없지만 상향평가를 받는 임원(D-187)도 센다 — 직접 선택한 사람으로만 판단(회차 정보가 없어 팀·직급은 모름, D-189) */
 export const scopeTargets = (c: Pick<Cycle, 'targets'> & Partial<Pick<Cycle, 'assignments'>>, sc: VersionScope): { employeeId: ID }[] => {
+  if (sc.slots) { // D-211: 화살표에 해당하는 배정의 평가받는 사람
+    const cc = c as Cycle
+    return [...new Set((cc.assignments ?? []).filter((a) => !a.excluded && sc.slots!.includes(slotOf(assignmentCtx(cc, a).rule, assignmentCtx(cc, a).tier) as SlotKey)).map((a) => a.targetId))].map((employeeId) => ({ employeeId }))
+  }
   const extra = [...new Set((c.assignments ?? []).filter((a) => a.direction === 'up' && !a.excluded && !c.targets.some((t) => t.employeeId === a.targetId)).map((a) => a.targetId))]
     .map((employeeId) => ({ employeeId }))
   if (sc.mode === 'all') return [...c.targets, ...(sc.rules.includes('upward') ? extra : [])]
@@ -99,6 +135,7 @@ export const scopeTargets = (c: Pick<Cycle, 'targets'> & Partial<Pick<Cycle, 'as
 /** 공통 기본(모두에게 동일 적용)은 평가 유형별로 하나만 */
 export function scopeErrors(c: Pick<Cycle, 'versions'>, templateId: ID, scope: VersionScope): string[] {
   const e: string[] = []
+  if (scope.slots) { if (!scope.slots.length) e.push('이 평가표가 맡을 평가(화살표)를 하나 이상 고르세요.'); return e } // D-211: 화살표는 겹치지 않음
   if (!scope.rules.length) e.push('적용 평가를 하나 이상 고르세요.')
   if (scope.mode === 'custom') {
     if (scope.employees && !scope.employees.length) e.push('적용할 사람을 한 명 이상 고르세요(또는 전체 팀).')
@@ -158,13 +195,12 @@ export function applyVersion(s: Pick<AppState, 'responses'>, c: Cycle, templateI
   if (!tpl || !tpl.sections.some((sec) => sec.questions.some((q) => q.active))) errors.push('문항이 없습니다. 문항을 추가한 뒤 적용하세요.')
   if (scope.mode === 'custom' && !errors.some((x) => x.startsWith('적용할 사람') || x.startsWith('적용 팀') || x.startsWith('적용 직급')) && !scopeTargets(c, scope).length) errors.push('조건에 맞는 이번 회차 대상자가 없습니다.')
   if (activeVersions(c).some((x) => x.templateId !== templateId && x.name === name.trim())) errors.push(`'${name.trim()}' 이름이 이미 있습니다.`)
-  const trial = structuredClone(c)
-  trial.versions = trial.versions!.map((x) => (x.templateId === templateId ? { templateId, name: name.trim(), scope } : x))
+  const trial = withScope(c, templateId, name.trim(), scope)
   trial.versionPicks = picks
   const conflicts = applyVersions(s, trial).filter((x) => x.kind === 'conflict')
   if (conflicts.length) errors.push('겹치는 평가가 있습니다. 적용할 버전을 고르거나 조건을 고치세요.')
   if (errors.length) return { errors, conflicts }
-  c.versions = c.versions!.map((x) => (x.templateId === templateId ? { templateId, name: name.trim(), scope } : x)) // draft·pending 해제
+  c.versions = withScope(c, templateId, name.trim(), scope).versions // draft·pending 해제. 화살표는 다른 평가표에서 옮겨 옴(D-211)
   c.templates[templateId].name = name.trim()
   c.versionPicks = picks
   applyVersions(s, c)
@@ -210,5 +246,50 @@ export function scopesToCustom(c: Cycle): number {
 export function versionScopesV30(s: AppState): string[] {
   const notes: string[] = []
   for (const c of s.cycles) { const n = scopesToCustom(c); if (n) notes.push(`${c.name}: '모두에게 동일 적용' 평가표 ${n}개 → 전체 체크(적용 대상 그대로)`) }
+  return notes
+}
+
+/**
+ * 이 평가표의 범위를 바꾼 회차 사본(D-211): 화살표는 한 평가표만 — 이 평가표가 맡은 화살표를 다른 평가표(적용 중·초안·수정 초안)에서 뺀다.
+ * 적용 전 미리보기와 적용이 같은 함수를 쓴다
+ */
+export function withScope(c: Cycle, templateId: ID, name: string, scope: VersionScope): Cycle {
+  const t = structuredClone(c)
+  const mine = scope.slots ?? []
+  const strip = (sc: VersionScope) => (sc.slots && mine.some((k) => sc.slots!.includes(k)) ? slotScope(sc.slots.filter((k) => !mine.includes(k))) : sc)
+  t.versions = (t.versions ?? []).map((x) => x.templateId === templateId ? { templateId, name, scope } : { ...x, scope: strip(x.scope), ...(x.pending ? { pending: { ...x.pending, scope: strip(x.pending.scope) } } : {}) })
+  return t
+}
+
+/**
+ * D-211: 평가표 범위를 화살표로 — 지금 누가 어떤 평가표를 받는지 그대로 화살표에 옮긴다(화살표마다 지금 쓰이는 평가표 하나).
+ * 수정 초안(pending)·초안 버전은 적용 평가 × 직급 조건에 맞는 화살표로(이미 다른 평가표가 맡은 화살표는 빼지 않고 적용 때 옮김).
+ * 준비·진행 회차만, 이미 화살표 방식이면 그대로. 팀·사람 단위 조건은 쓰지 않게 됨
+ */
+export function toSlots(s: Pick<AppState, 'employees' | 'positions'>, c: Cycle): boolean {
+  if (!c.versions?.length || slotMode(c) || (c.status !== '준비' && c.status !== '진행')) return false
+  const tierPos = (tier: Tier) => (s.positions ?? []).find((p) => p.evalClass === tier)?.id
+  const tierOfT = (t: Cycle['targets'][number]): Tier => (t.isExecutive ? '임원' : t.isTeamLead ? '팀장' : '사원')
+  const owner = new Map<SlotKey, ID>()
+  for (const sl of SLOTS) {
+    // 대표 평가받는 사람: 그 직급의 회차 대상자(상향평가 임원은 참여 임원) — 없으면 직급만으로
+    const t = c.targets.find((x) => tierOfT(x) === sl.tier)
+    const ex = sl.key === 'up-exec' ? s.employees.find((e) => e.active && e.isExecutive && !e.isCeo && !(c.execOff ?? []).includes(e.id)) : undefined
+    const ctx: VersionCtx = t ? { rule: sl.rule, teamId: t.departmentId || undefined, positionId: t.positionId, employeeId: t.employeeId } : { rule: sl.rule, teamId: ex?.teamId, positionId: ex?.positionId ?? tierPos(sl.tier), employeeId: ex?.id }
+    const r = resolveVersion(c, ctx)
+    if (r.templateId) owner.set(sl.key, r.templateId)
+  }
+  const guess = (sc: VersionScope): SlotKey[] => SLOTS.filter((sl) => sc.rules.includes(sl.rule) && (sc.positions === 'all' || sc.positions.includes(tierPos(sl.tier) ?? ''))).map((x) => x.key)
+  c.versions = c.versions.map((v) => {
+    const live = !v.archived && !v.draft && v.scope.rules.length > 0
+    const scope = live ? slotScope(SLOTS.filter((sl) => owner.get(sl.key) === v.templateId).map((x) => x.key)) : slotScope(guess(v.scope))
+    return { ...v, scope, ...(v.pending ? { pending: { ...v.pending, scope: slotScope(guess(v.pending.scope)) } } : {}) }
+  })
+  return true
+}
+/** v31 → v32 (D-211): 준비·진행 회차의 평가표 범위를 화살표로(누가 어떤 평가표를 받는지 그대로). 반복 안전 */
+export function versionSlotsV32(s: AppState): string[] {
+  const notes: string[] = []
+  for (const c of s.cycles) if (toSlots(s, c)) notes.push(`${c.name}: 평가표 적용 범위를 화살표(누가 → 누구를)로`)
   return notes
 }

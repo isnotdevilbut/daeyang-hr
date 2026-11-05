@@ -3,7 +3,7 @@ import type { AppState, Assignment, Cycle, Employee, PathPolicy, Stage, TargetSn
 import { DRAFT_ID } from './templates'
 import { templateFor } from './catalog'
 import { ensureExecUpward, ensureUpwardTemplate, syncUpward } from './upward'
-import { applyVersions, ensureVersions, scopesToCustom } from './versions'
+import { applyVersions, ensureVersions, scopesToCustom, toSlots } from './versions'
 import { cycleExecs, distributeExecs } from './execPlan'
 
 export { cycleExecs }
@@ -153,7 +153,7 @@ export function createCycle(
   if (!oneExec) distributeExecs(s, cycle)
   ensureVersions(cycle) // 평가표 버전: 지금 문항을 "공통 평가표"로 (D-082)
   if (upward) { cycle.upwardToExec = true; ensureUpwardTemplate(cycle); ensureExecUpward(s, cycle); syncUpward(s, cycle) } // 팀원→팀장평가 평가표·배정 (D-114)
-  if (upward) scopesToCustom(cycle) // D-210: 모든 평가표는 체크 방식(전체 체크)
+  if (upward) { scopesToCustom(cycle); toSlots(s, cycle); applyVersions(s, cycle) } // D-210·D-211: 평가표 범위 = 화살표(누가 → 누구를)
   return cycle
 }
 
@@ -191,7 +191,7 @@ export function cloneCycle(s: AppState, src: Cycle, name: string): Cycle {
   }
   c.assignments = buildAssignments(s, c)
   distributeExecs(s, c)
-  scopesToCustom(c) // D-210: 원본이 이전 방식('모두에게 동일 적용')이어도 새 평가는 체크 방식
+  scopesToCustom(c); toSlots(s, c) // D-210·D-211: 원본이 이전 방식이어도 새 평가는 화살표 방식
   syncUpward(s, c) // 원본에 팀원→팀장 평가표가 있으면 함께 (D-114)
   applyVersions(s, c)
   return c

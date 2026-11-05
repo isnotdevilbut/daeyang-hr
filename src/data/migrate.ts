@@ -13,7 +13,7 @@ import { syncCycle } from '../domain/cycleSync'
 import { v15 } from '../domain/demoV15'
 import { leadBlendV25, scoringV16 } from '../domain/scoringV16'
 import { execPerTeam } from '../domain/execTeamsV17'
-import { versionScopesV30 } from '../domain/versions'
+import { versionScopesV30, versionSlotsV32 } from '../domain/versions'
 import { execUpwardFormV27, execUpwardPairsV28, upwardDemoMoreV29, upwardExecV26, upwardFormV22, upwardPairedV31, upwardV18 } from '../domain/upward'
 import { joinAllStaff } from '../domain/joinAllV19'
 import { leadUpwardOpen, moreDemo } from '../domain/demoV20'
@@ -23,7 +23,8 @@ import { tierOf } from '../domain/org'
 export interface MigrationResult { state: AppState; notes: string[] }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-export function migrate(raw: any): MigrationResult | null {
+/** opts.until: 그 버전까지만(시험용 — 마지막 단계 하나 앞에서 멈춤). 화면은 항상 끝까지 */
+export function migrate(raw: any, opts: { until?: number } = {}): MigrationResult | null {
   if (!raw || typeof raw !== 'object') return null
   const notes: string[] = []
   const s = structuredClone(raw)
@@ -284,7 +285,14 @@ export function migrate(raw: any): MigrationResult | null {
     s.schemaVersion = 31
   }
 
-  if (s.schemaVersion !== 31) return null
+  if (opts.until === 31 && s.schemaVersion === 31) return { state: s as AppState, notes }
+  if (s.schemaVersion === 31) {
+    // v31 → v32 (D-211): 평가표 범위를 화살표(누가 → 누구를)로 — 누가 어떤 평가표를 받는지 그대로, 준비·진행 회차만
+    notes.push(...versionSlotsV32(s))
+    s.schemaVersion = 32
+  }
+
+  if (s.schemaVersion !== 32) return null
   return { state: s as AppState, notes }
 }
 

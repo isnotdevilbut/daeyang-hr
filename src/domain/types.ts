@@ -191,7 +191,10 @@ export interface Assignment {
  * employees(D-087) = 직접 선택한 평가받는 사람(직원 ID). 있으면 teams 대신 이 목록으로 대상을 고른다(새 직원 자동 포함 없음, 이름·팀이 바뀌어도 유지).
  * 없으면 이전 방식(팀 단위 — 그 팀의 대상자 전체). positions는 어느 쪽이든 함께 충족해야 함
  */
-export interface VersionScope { mode: 'all' | 'custom'; rules: EvaluatorRule[]; teams: 'all' | ID[]; positions: 'all' | ID[]; employees?: ID[] }
+/** 평가 화살표(D-211): 누가 → 누구를. 평가 종류 × 평가받는 사람의 직급 구분 — 한 화살표는 평가표 하나만 맡음 */
+export type SlotKey = 'self-member' | 'self-lead' | 'self-exec' | 'lead-member' | 'exec-member' | 'exec-lead' | 'up-lead' | 'up-exec'
+/** slots가 있으면(D-211) 그 화살표만 맡음 — rules는 slots의 평가 종류, 팀·직급·사람 조건은 쓰지 않음(전체) */
+export interface VersionScope { mode: 'all' | 'custom'; rules: EvaluatorRule[]; teams: 'all' | ID[]; positions: 'all' | ID[]; employees?: ID[]; slots?: SlotKey[] }
 /**
  * draft = 아직 적용하지 않은 초안 버전(평가표 선택·배정·점수에 쓰이지 않음, D-085).
  * pending = 적용 중인 버전의 이름·적용 범위를 고친 초안(적용 전까지 name·scope가 그대로 쓰임)

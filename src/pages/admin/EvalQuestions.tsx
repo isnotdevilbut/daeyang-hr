@@ -18,8 +18,8 @@ import type { Sheet } from '../../domain/xlsx'
 import { jobName, positionName, positionsOf } from '../../domain/catalog'
 import { activeTeams } from '../../domain/org'
 import { pointsErrors, usesPoints } from '../../domain/points'
-import { activeVersions, liveVersions, addVersion, applyVersion, applyVersions, blankTemplate, cloneTemplate, deleteVersion, pickKey, resolveVersion, saveVersionDraft, scopeTargets, versionUsed, type VersionProblem } from '../../domain/versions'
-import type { AppState, TemplateVersion, VersionScope } from '../../domain/types'
+import { activeVersions, liveVersions, addVersion, applyVersion, applyVersions, blankTemplate, cloneTemplate, deleteVersion, pickKey, resolveVersion, saveVersionDraft, scopeTargets, slotMode, slotScope, SLOTS, versionUsed, withScope, type VersionProblem } from '../../domain/versions'
+import type { AppState, SlotKey, TemplateVersion, VersionScope } from '../../domain/types'
 
 /** 끌어서 옮길 자리: list = 영역 번호(영역을 옮길 때는 0), slot = 그 목록에서 끼워 넣을 자리(0 ~ 개수) */
 type DragPos = { list: number; slot: number }
@@ -436,7 +436,7 @@ function Preview({ t: current, cycle, onClose }: { t: Template; cycle: Cycle; on
   // 적용 전 초안(또는 적용 평가가 빈 버전)을 열고 있으면 그 버전 문항을 그대로 미리보기 — 실제 배정·선택에는 쓰이지 않음 (D-085)
   const curV = cycle.versions?.find((v) => v.templateId === current.id)
   const draftPreview = versioned && !!curV && !liveVersions(cycle).includes(curV)
-  const res = versioned && !draftPreview ? resolveVersion(cycle, { rule, teamId: team, positionId: pos, employeeId: who || undefined, jobType: job }) : null
+  const res = versioned && !draftPreview ? resolveVersion(cycle, { rule, teamId: team, positionId: pos, employeeId: who || undefined, jobType: job, tier: positionsOf(s).find((p) => p.id === pos)?.evalClass }) /* 화살표 방식은 평가받는 사람의 직급 구분으로(D-211) */ : null
   const t = versioned && !draftPreview ? (res?.templateId ? cycle.templates[res.templateId] : undefined) : current
   const vName = (id: string) => cycle.versions?.find((v) => v.templateId === id)?.name ?? id
   const isLead = versioned ? posLead : lead
@@ -736,13 +736,13 @@ function VersionBar({ cycle, selected, onSelect }: { cycle: Cycle; selected: str
   const uniqueName = (base: string) => { let n = base, i = 2; while (list.some((v) => v.name === n)) n = `${base} ${i++}`; return n }
   const add = () => {
     const t = blankTemplate(uniqueName('새 평가표'))
-    mutC((c) => addVersion(c, t, t.name, { mode: 'custom', rules: [], teams: 'all', positions: 'all' }))
+    mutC((c) => addVersion(c, t, t.name, slotMode(c) ? slotScope([]) : { mode: 'custom', rules: [], teams: 'all', positions: 'all' }))
     onSelect(t.id); setMsg('빈 평가표를 초안으로 만들었습니다.')
   }
   const dup = () => {
     if (!cur) return
     const t = cloneTemplate(cycle.templates[cur.templateId], uniqueName(`${cur.name} 복사`))
-    mutC((c) => addVersion(c, t, t.name, { mode: 'custom', rules: [], teams: 'all', positions: 'all' })) // 복제본은 범위를 정하기 전까지 적용 안 됨
+    mutC((c) => addVersion(c, t, t.name, slotMode(c) ? slotScope([]) : { mode: 'custom', rules: [], teams: 'all', positions: 'all' })) // 복제본은 범위를 정하기 전까지 적용 안 됨
     onSelect(t.id); setMsg(`'${cur.name}'을(를) 초안으로 복제했습니다.`)
   }
   const remove = () => {
@@ -786,6 +786,7 @@ function ScopeEditor({ cycle, v, onDup, onRemove, msg, setMsg }: { cycle: Cycle;
   const [conf, setConf] = useState<VersionProblem[]>([]) // 적용을 눌렀을 때만 계산·표시
   const dirty = name !== stored.name || JSON.stringify(scope) !== JSON.stringify(stored.scope)
   const live = !v.draft
+  const arrows = !!scope.slots // D-211: 화살표(평가자 → 평가대상) 방식 회차
   const positions = positionsOf(s)
   const vName = (id: string) => cycle.versions?.find((x) => x.templateId === id)?.name ?? id
   const groups = new Map<string, { ids: string[]; n: number; who: string[] }>()
@@ -798,9 +799,8 @@ function ScopeEditor({ cycle, v, onDup, onRemove, msg, setMsg }: { cycle: Cycle;
   // D-125: 적용 전에 미리 — 지금 고른 조건대로 적용하면 평가표가 없어지는(또는 겹치는) 평가. 지금 상태에 이미 있는 문제는 빼고 새로 생기는 것만
   const before = applyVersions(s, structuredClone(cycle)).map((p) => `${p.kind}|${p.a.id}`)
   const preview = (() => {
-    if (!dirty || !scope.rules.length) return [] as VersionProblem[]
-    const trial = structuredClone(cycle)
-    trial.versions = (trial.versions ?? []).map((x) => (x.templateId === v.templateId ? { templateId: x.templateId, name: name.trim() || x.name, scope } : x))
+    if (!dirty || (!scope.slots && !scope.rules.length)) return [] as VersionProblem[]
+    const trial = withScope(cycle, v.templateId, name.trim() || v.name, scope) // 화살표는 다른 평가표에서 옮겨 옴(D-211)
     trial.versionPicks = picks
     return applyVersions(s, trial).filter((p) => (p.kind === 'none' || p.kind === 'conflict') && !before.includes(`${p.kind}|${p.a.id}`))
   })()
@@ -827,7 +827,7 @@ function ScopeEditor({ cycle, v, onDup, onRemove, msg, setMsg }: { cycle: Cycle;
         <button className="btn small" onClick={onDup}>복제</button>
         <button className="btn small danger" onClick={onRemove}>삭제</button>
       </div>
-      <div className="scope-grid">
+      {arrows ? <SlotPicker cycle={cycle} v={v} scope={scope} setScope={setScope} /> : <div className="scope-grid">
         <fieldset className="scope-set"><legend>적용 평가</legend>
           {RULES.map((r) => <label key={r} className="check"><input type="checkbox" checked={scope.rules.includes(r)} onChange={(e) => setScope({ ...scope, rules: RULES.filter((x) => (x === r ? e.target.checked : scope.rules.includes(x))) })} /> {RULE_TEXT[r]}</label>)}
         </fieldset>
@@ -838,20 +838,20 @@ function ScopeEditor({ cycle, v, onDup, onRemove, msg, setMsg }: { cycle: Cycle;
             {positions.map((p) => <label key={p.id} className="check"><input type="checkbox" disabled={scope.positions === 'all'} checked={scope.positions === 'all' || scope.positions.includes(p.id)} onChange={(e) => setScope({ ...scope, positions: toggle(scope.positions === 'all' ? [] : scope.positions, p.id, e.target.checked) })} /> {p.name}</label>)}
           </fieldset>
         </>}
-      </div>
+      </div>}
       {/* D-155: 공통 기본 평가표의 '이 평가표는 적용 평가 중 …' 안내는 표시하지 않음 */}
       {/* D-122: 팀·직급·사람 조건은 평가받는 사람 기준 — 팀원→팀장평가는 평가받는 사람이 팀장(평가하는 팀원이 아님) */}
-      {scope.rules.includes('upward') && <p className="muted small scope-hint">팀·직급·사람은 <b>평가받는 사람</b> 기준이에요. 상향평가는 평가받는 사람이 <b>팀장·임원</b>이라, 직급을 고를 때 '팀장'·'임원'을 넣어야 해요.</p>}
+      {!arrows && scope.rules.includes('upward') && <p className="muted small scope-hint">팀·직급·사람은 <b>평가받는 사람</b> 기준이에요. 상향평가는 평가받는 사람이 <b>팀장·임원</b>이라, 직급을 고를 때 '팀장'·'임원'을 넣어야 해요.</p>}
       {preview.length > 0 && (
         <div className="feedback fail scope-preview" role="status">
           ⚠ 이대로 적용하면 — {problemText(cycle, preview, s)}
-          <div className="muted small">이대로면 위 평가는 어느 평가표에도 체크되지 않아 '평가 미배치'가 돼요. 이 평가표에 다시 체크하거나, 그 평가를 맡을 다른 평가표에서 체크하세요(팀·직급·사람은 평가받는 사람 기준).</div>
+          <div className="muted small">{arrows ? "이대로면 위 평가는 어느 평가표도 맡지 않아 '평가 미배치'가 돼요. 그 화살표를 이 평가표나 다른 평가표에서 골라 주세요." : "이대로면 위 평가는 어느 평가표에도 체크되지 않아 '평가 미배치'가 돼요. 이 평가표에 다시 체크하거나, 그 평가를 맡을 다른 평가표에서 체크하세요(팀·직급·사람은 평가받는 사람 기준)."}</div>
         </div>
       )}
       {(
         <p className="scope-summary" role="status">
           <b>적용 대상(평가받는 사람) {scopeTargets(cycle, scope).length}명</b>
-          <span className="muted"> · 이번 회차 참여자 중 {scope.employees ? `직접 선택 ${scope.employees.length}명` : scope.teams === 'all' ? '전체 팀' : `팀 ${scope.teams.length}개`}{scope.positions === 'all' ? '' : ` · 직급 ${scope.positions.length}개`} 조건을 모두 충족 · 적용 평가 {scope.rules.map((r) => RULE_TEXT[r]).join('·') || '없음'}</span>
+          {!arrows && <span className="muted"> · 이번 회차 참여자 중 {scope.employees ? `직접 선택 ${scope.employees.length}명` : scope.teams === 'all' ? '전체 팀' : `팀 ${scope.teams.length}개`}{scope.positions === 'all' ? '' : ` · 직급 ${scope.positions.length}개`} 조건을 모두 충족 · 적용 평가 {scope.rules.map((r) => RULE_TEXT[r]).join('·') || '없음'}</span>}
         </p>
       )}
       {groups.size > 0 && (
@@ -973,5 +973,43 @@ function Problems({ cycle }: { cycle: Cycle }) {
       <div>⚠ 평가표 확인 필요 — {(['conflict', 'none', 'empty'] as const).filter((k) => by(k).length).map((k) => `${label[k]}: ${part(by(k))}`).join(' · ')}</div>
       {by('none').length > 0 && <div className="muted small">평가 미배치 = 어느 평가표에도 체크되지 않은 평가예요. 그 평가를 맡을 평가표에서 적용 평가·팀(사람)·직급에 그 사람을 체크하고 적용하면 사라져요 — 팀·직급·사람은 평가받는 사람 기준(예: 상향평가는 팀장·임원).</div>}
     </div>
+  )
+}
+
+/**
+ * 평가자 → 평가대상 화살표(D-211): 이 평가표가 맡을 평가를 누른다. 한 화살표는 평가표 하나만 —
+ * 다른 평가표가 맡은 화살표를 누르면 적용할 때 이 평가표로 옮겨 오고, 아무 평가표도 맡지 않은 화살표는 '평가 미배치'
+ */
+const SLOT_GROUPS: { title: React.ReactNode; keys: SlotKey[] }[] = [
+  { title: <><span className="stage-no">1단계</span> 자기평가</>, keys: ['self-member', 'self-lead', 'self-exec'] },
+  { title: <><span className="stage-no">2단계</span> 팀장평가</>, keys: ['lead-member'] },
+  { title: <><span className="stage-no">3단계</span> 임원평가</>, keys: ['exec-member', 'exec-lead'] },
+  { title: <>상향평가</>, keys: ['up-lead', 'up-exec'] },
+]
+function SlotPicker({ cycle, v, scope, setScope }: { cycle: Cycle; v: TemplateVersion; scope: VersionScope; setScope: (x: VersionScope) => void }) {
+  const mine = scope.slots ?? []
+  const other = (k: SlotKey) => liveVersions(cycle).find((x) => x.templateId !== v.templateId && x.scope.slots?.includes(k))
+  const flip = (k: SlotKey) => setScope(slotScope(mine.includes(k) ? mine.filter((x) => x !== k) : [...mine, k]))
+  return (
+    <fieldset className="scope-set slot-set"><legend>평가자 → 평가대상 <span className="muted small">이 평가표를 쓸 평가를 누르세요</span></legend>
+      {SLOT_GROUPS.map((g, i) => (
+        <div key={i} className="slot-row">
+          <div className="slot-row-title">{g.title}</div>
+          <div className="slot-btns">
+            {g.keys.map((k) => {
+              const sl = SLOTS.find((x) => x.key === k)!
+              const on = mine.includes(k)
+              const o = other(k)
+              return (
+                <button key={k} type="button" className={`slot-btn ${on ? 'on' : o ? 'taken' : 'free'}`} aria-pressed={on} onClick={() => flip(k)} title={`${sl.from}이(가) ${sl.to === '본인' ? '본인을' : `${sl.to}을(를)`} 평가`}>
+                  <span className="slot-arrow"><b>{sl.from}</b> → <b>{sl.to}</b></span>
+                  <span className="slot-state">{on ? (o ? `✓ ${o.name}에서 옮겨 옴` : '✓ 이 평가표') : o ? `${o.name} 사용 중` : '평가 미배치'}</span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      ))}
+    </fieldset>
   )
 }
