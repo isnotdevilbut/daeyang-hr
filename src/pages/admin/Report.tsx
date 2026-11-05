@@ -268,7 +268,8 @@ export function ReportSheet({ s, cycle, parts, m }: { s: AppState; cycle: Cycle;
 function Answers({ title, as, qs, s, cycle, showWho, name }: { title: string; as: Assignment[]; qs: Question[]; s: AppState; cycle: Cycle; showWho?: boolean; name?: (id: string) => string }) {
   return (
     <div className="rp-block">
-      <h3>{title}</h3>
+      {/* D-227: 담당자가 한 명이면 제목과 같은 줄에(팀장평가 이준호) — 여럿이면 사람마다 줄 */}
+      {(() => { const one = showWho && name && as.length === 1 ? as[0] : null; return <h3>{title}{one && <span className="rp-who-inline">{name!(one.evaluatorId)}{s.responses[one.id]?.status !== 'submitted' && <span className="muted"> · 미제출</span>}</span>}</h3> })()}
       {as.map((a) => {
         const resp = s.responses[a.id]
         const tpl = cycle.templates[a.templateId]
@@ -277,7 +278,7 @@ function Answers({ title, as, qs, s, cycle, showWho, name }: { title: string; as
         if (!rows.length) return null
         return (
           <div key={a.id} className="rp-eval">
-            {showWho && name && <div className="rp-who">{name(a.evaluatorId)}{resp?.status !== 'submitted' && <span className="muted"> · 미제출</span>}</div>}
+            {showWho && name && as.length > 1 && <div className="rp-who">{name(a.evaluatorId)}{resp?.status !== 'submitted' && <span className="muted"> · 미제출</span>}</div>}
             <table><tbody>
               {resp?.status !== 'submitted'
                 ? <tr><td className="muted" colSpan={2}>(미제출)</td></tr>

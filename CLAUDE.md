@@ -1,6 +1,6 @@
 # 대양롤랜트 인사평가 목업 — 작업 안내 (Claude Code용)
 
-이 파일은 새 계정·새 세션의 Claude Code가 이 폴더를 열면 자동으로 읽는다. 자세한 결정 이력은 `docs/decisions.md`(D-001 ~ D-226)에 있다.
+이 파일은 새 계정·새 세션의 Claude Code가 이 폴더를 열면 자동으로 읽는다. 자세한 결정 이력은 `docs/decisions.md`(D-001 ~ D-227)에 있다.
 
 ## 무엇인가
 - 대양롤랜트(주) 인사평가 **목업**(가상 데이터). Vite + React 18 + TypeScript, HashRouter, 테스트 vitest.
