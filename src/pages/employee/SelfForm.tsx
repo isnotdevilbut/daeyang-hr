@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Link, Navigate, useParams } from 'react-router-dom'
 import { useAppState } from '../../data/store'
 import { secTitle, t, useLang } from '../../i18n'
@@ -30,18 +30,10 @@ function Flow({ cycle, aid }: { cycle: Cycle; aid: string }) {
   const sections = visibleSections(tpl, qctx)
   const ed = useResponseEditor(aid, lang)
   const [viewSubmitted, setViewSubmitted] = useState(false)
-  const [failNext, setFailNext] = useState(false)
   const prog = requiredProgress(tpl, qctx, ed.answers)
 
-  // 실수로 나가려 할 때 저장 안 된 변경 경고
-  useEffect(() => {
-    if (ed.saveState !== 'dirty') return
-    const h = (e: BeforeUnloadEvent) => { e.preventDefault() }
-    window.addEventListener('beforeunload', h)
-    return () => window.removeEventListener('beforeunload', h)
-  }, [ed.saveState])
-
-  const save = async () => { await ed.saveDraft(failNext ? 1 : 0); setFailNext(false) }
+  // D-222: 나가기 경고 대신 자동 저장(입력이 멈추면·화면을 나갈 때) — useResponseEditor
+  const save = async () => { await ed.saveDraft() }
   const submit = async () => {
     if (prog.missing.length) return
     if (!confirm(t('form.confirmSubmit', lang))) return
@@ -104,10 +96,6 @@ function Flow({ cycle, aid }: { cycle: Cycle; aid: string }) {
       beforeNext={async () => { if (ed.saveState === 'dirty') await ed.saveDraft() }}
       onSubmit={submit}
       passedKey={`daeyang-hr-passed-${aid}`}
-    >
-      <label className="muted" style={{ display: 'block', marginTop: 30, fontSize: 14 }}>
-        <input type="checkbox" checked={failNext} onChange={(e) => setFailNext(e.target.checked)} /> {t('form.failDemo', lang)}
-      </label>
-    </ResponsePager>
+    />
   )
 }
