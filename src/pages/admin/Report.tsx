@@ -186,9 +186,9 @@ export function sheetModel(s: AppState, cycle: Cycle, t: TargetSnapshot, parts: 
     on('info.team') && ['팀', t.teamName],
     on('info.position') && ['직급', targetPosition(s, cycle, t)],
     on('info.job') && ['직무', jobName(s, t.jobType)],
-    on('cycle.name') && ['평가 회차', cycle.name],
-    on('cycle.period') && ['평가 기간', cycle.period || '—'],
   ].filter(Boolean) as [string, ReactNode][]
+  // D-226: 평가 회차·기간은 인적 사항 표 위 캡션으로
+  const caption = [on('cycle.name') && ['평가 회차', cycleLabel(cycle)], on('cycle.period') && ['평가 기간', cycle.period || '—']].filter(Boolean) as [string, string][]
   const qShown = (prefix: string, qs: Question[]) => qs.filter((q) => on(`${prefix}:q:${q.id}`))
   const selfQ = qShown('self', parts.selfQ), leadQ = qShown('lead', parts.leadQ), execQ = qShown('exec', parts.execQ)
   const execShown = parts.exec.filter((a) => on(`exec:e:${a.evaluatorId}`))
@@ -196,9 +196,9 @@ export function sheetModel(s: AppState, cycle: Cycle, t: TargetSnapshot, parts: 
   const scoreRows = on('scores.base') || on('scores.kpi') || on('scores.final')
   const showNote = on('note') && !!noteText
   const stagesShown = r.stages.filter((st) => on(`stage:${st.order}`)) // D-225: 단계마다 포함 여부
-  const empty = !info.length && !selfQ.length && !leadQ.length && !(execShown.length && execQ.length) && !stagesShown.length && !scoreRows && !showNote
+  const empty = !info.length && !caption.length && !selfQ.length && !leadQ.length && !(execShown.length && execQ.length) && !stagesShown.length && !scoreRows && !showNote
   const complete = !r.combined.incomplete && r.grade !== null
-  return { r, info, selfQ, leadQ, execQ, execShown, history, scoreRows, showNote, noteText, empty, complete, on, stagesShown }
+  return { r, info, caption, selfQ, leadQ, execQ, execShown, history, scoreRows, showNote, noteText, empty, complete, on, stagesShown }
 }
 
 /** 리포트 본문(A4 한 장 분량 — 길면 다음 쪽으로) */
@@ -207,18 +207,20 @@ export function ReportSheet({ s, cycle, parts, m }: { s: AppState; cycle: Cycle;
   return (
     <div className="a4">
       <div className="watermark">{complete ? '검토용 초안' : '미완료 초안'}</div>
-      <div className="row" style={{ marginBottom: 6 }}>
-        <img src={logoKo} alt="ROLLENT 대양롤랜트(주)" style={{ height: 34 }} />
+      {/* D-226: 머리 부분을 한 줄로 — 로고 · 제목 · 비공개 표시 */}
+      <div className="rp-head">
+        <img src={logoKo} alt="ROLLENT 대양롤랜트(주)" />
+        <h1>개인 인사평가 리포트</h1>
+        <span className="muted">내부 보관 자료 · 직원 비공개</span>
       </div>
-      <h1>개인 인사평가 리포트</h1>
-      <div className="muted">내부 보관 자료 · 직원 비공개</div>
       {m.empty && <p className="report-empty">포함한 항목이 없습니다.</p>}
+      {/* 평가 회차·기간 = 인적 사항 표 위 캡션, 인적 사항 = 가로 한 줄(머리글 + 값) */}
+      {m.caption.length > 0 && <div className="rp-caption">{m.caption.map(([k, v]) => <span key={k} className="rp-cap-item" data-k={k} data-v={v}><b>{k}</b> {v}</span>)}</div>}
       {info.length > 0 && (
-        <table className="rp-info"><tbody>
-          {pairs(info).map((row, i) => (
-            <tr key={i}>{row.map(([k, v]) => [<th key={`${k}h`}>{k}</th>, <td key={`${k}d`}>{v}</td>])}{row.length === 1 && <td className="rp-blank" colSpan={2} />}</tr>
-          ))}
-        </tbody></table>
+        <table className="rp-info rp-info-row">
+          <thead><tr>{info.map(([k]) => <th key={k}>{k}</th>)}</tr></thead>
+          <tbody><tr>{info.map(([k, v]) => <td key={k}>{v}</td>)}</tr></tbody>
+        </table>
       )}
       {selfQ.length > 0 && <Answers title="자기평가" as={parts.self} qs={selfQ} s={s} cycle={cycle} />}
       {leadQ.length > 0 && <Answers title="팀장평가" as={parts.lead} qs={leadQ} s={s} cycle={cycle} showWho name={parts.name} />}
@@ -262,7 +264,6 @@ export function ReportSheet({ s, cycle, parts, m }: { s: AppState; cycle: Cycle;
 }
 
 /** 기본 정보를 한 줄에 두 칸씩 — 해제한 칸은 비우지 않고 당겨서 채움 */
-function pairs<T>(xs: T[]): T[][] { const out: T[][] = []; for (let i = 0; i < xs.length; i += 2) out.push(xs.slice(i, i + 2)); return out }
 
 function Answers({ title, as, qs, s, cycle, showWho, name }: { title: string; as: Assignment[]; qs: Question[]; s: AppState; cycle: Cycle; showWho?: boolean; name?: (id: string) => string }) {
   return (
@@ -297,8 +298,16 @@ export const REPORT_HEAD = ['구분', '항목', '내용', '값', '비고']
 export function reportRows(a4: HTMLElement): string[][] {
   const out: string[][] = []
   let section = '기본 정보'
-  a4.querySelectorAll('h3, table tr, .rp-note').forEach((el) => {
+  a4.querySelectorAll('h3, table tr, .rp-note, .rp-cap-item').forEach((el) => {
     if (el.tagName === 'H3') { section = clean(el.childNodes[0]?.textContent ?? el.textContent ?? ''); return }
+    if (el.classList.contains('rp-cap-item')) { out.push([section, (el as HTMLElement).dataset.k ?? '', (el as HTMLElement).dataset.v ?? '', '', '']); return }
+    // 인적 사항 가로 표(D-226): 머리글 칸 = 항목, 값 칸 = 내용
+    if (el.closest('table')?.classList.contains('rp-info-row')) {
+      if (el.closest('thead')) return
+      const heads = [...(el.closest('table')!.querySelectorAll('thead th'))].map((h) => clean(h.textContent ?? ''))
+      ;[...el.children].forEach((c, i) => out.push([section, heads[i] ?? '', clean(c.textContent ?? ''), '', '']))
+      return
+    }
     if (el.classList.contains('rp-note')) { out.push([section, '추가 기록', clean(el.textContent ?? ''), '', '']); return }
     const cells = [...el.children].filter((c) => !c.classList.contains('rp-blank')).map((c) => clean(c.textContent ?? ''))
     if (el.closest('thead') || !cells.some(Boolean)) return
