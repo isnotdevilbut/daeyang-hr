@@ -1670,3 +1670,6 @@ body.drag-sorting, body.drag-sorting * { cursor: grabbing !important; user-selec
 .slot-btn:focus-visible { outline: 2px solid #20b8ca; outline-offset: 2px; }
 @media (max-width: 640px) { .slot-row { grid-template-columns: 1fr; gap: 6px; } .slot-btn { min-width: 0; flex: 1 1 100%; } }
 .slot-btn.taken { justify-content: center; }
+/* D-214: 화살표 글자 가운데, 맡은 화살표는 오른쪽 ✓ */
+.slot-btn { position: relative; align-items: center; justify-content: center; text-align: center; min-height: 52px; padding: 8px 34px; }
+.slot-btn .slot-check { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); font-size: 18px; font-weight: 900; }

@@ -850,7 +850,7 @@ function ScopeEditor({ cycle, v, onDup, onRemove, msg, setMsg }: { cycle: Cycle;
       )}
       {(
         <p className="scope-summary" role="status">
-          <b>적용 대상(평가받는 사람) {scopeTargets(cycle, scope).length}명</b>
+          <b>적용 대상 {scopeTargets(cycle, scope).filter((t) => arrows ? s.employees.find((e) => e.id === t.employeeId)?.active : true).length}명</b>{/* D-214: 재직 중인 사람만 */}
           {!arrows && <span className="muted"> · 이번 회차 참여자 중 {scope.employees ? `직접 선택 ${scope.employees.length}명` : scope.teams === 'all' ? '전체 팀' : `팀 ${scope.teams.length}개`}{scope.positions === 'all' ? '' : ` · 직급 ${scope.positions.length}개`} 조건을 모두 충족 · 적용 평가 {scope.rules.map((r) => RULE_TEXT[r]).join('·') || '없음'}</span>}
         </p>
       )}
@@ -1003,8 +1003,9 @@ function SlotPicker({ cycle, v, scope, setScope }: { cycle: Cycle; v: TemplateVe
               return (
                 <button key={k} type="button" className={`slot-btn ${on ? 'on' : o ? 'taken' : 'free'}`} aria-pressed={on} onClick={() => flip(k)} title={`${sl.from}이(가) ${sl.to === '본인' ? '본인을' : `${sl.to}을(를)`} 평가`}>
                   <span className="slot-arrow"><b>{sl.from}</b> → <b>{sl.to}</b></span>
-                  {/* D-213: 다른 평가표가 맡은 화살표는 어디서 쓰는지 글자 없이(회색만) — 이 평가표·평가 미배치만 글자 */}
-                  {(on || !o) && <span className="slot-state">{on ? '✓ 이 평가표' : '평가 미배치'}</span>}
+                  {/* D-213·D-214: 글자는 가운데, 이 평가표가 맡은 화살표는 오른쪽에 ✓만. 다른 평가표 화살표는 글자 없음, 아무도 안 맡으면 '평가 미배치' */}
+                  {on && <span className="slot-check" aria-hidden>✓</span>}
+                  {!on && !o && <span className="slot-state">평가 미배치</span>}
                 </button>
               )
             })}
