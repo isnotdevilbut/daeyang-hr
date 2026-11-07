@@ -126,7 +126,7 @@ export function applyExecDraft(d: AppState, c: Cycle, execDraft: Record<string, 
     if (o === undefined) continue
     const a = execAssignment(c, t)
     const r = a ? d.responses[a.id] : undefined
-    if (a && r?.status === 'submitted') continue
+    // D-233: 제출된 평가도 옮길 수 있음 — 이전 임원의 평가는 지우지 않고 '이전 배정' 기록(집계 제외)으로 남김
     if (ex) cleared.delete(tid); else cleared.add(tid)
     if (a && a.evaluatorId === ex) continue
     if (a && !r) {

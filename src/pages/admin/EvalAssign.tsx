@@ -154,7 +154,6 @@ function Assignments({ cycle, locked, execDraft, setExecDraft, onSave, msg }: { 
   const [secOpen, setSecOpen] = useState(false) // D-202: 처음엔 접힘
   const [q, setQ] = useState('')
   const [team, setTeam] = useState('')
-  const [note, setNote] = useState('') // 팀 전체 선택이 제출된 평가 때문에 일부만 반영됐을 때 짧은 안내
   const [adding, setAdding] = useState<string | null>(null) // D-231: '+ 추가'를 누른 임원
   const execs = cycleExecs(s, cycle)
   const name = (id: string) => s.employees.find((e) => e.id === id)?.name ?? '?'
@@ -174,17 +173,18 @@ function Assignments({ cycle, locked, execDraft, setExecDraft, onSave, msg }: { 
   const qq = q.trim()
   const visible = (r: Row) => (!team || r.t.teamName === team) && (!qq || r.t.name.includes(qq) || r.t.teamName.includes(qq))
   const unassigned = rows.filter((r) => !r.cur)
-  const fixed = (r: Row) => r.st === 'submitted'
   /** 여러 대상자를 한 번에 바꾸기 — 다른 임원 담당·작성 중 평가는 한 번 확인. 제출된 평가는 건너뜀 */
+  // D-233: 모두 고를 수 있음 — 다른 임원 배정과 겹치면 팝업으로 확인(제출·작성 중 평가도 옮길 수 있고, 이전 평가는 '이전 배정' 기록으로 남음)
   const setMany = (list: Row[], ex: string, ask = true) => {
-    const ch = list.filter((r) => !fixed(r) && r.cur !== ex)
+    const ch = list.filter((r) => r.cur !== ex)
     if (!ch.length) return true
     if (ask) {
       const moving = ch.filter((r) => r.cur && ex)
-      const drafts = ch.filter((r) => r.st === 'draft' && r.a && r.a.evaluatorId !== ex)
+      const written = ch.filter((r) => (r.st === 'draft' || r.st === 'submitted') && r.a && r.a.evaluatorId !== ex)
       const lines: string[] = []
-      if (moving.length) lines.push(moving.length === 1 ? `${moving[0].t.name}은(는) ${name(moving[0].cur)} 담당입니다. ${name(ex)}에게 옮길까요?` : `${moving.length}명은 다른 임원 담당입니다(${moving.map((r) => r.t.name).join(', ')}). ${name(ex)}에게 옮길까요?`)
-      if (drafts.length) lines.push(`작성 중인 평가 ${drafts.length}건(${drafts.map((r) => r.t.name).join(', ')})은 이전 임원의 기록으로 남기고${ex ? ', 새 담당 임원은 처음부터 작성합니다' : ''}.`)
+      if (moving.length) lines.push(moving.length === 1 ? `${moving[0].t.name}은(는) 지금 ${name(moving[0].cur)} 배정이에요. ${name(ex)} 배정으로 바꾸겠습니까?` : `${moving.map((r) => `${r.t.name}(${name(r.cur)})`).join(', ')}은(는) 지금 다른 임원 배정이에요. ${name(ex)} 배정으로 바꾸겠습니까?`)
+      else if (!ex && written.length) lines.push(`${written.map((r) => r.t.name).join(', ')}의 배정을 뺄까요?`)
+      if (written.length) lines.push(`(이미 쓴 평가 ${written.length}건은 이전 기록으로 남아요)`)
       if (lines.length && !confirm(lines.join('\n'))) return false
     }
     const next = { ...execDraft }
@@ -213,8 +213,7 @@ function Assignments({ cycle, locked, execDraft, setExecDraft, onSave, msg }: { 
         </select>
         {/* D-166: '미지정만' 거르기 제거 */}
       </div>
-      {unassigned.length > 0 && <p className="exec-free-note">미지정: {unassigned.map((r) => r.t.name).join(', ')} <span className="muted">— 담당 임원을 체크하기 전까지 임원평가 미완료</span></p>}
-      {note && <p className="exec-free-note exec-note" role="status">{note}</p>}
+      {/* D-233: 안내 문구 없음 */}
       {/* D-231: 임원 카드 = 그 임원이 맡은 사람만(팀별), ✕로 빼기 · '+ 추가'로 팀별 토글 → 직원 목록에서 골라 추가(체크박스 펼침 없앰) */}
       <div className="exec-cols">
         {execs.map((ex) => {
@@ -222,7 +221,7 @@ function Assignments({ cycle, locked, execDraft, setExecDraft, onSave, msg }: { 
           const shownMine = mine.filter(visible)
           return (
             <section key={ex.id} className="exec-col" aria-label={`${ex.name} ${title}`}>
-              <header className="exec-col-head"><b>{ex.name}</b><span className="exec-n">{mine.length}명</span><button type="button" className="btn small exec-add" disabled={locked} onClick={() => { setNote(''); setAdding(ex.id) }}>+ 추가</button></header>
+              <header className="exec-col-head"><b>{ex.name}</b><span className="exec-n">{mine.length}명</span><button type="button" className="btn small exec-add" disabled={locked} onClick={() => setAdding(ex.id)}>+ 추가</button></header>
               {shownMine.length === 0 ? <p className="muted small exec-empty">{mine.length ? '검색 조건에 맞는 사람 없음' : '맡은 사람 없음'}</p> : (
                 <div className="exec-mine">
                   {teams.map((tm) => {
@@ -238,8 +237,8 @@ function Assignments({ cycle, locked, execDraft, setExecDraft, onSave, msg }: { 
                               {r.st === 'draft' && execDraft[r.t.employeeId] === undefined && <span className="muted small">작성 중</span>}
                               {r.noLead && <span className="chip draft tag">팀장 설정 필요</span>}
                               <span className="spacer" />
-                              {/* 제출된 평가는 담당 고정(빼기 없음, D-163) */}
-                              {!fixed(r) && <button type="button" className="exec-x" disabled={locked} aria-label={`${ex.name} 담당에서 ${r.t.name} 빼기`} title="빼기(미지정으로)" onClick={() => { setNote(''); setMany([r], '') }}>✕</button>}
+                              {/* D-233: 제출된 평가도 뺄 수 있음(팝업 확인) */}
+                              <button type="button" className="exec-x" disabled={locked} aria-label={`${ex.name} 담당에서 ${r.t.name} 빼기`} title="빼기(미지정으로)" onClick={() => setMany([r], '')}>✕</button>
                             </li>
                           ))}
                         </ul>
@@ -254,7 +253,7 @@ function Assignments({ cycle, locked, execDraft, setExecDraft, onSave, msg }: { 
       </div>
       {adding && (() => {
         const ex = execs.find((x) => x.id === adding)!
-        return <ExecAddModal exName={ex.name} rows={rows.filter((r) => r.cur !== ex.id)} teams={teams} nameOf={name} posOf={(r) => targetPosition(s, cycle, r.t)} fixed={fixed}
+        return <ExecAddModal exName={ex.name} rows={rows.filter((r) => r.cur !== ex.id)} teams={teams} posOf={(r) => targetPosition(s, cycle, r.t)}
           onClose={() => setAdding(null)} onAdd={(list) => { if (setMany(list, ex.id)) setAdding(null) }} />
       })()}
       </>}
@@ -337,7 +336,7 @@ function GradeRatios() {
  * 지금 다른 임원 담당이면 '(지금: OO 담당)' 표시 — 추가하면 이 임원으로 옮김(한 사람 = 담당 임원 한 명). 제출된 평가는 옮길 수 없음
  */
 type ExecRow = { t: Cycle['targets'][number]; cur: string; st: string }
-function ExecAddModal<R extends ExecRow>({ exName, rows, teams, nameOf, posOf, fixed, onClose, onAdd }: { exName: string; rows: R[]; teams: string[]; nameOf: (id: string) => string; posOf: (r: R) => string; fixed: (r: R) => boolean; onClose: () => void; onAdd: (list: R[]) => void }) {
+function ExecAddModal<R extends ExecRow>({ exName, rows, teams, posOf, onClose, onAdd }: { exName: string; rows: R[]; teams: string[]; posOf: (r: R) => string; onClose: () => void; onAdd: (list: R[]) => void }) {
   const [q, setQ] = useState('')
   const [open, setOpen] = useState<Record<string, boolean>>({})
   const [pick, setPick] = useState<Set<string>>(new Set())
@@ -362,12 +361,11 @@ function ExecAddModal<R extends ExecRow>({ exName, rows, teams, nameOf, posOf, f
                 {isOpen && (
                   <ul className="exec-people">
                     {list.map((r) => (
-                      <li key={r.t.employeeId} className={fixed(r) ? 'fixed' : ''}>
+                      <li key={r.t.employeeId}>
                         <label>
-                          <input type="checkbox" disabled={fixed(r)} checked={pick.has(r.t.employeeId)} aria-label={`${r.t.name} 추가`} onChange={(e) => toggle(r.t.employeeId, e.target.checked)} />
+                          <input type="checkbox" checked={pick.has(r.t.employeeId)} aria-label={`${r.t.name} 추가`} onChange={(e) => toggle(r.t.employeeId, e.target.checked)} />
                           <b>{r.t.name}</b><span className="muted">{posOf(r)}</span>
                         </label>
-                        <span className="muted small">{fixed(r) ? `${nameOf(r.cur)} 제출 — 옮길 수 없음` : r.cur ? `지금: ${nameOf(r.cur)} 담당` : '담당 없음'}</span>
                       </li>
                     ))}
                   </ul>
@@ -376,7 +374,7 @@ function ExecAddModal<R extends ExecRow>({ exName, rows, teams, nameOf, posOf, f
             )
           })}
         </div>
-        <div className="row" style={{ marginTop: 12 }}><span className="muted small">{pick.size ? `${pick.size}명 선택` : ''}</span><span className="spacer" /><button className="btn" onClick={onClose}>취소</button><button className="btn primary" disabled={!pick.size} onClick={() => onAdd(rows.filter((r) => pick.has(r.t.employeeId)))}>추가</button></div>
+        <div className="row" style={{ marginTop: 12 }}><span className="spacer" /><button className="btn" onClick={onClose}>취소</button><button className="btn primary" disabled={!pick.size} onClick={() => onAdd(rows.filter((r) => pick.has(r.t.employeeId)))}>추가</button></div>
       </div>
     </Modal>
   )

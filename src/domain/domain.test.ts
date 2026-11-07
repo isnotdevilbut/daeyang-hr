@@ -2369,7 +2369,7 @@ describe('임원 평가 배정 체크·적용 범위 직접 선택 (D-087)', asy
     expect(exec3(s, t.employeeId).map((a) => a.evaluatorId)).toEqual([ex])
     expect(c.execUnassigned).toBeUndefined()
   })
-  it('다른 임원으로 옮김: 응답 없으면 담당만 바뀜(한 건), 작성 중이면 이전 기록 보존(reassigned) 뒤 새 배정, 제출은 바뀌지 않음', () => {
+  it('다른 임원으로 옮김: 응답 없으면 담당만 바뀜(한 건), 작성 중·제출이면 이전 기록 보존(reassigned) 뒤 새 배정(D-233)', () => {
     const s = createSeed(); const c = s.cycles[0]
     const execs = sync.cycleExecs(s, c).map((e) => e.id)
     const t = freeTarget(s)
@@ -2382,10 +2382,13 @@ describe('임원 평가 배정 체크·적용 범위 직접 선택 (D-087)', asy
     X.applyExecDraft(s, c, { [t.employeeId]: to2 })
     expect(c.assignments.find((x) => x.id === a.id)!.excluded).toBe('reassigned')
     expect(exec3(s, t.employeeId).map((x) => x.evaluatorId)).toEqual([to2])
+    // D-233: 제출된 평가도 옮길 수 있음 — 이전 임원 평가는 이전 배정 기록(reassigned)으로 남고 새 임원에게 새 배정
     const sub = c.assignments.find((x) => x.stageOrder === 3 && !x.excluded && s.responses[x.id]?.status === 'submitted')!
-    X.applyExecDraft(s, c, { [sub.targetId]: execs.find((x) => x !== sub.evaluatorId)! })
-    X.applyExecDraft(s, c, { [sub.targetId]: '' })
-    expect(exec3(s, sub.targetId).map((x) => x.evaluatorId)).toEqual([sub.evaluatorId])
+    const other = execs.find((x) => x !== sub.evaluatorId)!
+    X.applyExecDraft(s, c, { [sub.targetId]: other })
+    expect(c.assignments.find((x) => x.id === sub.id)!.excluded).toBe('reassigned')
+    expect(s.responses[sub.id].status).toBe('submitted')
+    expect(exec3(s, sub.targetId).map((x) => x.evaluatorId)).toEqual([other])
   })
   it('적용 범위 직접 선택: 직원 ID로 저장, 직급 조건도 함께 충족, 선택하지 않은 같은 팀 직원·새 직원은 제외, 이름·팀이 바뀌어도 유지', () => {
     const s = createSeed({ until: 19 }); const c = s.cycles[0]
