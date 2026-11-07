@@ -353,3 +353,20 @@ export function useLang(): [Lang, (l: Lang) => void] {
   }, [])
   return [lang, setLang]
 }
+
+/**
+ * 회차 이름(관리자가 쓴 글) → 선택 언어(D-245). 한국어는 그대로.
+ * 러시아어: 자주 쓰는 낱말(연도·상반기·하반기·인사평가·연간·복제)만 바꾸고, 그 밖의 글자는 원문 그대로
+ */
+export function cycleText(name: string, lang: Lang): string {
+  if (lang !== 'ru') return name
+  const HALF: Record<string, string> = { 상반기: '1-е полугодие', 하반기: '2-е полугодие', 연간: 'год', '1분기': '1-й квартал', '2분기': '2-й квартал', '3분기': '3-й квартал', '4분기': '4-й квартал' }
+  const m = name.match(/^\s*(\d{4})\s*년?\s*(상반기|하반기|연간|[1-4]분기)?\s*(인사\s*평가|평가)\s*(.*)$/)
+  const tail = (x: string) => x.replace(/\(\s*복제\s*\)/g, '(копия)').replace(/복제/g, 'копия')
+  if (m) {
+    const [, y, h, , rest] = m
+    const when = h && h !== '연간' ? `${HALF[h]} ${y} г.` : `${y} г.`
+    return `${h === '연간' ? 'Годовая оценка' : 'Оценка'} персонала за ${when}${rest ? ' ' + tail(rest) : ''}`
+  }
+  return tail(name.replace(/상반기/g, HALF.상반기).replace(/하반기/g, HALF.하반기).replace(/인사\s*평가/g, 'оценка персонала'))
+}

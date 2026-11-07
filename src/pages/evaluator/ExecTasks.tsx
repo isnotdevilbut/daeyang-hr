@@ -6,7 +6,7 @@ import { useAppState } from '../../data/store'
 import { cycleLabel } from '../../domain/cycle'
 import { assignmentCell, cycleClosed, isActiveAssignment, type CellStatus } from '../../domain/progress'
 import type { Assignment, Cycle, Lang, TargetSnapshot } from '../../domain/types'
-import { t as tr, tierText, useLang, type TKey } from '../../i18n'
+import { cycleText, t as tr, tierText, useLang, type TKey } from '../../i18n'
 import { targetPosition } from '../../domain/catalog'
 
 type Filter = 'all' | 'open' | 'done'
@@ -46,7 +46,7 @@ export default function ExecTasks() {
             <label>
               <span className="pick-label">{tr('list.cycle', lang)}</span>
               <select value={cycle.id} onChange={(e) => setCycleId(e.target.value)}>
-                {cycles.map((c) => <option key={c.id} value={c.id}>{cycleLabel(c)}</option>)}
+                {cycles.map((c) => <option key={c.id} value={c.id}>{cycleText(cycleLabel(c), lang)}</option>)}
               </select>
             </label>
           </div>

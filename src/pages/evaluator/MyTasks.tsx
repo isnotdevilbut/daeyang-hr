@@ -4,7 +4,7 @@ import { can } from '../../domain/permissions'
 import { cycleLabel } from '../../domain/cycle'
 import { assignmentCell, cycleClosed, isActiveAssignment, isUpward, personSnap, statusOf, type CellStatus } from '../../domain/progress'
 import type { Assignment, Cycle, Lang, TargetSnapshot } from '../../domain/types'
-import { t as tr, tierText, useLang } from '../../i18n'
+import { cycleText, t as tr, tierText, useLang } from '../../i18n'
 import { targetPosition } from '../../domain/catalog'
 import { Empty, Forbidden, StatusChip } from '../../components/ui'
 import ExecTasks from './ExecTasks'
@@ -42,7 +42,7 @@ export default function MyTasks() {
               const st = statusOf(s.responses, a.id)
               return (
                 <li key={a.id}>
-                  <b>{cycleLabel(c)}</b>
+                  <b>{cycleText(cycleLabel(c), lang)}</b>
                   {/* 마감 회차(D-093): 미제출은 '마감'(작성 버튼 없음), 제출은 완료 + 마감 표시. 응답 상태는 그대로 */}
                   {cycleClosed(c) && st !== 'submitted' ? <span className="chip locked">{tr('status.closed', lang)}</span> : <StatusChip status={st} lang={lang} />}
                   {cycleClosed(c) && st === 'submitted' && <span className="chip na tag">{tr('status.closed', lang)}</span>}
