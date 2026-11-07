@@ -55,12 +55,12 @@ export default function MyTasks() {
       )}
 
       {ups.length > 0 && <section className="panel">
-        <div className="panel-head"><h2>{tr('list.upward', lang)} <span className="muted">{tr('count.items', lang, { n: ups.length })}</span></h2></div>
+        <div className="panel-head"><h2>{tr('list.upward', lang)} <span className="muted tk-count">{tr('count.items', lang, { n: ups.length })}</span></h2></div>
         <TaskTable rows={ups} lang={lang} />
       </section>}
 
       {(rows.length > 0 || (mine.length === 0 && ups.length === 0)) && <section className="panel">
-        <div className="panel-head"><h2>{mine.length > 0 || ups.length > 0 ? tr('list.team', lang) : tr('list.assigned', lang)} <span className="muted">{tr('count.items', lang, { n: rows.length })}</span></h2></div>
+        <div className="panel-head"><h2>{mine.length > 0 || ups.length > 0 ? tr('list.team', lang) : tr('list.assigned', lang)} <span className="muted tk-count">{tr('count.items', lang, { n: rows.length })}</span></h2></div>
         {rows.length === 0 ? <Empty>{tr('list.none', lang)}</Empty> : <TaskTable rows={rows} lang={lang} />}
       </section>}
     </div>
