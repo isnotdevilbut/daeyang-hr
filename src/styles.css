@@ -1746,3 +1746,6 @@ body.drag-sorting, body.drag-sorting * { cursor: grabbing !important; user-selec
 .exec-x { width: 24px; height: 24px; border: 1.5px solid var(--danger); color: var(--danger); background: #fff; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 900; line-height: 1; padding: 0; }
 .exec-x span { margin-top: -2px; }
 .exec-x:hover:not(:disabled) { background: var(--danger-bg); }
+/* D-236: 빼기 버튼 작게 */
+.exec-x { width: 18px; height: 18px; border-width: 1.3px; font-size: 13px; }
+.exec-x span { margin-top: -1px; }
