@@ -238,7 +238,7 @@ function Assignments({ cycle, locked, execDraft, setExecDraft, onSave, msg }: { 
                               {r.noLead && <span className="chip draft tag">팀장 설정 필요</span>}
                               <span className="spacer" />
                               {/* D-233: 제출된 평가도 뺄 수 있음(팝업 확인) */}
-                              <button type="button" className="exec-x" disabled={locked} aria-label={`${ex.name} 담당에서 ${r.t.name} 빼기`} title="빼기(미지정으로)" onClick={() => setMany([r], '')}>✕</button>
+                              <button type="button" className="exec-x" disabled={locked} aria-label={`${ex.name} 담당에서 ${r.t.name} 빼기`} title="빼기(미지정으로)" onClick={() => setMany([r], '')}><span aria-hidden>−</span></button>{/* D-235: 빼기 = 빨간 테두리 동그라미 안 − */}
                             </li>
                           ))}
                         </ul>

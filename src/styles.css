@@ -1739,3 +1739,10 @@ body.drag-sorting, body.drag-sorting * { cursor: grabbing !important; user-selec
 @media (max-width: 640px) { .qa-tbl thead { display: none; } .qa-tbl tr, .qa-tbl th, .qa-tbl td { display: block; width: auto !important; } .qa-tbl tbody td { border-top: 0; } }
 /* D-234: 응답 결과 표 비율 — 답은 대부분 짧아 질문 65% · 응답 35%로 통일(응답 칸 빈 공간 줄임, 긴 답은 칸 안에서 줄바꿈) */
 .qa-tbl thead th:first-child { width: 65%; }
+/* D-235: 임원 평가 배정 카드 — 팀 이름 줄은 하늘색 바탕(사람 줄과 구분), 빼기 버튼 = 빨간 테두리 동그라미 안 '−' */
+.exec-mine-tm { background: #e6f2fc; color: #0b4f8a; border-radius: 8px; padding: 5px 10px; margin: 2px 0 4px; font-size: 13.5px; }
+.exec-mine-team { border-bottom: 0; padding: 4px 0; }
+.exec-mine li { padding: 3px 4px 3px 10px; }
+.exec-x { width: 24px; height: 24px; border: 1.5px solid var(--danger); color: var(--danger); background: #fff; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 900; line-height: 1; padding: 0; }
+.exec-x span { margin-top: -2px; }
+.exec-x:hover:not(:disabled) { background: var(--danger-bg); }
