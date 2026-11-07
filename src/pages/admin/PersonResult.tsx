@@ -252,44 +252,61 @@ function WriteList({ cycle, evaluatorId, hideEmpty = false }: { cycle: Cycle; ev
     .filter((r) => !!r.t)
     // 미완료 먼저, 완료는 아래(D-093) — 같은 그룹 안에서는 팀·팀장 먼저·이름 순
     .sort((x, y) => Number(x.st === 'submitted') - Number(y.st === 'submitted') || x.t.teamName.localeCompare(y.t.teamName, 'ko') || Number(y.t.isTeamLead) - Number(x.t.isTeamLead) || x.t.name.localeCompare(y.t.name, 'ko'))
-  // D-190: 이 사람이 받는 상향평가(팀원→팀장·팀원→임원·팀장→임원)도 여기에 — 단계별 현황에는 1·2·3단계만. 쓰는 평가 다음에, 미완료 먼저·평가자 이름 순
-  const nameOf = (id: string) => s.employees.find((e) => e.id === id)?.name ?? '?'
+  // D-241: [내가 평가해야 할 사람]과 [나를 평가한 사람](받는 상향평가)을 칸으로 나눔 — 나를 평가한 사람은 평가자의 팀·직급
   const got = ups.filter((a) => a.targetId === evaluatorId)
-    .map((a) => ({ a, t: personSnap(s, cycle, a.targetId)!, st: assignmentCell(cycle, s.responses, a) }))
+    .map((a) => ({ a, t: personSnap(s, cycle, a.evaluatorId)!, st: assignmentCell(cycle, s.responses, a) }))
     .filter((r) => !!r.t)
-    .sort((x, y) => Number(x.st === 'submitted') - Number(y.st === 'submitted') || nameOf(x.a.evaluatorId).localeCompare(nameOf(y.a.evaluatorId), 'ko'))
-  const rows = [...mine, ...got]
-  const shown = rows // D-126: 전체·미완료·완료 개수 버튼 없이 모두 표시(미완료 먼저)
-  if (hideEmpty && rows.length === 0) return null
+    .sort((x, y) => Number(x.st === 'submitted') - Number(y.st === 'submitted') || x.t.teamName.localeCompare(y.t.teamName, 'ko') || x.t.name.localeCompare(y.t.name, 'ko'))
+  if (hideEmpty && mine.length === 0 && got.length === 0) return null
+  const badge = (st: string) => (
+    <span className="write-st"><span className="ws-badge">{st === 'submitted' ? <span className="chip stage done">완료</span> : <span className="chip stage todo">미완료</span>}</span></span>
+  )
   return (
     <>
-      <h2 id="write-title" className="section-title">담당 평가 현황</h2>
-      <section className="panel recv-panel write-panel" aria-labelledby="write-title">
-        {rows.length === 0 ? <p className="write-empty">배정된 평가 없음</p> : <>
+      {(mine.length > 0 || !hideEmpty) && <>
+        <h2 id="write-title" className="section-title">내가 평가해야 할 사람</h2>
+        <section className="panel recv-panel write-panel" aria-labelledby="write-title">
+          {mine.length === 0 ? <p className="write-empty">배정된 평가 없음</p> : (
+            <div className="table-wrap">
+              <table className="tbl write-tbl">
+                <thead><tr><th>평가 유형</th><th>팀</th><th>직급</th><th>평가 대상자</th><th>상태</th></tr></thead>
+                <tbody>
+                  {mine.map((r) => (
+                    <tr key={r.a.id}>
+                      <td><RuleText cycle={cycle} a={r.a} /></td>
+                      <td>{r.t.teamName}</td>
+                      <td>{targetPosition(s, cycle, r.t)}</td>
+                      <td><b>{r.t.name}</b></td>
+                      <td>{badge(r.st)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      </>}
+      {got.length > 0 && <>
+        <h2 id="got-title" className="section-title">나를 평가한 사람</h2>
+        <section className="panel recv-panel write-panel" aria-labelledby="got-title">
           <div className="table-wrap">
             <table className="tbl write-tbl">
-              <thead><tr><th>평가 유형</th><th>팀</th><th>직급</th><th>평가자</th><th>평가 대상자</th><th>상태</th></tr></thead>
+              <thead><tr><th>평가 유형</th><th>팀</th><th>직급</th><th>평가자</th><th>상태</th></tr></thead>
               <tbody>
-                {shown.map((r) => (
+                {got.map((r) => (
                   <tr key={r.a.id}>
                     <td><RuleText cycle={cycle} a={r.a} /></td>
                     <td>{r.t.teamName}</td>
                     <td>{targetPosition(s, cycle, r.t)}</td>
-                    <td>{nameOf(r.a.evaluatorId)}</td>
                     <td><b>{r.t.name}</b></td>
-                    <td>
-                      <span className="write-st">
-                        {/* 배지는 상태 열 중앙축(가운데 칸) — D-093 */}
-                        <span className="ws-badge">{r.st === 'submitted' ? <span className="chip stage done">완료</span> : <span className="chip stage todo">미완료</span>}</span>
-                      </span>
-                    </td>
+                    <td>{badge(r.st)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        </>}
-      </section>
+        </section>
+      </>}
     </>
   )
 }
