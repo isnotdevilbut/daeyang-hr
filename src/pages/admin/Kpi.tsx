@@ -5,9 +5,9 @@ import { useSelectedCycle } from '../../data/hooks'
 import { can } from '../../domain/permissions'
 import { cycleLabel } from '../../domain/cycle'
 import {
-  deptKpi, indicatorErrors, indicatorResult, kpiEntry, kpiLocked, orgUnits, UNIT_LABEL, withUnit, type DeptKpi,
+  deptKpi, indicatorErrors, indicatorResult, kpiEntry, kpiLocked, orgUnits, UNIT_TEXT, withUnit, type DeptKpi,
 } from '../../domain/kpi'
-import type { Cycle, FinalBlendItem, FinalBlendPlan, FinalPart, JobType, KpiIndicator, KpiUnit } from '../../domain/types'
+import type { Cycle, FinalBlendItem, FinalBlendPlan, FinalPart, JobType, KpiIndicator } from '../../domain/types'
 import { FINAL_BLEND_EXAMPLE } from '../../domain/scoringV16'
 import { Forbidden, Modal } from '../../components/ui'
 import { activeJobs, jobName } from '../../domain/catalog'
@@ -103,7 +103,7 @@ function DeptEditor({ cycle, deptId, deptName, editable }: { cycle: Cycle; deptI
   const k = deptKpi(s, cycle.id, deptId, undefined, jobIds)
   const [dialog, setDialog] = useState<Dialog | null>(null)
   const [msg, setMsg] = useState('')
-  const blank: KpiIndicator = { id: '', cycleId: cycle.id, departmentId: deptId, name: '', unit: 'percent', direction: 'higher', target: null, actual: null, weight: null }
+  const blank: KpiIndicator = { id: '', cycleId: cycle.id, departmentId: deptId, name: '', unit: 'other', direction: 'higher', target: null, actual: null, weight: null }
   const manualOn = k.mode === 'manual'
   const hasManual = k.manualScore !== null
   const hasInds = k.indicators.length > 0
@@ -233,7 +233,7 @@ function KpiModal({ dialog, cycle, deptId, blank, k, onClose, onSaved }: { dialo
     const switching = adding && k.mode === 'manual'
     if (switching && hasManual && !confirm(`현재 직접 입력한 팀 점수(${k.manualScore}점)가 적용 중입니다.\n지표를 추가하면 지표 계산 점수를 적용하고, 직접 입력 점수는 지우지 않고 보관합니다. 계속할까요?`)) return
     update((d) => {
-      const clean: KpiIndicator = { id: cur.id || `kpi-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`, cycleId: cur.cycleId, departmentId: cur.departmentId, name: cur.name.trim(), unit: cur.unit, ...(cur.unit === 'other' && cur.unitText?.trim() ? { unitText: cur.unitText.trim() } : {}), direction: cur.direction, target: cur.target, actual: cur.actual, weight: cur.weight, ...(cur.jobs?.length ? { jobs: [...cur.jobs] } : {}) }
+      const clean: KpiIndicator = { id: cur.id || `kpi-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`, cycleId: cur.cycleId, departmentId: cur.departmentId, name: cur.name.trim(), unit: 'other', ...(unitInput(cur).trim() ? { unitText: unitInput(cur).trim() } : {}), direction: cur.direction, target: cur.target, actual: cur.actual, weight: cur.weight, ...(cur.jobs?.length ? { jobs: [...cur.jobs] } : {}) }
       const i = d.kpiIndicators.findIndex((x) => x.id === clean.id)
       if (i >= 0) d.kpiIndicators[i] = clean
       else d.kpiIndicators.push(clean)
@@ -273,13 +273,8 @@ function KpiModal({ dialog, cycle, deptId, blank, k, onClose, onSaved }: { dialo
         </div>
       ) : (
         <div className="grid form-grid">
-          <label className="field">단위
-            <select value={f.unit} onChange={(e) => setF({ ...f, unit: e.target.value as KpiUnit })}>
-              {(Object.keys(UNIT_LABEL) as KpiUnit[]).map((u) => <option key={u} value={u}>{UNIT_LABEL[u]}</option>)}
-            </select>
-          </label>
-          {/* D-240: '기타'를 고르면 단위를 직접 입력(예: 회, 시간, 개) */}
-          {f.unit === 'other' && <label className="field">단위 직접 입력<input type="text" maxLength={10} placeholder="예: 회, 시간, 개" value={f.unitText ?? ''} onChange={(e) => setF({ ...f, unitText: e.target.value })} /></label>}
+          {/* D-242: 단위는 목록 없이 직접 입력(%·건·점·원·회 등 무엇이든) — 화면 표시용, 계산과 무관 */}
+          <label className="field">단위<input type="text" maxLength={10} placeholder="예: %, 건, 점, 원, 회" value={unitInput(f)} onChange={(e) => setF({ ...f, unit: 'other', unitText: e.target.value })} /></label>
           <label className="field" style={{ gridColumn: '1 / -1' }}>지표 이름<input type="text" value={f.name} autoFocus={!adding} onChange={(e) => setF({ ...f, name: e.target.value })} /></label>
           {/* D-150: 적용 직무 — 같은 팀 안에서도 직무마다 다른 지표. 전체 직무 = 그 팀 모두 */}
           <label className="field">적용 직무
@@ -381,3 +376,9 @@ const EditIc = () => (
 const DelIc = () => (
   <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden focusable="false"><path d="M4 4l8 8M12 4l-8 8" stroke="#d8343b" strokeWidth="1.8" strokeLinecap="round" /></svg>
 )
+
+/** 단위 입력 칸 값(D-242): 직접 쓴 단위, 이전에 목록에서 고른 단위는 그 글자(%·건·점·원) */
+function unitInput(f: Pick<KpiIndicator, 'unit' | 'unitText'>): string {
+  if (f.unit === 'other') return f.unitText ?? ''
+  return f.unit === 'amount' ? '원' : UNIT_TEXT[f.unit]
+}
