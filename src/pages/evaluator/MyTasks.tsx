@@ -4,7 +4,8 @@ import { can } from '../../domain/permissions'
 import { cycleLabel } from '../../domain/cycle'
 import { assignmentCell, cycleClosed, isActiveAssignment, isUpward, personSnap, statusOf, type CellStatus } from '../../domain/progress'
 import type { Assignment, Cycle, Lang, TargetSnapshot } from '../../domain/types'
-import { t as tr, useLang } from '../../i18n'
+import { t as tr, tierText, useLang } from '../../i18n'
+import { targetPosition } from '../../domain/catalog'
 import { Empty, Forbidden, StatusChip } from '../../components/ui'
 import ExecTasks from './ExecTasks'
 
@@ -69,17 +70,19 @@ export default function MyTasks() {
 type TaskRow = { c: Cycle; a: Assignment; t: TargetSnapshot; cell: CellStatus }
 /** 작성할 평가 목록(팀원 평가·팀원→팀장평가 공통) */
 function TaskTable({ rows, lang }: { rows: TaskRow[]; lang: Lang }) {
+  const s = useAppState()
   return (
     <div className="table-wrap">
-      {/* D-090: 팀·이름·상태·버튼만(회차·직급·평가 유형 열 제거 — 데이터는 그대로). 휴대폰에서는 한 사람 = 한 묶음(이름·팀 / 상태·버튼) */}
+      {/* D-090: 팀·직급(D-243)·이름·상태·버튼(회차·평가 유형 열 제거 — 데이터는 그대로). 휴대폰에서는 한 사람 = 한 묶음(이름·팀 / 상태·버튼) */}
       <table className="tbl org-tbl task-tbl">
-        <thead><tr><th>{tr('list.teamCol', lang)}</th><th>{tr('list.target', lang)}</th><th>{tr('list.status', lang)}</th><th><span className="sr-only">{tr('list.write', lang)}</span></th></tr></thead>
+        <thead><tr><th>{tr('list.teamCol', lang)}</th><th>{tr('list.tier', lang)}</th><th>{tr('list.target', lang)}</th><th>{tr('list.status', lang)}</th><th><span className="sr-only">{tr('list.write', lang)}</span></th></tr></thead>
         <tbody>
           {rows.map(({ c, a, t, cell }) => {
             const closed = cycleClosed(c)
             return (
             <tr key={a.id}>
               <td className="tk-team">{t.teamName}</td>
+              <td className="tk-tier">{tierText(targetPosition(s, c, t), lang)}</td>
               <td className="tk-name"><b>{t.name}</b></td>
               <td className="tk-st">
                 {closed && cell !== 'submitted' ? <span className="chip locked">{tr('status.closed', lang)}</span> : <StatusChip status={cell} lang={lang} />}

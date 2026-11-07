@@ -1178,6 +1178,7 @@ ul.target-list { list-style: none; margin: 4px 0 0; padding: 0; }
 .task-tbl th, .task-tbl td:nth-child(-n+5) { white-space: normal; }
 .task-tbl .tk-name b { font-size: 16.5px; word-break: keep-all; }
 .task-tbl .tk-team { color: var(--text-sub); font-weight: 600; }
+.task-tbl .tk-tier { color: var(--text-sub); white-space: nowrap; } /* D-243 */
 .task-tbl .tk-st { white-space: nowrap; }
 .task-tbl .tk-wait { display: block; font-size: 13.5px; white-space: normal; }
 .task-tbl .tk-act { text-align: right; }
@@ -1185,10 +1186,12 @@ ul.target-list { list-style: none; margin: 4px 0 0; padding: 0; }
 @media (max-width: 640px) {
   .task-tbl { min-width: 0 !important; width: 100%; }
   .task-tbl thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
-  .task-tbl tbody tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'name st' 'team act'; align-items: center; gap: 2px 10px; padding: 10px 16px; border-bottom: 1px solid var(--line-soft); }
+  .task-tbl tbody tr { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: 'name name st' 'team tier act'; align-items: center; gap: 2px 10px; padding: 10px 16px; border-bottom: 1px solid var(--line-soft); }
   .task-tbl tbody td { display: block; padding: 0 !important; border: 0; }
   .task-tbl .tk-name { grid-area: name; }
   .task-tbl .tk-team { grid-area: team; font-size: 14.5px; }
+  .task-tbl .tk-tier { grid-area: tier; font-size: 14.5px; margin-left: -6px; }
+  .task-tbl .tk-tier::before { content: '· '; }
   .task-tbl .tk-st { grid-area: st; justify-self: end; text-align: right; }
   .task-tbl .tk-act { grid-area: act; justify-self: end; }
   .task-tbl .tk-act:empty { display: none; }
@@ -1340,7 +1343,7 @@ label.field, fieldset.field legend { font-size: 16px; }
 .exec-people .small, .write-st .small, .ws-note { font-size: 14.5px; }
 .exec-team-n, .pick-n { font-size: 15.5px; }
 .score-sum dd { font-size: 18px; }
-@media (max-width: 640px) { .task-tbl .tk-team { font-size: 15.5px; } .settings-bar .btn { font-size: 15px; } }
+@media (max-width: 640px) { .task-tbl .tk-team, .task-tbl .tk-tier { font-size: 15.5px; } .settings-bar .btn { font-size: 15px; } }
 /* D-099: 선택된 카드 안쪽도 옅은 파랑·청록으로 채워 선택 상태가 한눈에 보이게(숫자 뒤 별도 박스 없음, 글자색 그대로) */
 .stats5 button.stat[aria-pressed='true'] { background: linear-gradient(160deg, rgba(32, 184, 202, 0.13) 0%, rgba(9, 82, 158, 0.10) 100%), #fff; }
 @media (forced-colors: active) { .stats5 button.stat[aria-pressed='true'] { background: Highlight; } }
