@@ -30,11 +30,12 @@ export function stageScore(t: Template, r: Response | undefined, ctxOrDir: QCtx 
 }
 
 /** 점수 환산이 없는 등급 문항(A~D)의 선택 라벨 */
-export function gradeAnswer(t: Template, r: Response | undefined): string | null {
+/** ctx를 주면 그 평가에 보이는 문항에서만(D-232 — 임원평가에서 뺀 종합 등급의 예전 답은 읽지 않음) */
+export function gradeAnswer(t: Template, r: Response | undefined, ctx?: QCtx): string | null {
   if (!r) return null
   for (const s of t.sections)
     for (const q of s.questions)
-      if (q.active && q.type === 'grade' && q.options.every((o) => o.value === null)) {
+      if (q.active && q.type === 'grade' && q.options.every((o) => o.value === null) && (!ctx || applies(q, ctx))) {
         const o = q.options.find((x) => x.id === r.answers[q.id])
         if (o) return o.label
       }
@@ -158,7 +159,7 @@ function baseResult(state: AppState, cycle: Cycle, targetId: string): Omit<Perso
       if (usesPoints(t) && pointsStageScore(t, r, ctxFor(cycle, a), manual).ungraded.length) ungraded = true
       const sc = stageScore(t, r, ctxFor(cycle, a), manual)
       if (sc !== null) scores.push(sc)
-      grade = gradeAnswer(t, r) ?? grade
+      grade = gradeAnswer(t, r, ctxFor(cycle, a)) ?? grade
     }
     return {
       order: st.order,

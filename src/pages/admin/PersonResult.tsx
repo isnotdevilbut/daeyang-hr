@@ -29,18 +29,22 @@ export function AnswerList({ t, r, a, cycle, lang = 'ko' }: { t: Template; r: Re
   if (!r) return <p className="muted">{tr('ev.noAnswer', lang)}</p>
   const qs = t.sections.flatMap((s) => s.questions.filter((q) => applies(q, ctx)))
   return (
-    <dl className="qa-list">
-      {qs.map((q) => {
-        const v = r.answers[q.id]
-        const empty = v === null || v === undefined || String(v).trim() === ''
-        return (
-          <div className="qa" key={q.id}>
-            <dt>{qTitle(q, lang)}</dt>
-            <dd className={empty ? 'none' : ''}>{empty ? tr('ev.unanswered', lang) : (() => { const o = q.options.find((x) => x.id === v); return o ? optLabel(q, o, lang) : answerText(t, q.id, v) })()}</dd>
-          </div>
-        )
-      })}
-    </dl>
+    // D-232: 질문·응답을 확실히 나눈 표(머리글 + 칸 테두리, 질문 칸은 옅은 바탕)
+    <table className="qa-tbl">
+      <thead><tr><th scope="col">질문</th><th scope="col">응답</th></tr></thead>
+      <tbody>
+        {qs.map((q) => {
+          const v = r.answers[q.id]
+          const empty = v === null || v === undefined || String(v).trim() === ''
+          return (
+            <tr key={q.id}>
+              <th scope="row">{qTitle(q, lang)}</th>
+              <td className={empty ? 'none' : ''}>{empty ? tr('ev.unanswered', lang) : (() => { const o = q.options.find((x) => x.id === v); return o ? optLabel(q, o, lang) : answerText(t, q.id, v) })()}</td>
+            </tr>
+          )
+        })}
+      </tbody>
+    </table>
   )
 }
 
