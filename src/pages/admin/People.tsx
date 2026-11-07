@@ -936,7 +936,7 @@ function TeamMulti({ s, value, onChange }: { s: AppState; value: string[]; onCha
   const flip = (id: string, on: boolean) => onChange(on ? [...value.filter((x) => x !== id), id] : value.filter((x) => x !== id))
   return (
     <div className="field team-multi">
-      <span>팀 <span className="muted small">(여러 팀 선택 가능)</span></span>
+      <span className="team-multi-label">팀 <span className="muted small">(중복 선택 가능)</span></span>
       <button type="button" className={`team-multi-btn ${open ? 'open' : ''}`} aria-expanded={open} onClick={() => setOpen(!open)}>
         <span>{names.length ? names.join(' · ') : '팀 선택'}</span><span className="caret" aria-hidden>▾</span>
       </button>
