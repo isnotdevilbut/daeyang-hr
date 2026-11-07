@@ -1737,3 +1737,5 @@ body.drag-sorting, body.drag-sorting * { cursor: grabbing !important; user-selec
 .stage-group > .qa-tbl, .author-item > .qa-tbl { margin: 0; }
 .author-item > .qa-tbl { border-radius: 0 0 12px 12px; }
 @media (max-width: 640px) { .qa-tbl thead { display: none; } .qa-tbl tr, .qa-tbl th, .qa-tbl td { display: block; width: auto !important; } .qa-tbl tbody td { border-top: 0; } }
+/* D-234: 응답 결과 표 비율 — 답은 대부분 짧아 질문 65% · 응답 35%로 통일(응답 칸 빈 공간 줄임, 긴 답은 칸 안에서 줄바꿈) */
+.qa-tbl thead th:first-child { width: 65%; }
