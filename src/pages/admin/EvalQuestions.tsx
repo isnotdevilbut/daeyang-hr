@@ -72,6 +72,40 @@ function useDragSort(onDrop: (kind: 'sec' | 'q', from: DragPos, to: DragPos) => 
   return { start, cls, into }
 }
 
+/**
+ * 한 목록 안에서 끌어서 순서 바꾸기(D-238 — 선택지). 영역·문항 끌기(D-158)와 같은 손잡이·선 표시, 놓으면 그 자리로
+ */
+function useListDrag(group: string, onDrop: (from: number, to: number) => void) {
+  const [drag, setDrag] = useState<{ from: number; to: number } | null>(null)
+  const start = (from: number) => (e: React.PointerEvent) => {
+    if (e.button !== 0) return
+    e.preventDefault()
+    let to = from
+    setDrag({ from, to })
+    document.body.classList.add('drag-sorting')
+    const els = () => [...document.querySelectorAll<HTMLElement>(`[data-drag-group="${group}"]`)]
+    const onMove = (ev: PointerEvent) => {
+      const list = els(); const k = list.findIndex((el) => { const r = el.getBoundingClientRect(); return ev.clientY < r.top + r.height / 2 })
+      to = k < 0 ? list.length : k
+      setDrag({ from, to })
+    }
+    const end = (ev: PointerEvent) => {
+      window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', end); window.removeEventListener('pointercancel', end)
+      document.body.classList.remove('drag-sorting')
+      setDrag(null)
+      if (ev.type !== 'pointerup' || to === from || to === from + 1) return
+      onDrop(from, to > from ? to - 1 : to)
+    }
+    window.addEventListener('pointermove', onMove); window.addEventListener('pointerup', end); window.addEventListener('pointercancel', end)
+  }
+  const cls = (i: number, n: number) => {
+    if (!drag) return ''
+    const stay = drag.to === drag.from || drag.to === drag.from + 1
+    return [drag.from === i ? 'dragging' : '', !stay && drag.to === i ? 'drop-before' : '', !stay && drag.to === n && i === n - 1 ? 'drop-after' : ''].filter(Boolean).join(' ')
+  }
+  return { start, cls }
+}
+
 function DragHandle({ label, onStart, onKey }: { label: string; onStart: (e: React.PointerEvent) => void; onKey: (d: number) => void }) {
   return (
     <button type="button" className="drag-handle" aria-label={label} title="끌어서 순서 바꾸기" onPointerDown={onStart}
@@ -285,6 +319,13 @@ function QuestionEditor({ t, editing, answered, onClose, onSave }: {
   const setRules = (r: EvaluatorRule[]) => set({ rules: r, directions: directionsFromRules(r) })
   const jobs = q.jobs?.length ? q.jobs : (['office', 'production'] as JobType[])
   const roles = q.targetRoles?.length ? q.targetRoles : (['member', 'lead'] as ('member' | 'lead')[])
+  // 선택지 순서 바꾸기(D-238): 끌어 놓기·키보드 ↑↓ 공통
+  const moveOpt = (from: number, to: number) => setQ((cur) => {
+    if (to < 0 || to >= cur.options.length || to === from) return cur
+    const o2 = [...cur.options]; const [x] = o2.splice(from, 1); o2.splice(to, 0, x)
+    return { ...cur, options: o2 }
+  })
+  const optDrag = useListDrag('opt', moveOpt)
   const typeChoices: QuestionType[] = q.type === 'grade' ? [...BASIC_TYPES, 'grade'] : BASIC_TYPES
   const close = () => { if (JSON.stringify(q) + sectionId === original || confirm('저장하지 않은 변경이 있습니다. 닫을까요?')) onClose() }
   const save = () => {
@@ -327,13 +368,14 @@ function QuestionEditor({ t, editing, answered, onClose, onSave }: {
               <input type="checkbox" disabled={locked || q.type === 'grade'} checked={q.purpose === 'score'} onChange={(e) => set({ purpose: e.target.checked ? 'score' : 'info' })} /> 점수에 반영
             </label>
             {q.options.map((o, i) => (
-              <div className="opt-row" key={o.id}>
+              <div className={`opt-row ${optDrag.cls(i, q.options.length)}`} key={o.id} data-drag-group="opt">
+                {/* D-238: 선택지도 영역·문항처럼 끌어서 순서 바꾸기(키보드 ↑↓) */}
+                <DragHandle label={`선택지 ${i + 1} 순서 바꾸기 — 끌어서 옮기기(키보드 ↑↓)`} onStart={optDrag.start(i)} onKey={(d) => moveOpt(i, i + d)} />
                 <input type="text" aria-label={`선택지 ${i + 1}`} value={o.label} onChange={(e) => set({ options: q.options.map((x, k) => (k === i ? { ...x, label: e.target.value } : x)) })} />
                 {q.purpose === 'score' && q.type !== 'grade' && (
                   <input type="number" className="score" aria-label={`선택지 ${i + 1} 점수`} placeholder="점수" disabled={locked} value={o.value ?? ''}
                     onChange={(e) => set({ options: q.options.map((x, k) => (k === i ? { ...x, value: e.target.value === '' ? null : Number(e.target.value) } : x)) })} />
                 )}
-                <button className="btn small" aria-label="선택지 위로" disabled={i === 0} onClick={() => { const o2 = [...q.options]; [o2[i - 1], o2[i]] = [o2[i], o2[i - 1]]; set({ options: o2 }) }}>↑</button>
                 <button className="btn small danger" disabled={locked || q.options.length <= 2} onClick={() => set({ options: q.options.filter((_, k) => k !== i) })}>삭제</button>
               </div>
             ))}

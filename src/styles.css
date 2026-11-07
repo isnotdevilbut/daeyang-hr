@@ -1757,3 +1757,9 @@ body.drag-sorting, body.drag-sorting * { cursor: grabbing !important; user-selec
 .team-multi-list { display: grid; gap: 6px; margin-top: 6px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-solid); }
 .team-multi-list { position: absolute; left: 0; right: 0; top: 100%; z-index: 20; box-shadow: var(--shadow-1); }
 .form-grid .field select { align-self: start; }
+/* D-238: 선택지 끌어서 순서 바꾸기 — 문항과 같은 표시(놓일 자리에 파란 선) */
+.opt-row { position: relative; border-radius: 8px; }
+.opt-row.dragging { opacity: 0.45; }
+.opt-row.drop-before { box-shadow: 0 -3px 0 var(--brand-blue); }
+.opt-row.drop-after { box-shadow: 0 3px 0 var(--brand-blue); }
+.opt-row .drag-handle { flex: none; }
