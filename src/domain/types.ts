@@ -29,6 +29,8 @@ export interface Employee {
   empNo: string // 문자열: 앞자리 0 보존
   name: string
   teamId: ID
+  /** 임원이 여러 팀을 총괄할 때 맡은 팀 전부(D-237, 첫 번째 = teamId). 없으면 teamId 하나 */
+  teamIds?: ID[]
   position: string // 직급 표시 이름(positionId 직급의 이름과 같게 유지)
   /** 직급 ID (D-080). 평가 구분은 직급 설정에서, 실제 팀장 여부는 팀장 연결로 */
   positionId?: ID

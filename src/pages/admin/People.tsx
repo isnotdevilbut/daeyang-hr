@@ -2,13 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { update, useAppState } from '../../data/store'
 import { can } from '../../domain/permissions'
-import { activeTeams, applyTier, customFieldErrors, customFieldUsage, customValueText, deleteCustomField, deleteEmployee, deleteTeam, nameConflicts, otherLead, saveCustomField, syncTiers, teamMembers, teamNameError, tierOf, TIERS } from '../../domain/org'
+import { activeTeams, applyTier, teamIdsOf, teamNamesOf, customFieldErrors, customFieldUsage, customValueText, deleteCustomField, deleteEmployee, deleteTeam, nameConflicts, otherLead, saveCustomField, syncTiers, teamMembers, teamNameError, tierOf, TIERS } from '../../domain/org'
 import { syncOpenCycles } from '../../domain/cycleSync'
 import { joinOpenCycles } from '../../domain/cycle'
 import { activeJobs, classDefault, deleteJob, deletePosition, jobName, jobUsage, positionById, positionName, positionsOf, positionUsage, saveJob, savePosition } from '../../domain/catalog'
 import { applyRosterFill, applyRosterUpdates, canFill, canRegister, checkRoster, checkRosterFill, readRosterFile, ROSTER_FIELDS, rosterEmployees, rosterLeads, templateXlsxBytes, templateCsvText, fillXlsxBytes, fillCsvText, type ExistingMode, type RosterRow } from '../../domain/roster'
 import type { Sheet } from '../../domain/xlsx'
-import type { CustomField, Employee, EvalClass, JobDef, PositionDef } from '../../domain/types'
+import type { AppState, CustomField, Employee, EvalClass, JobDef, PositionDef } from '../../domain/types'
 import { Forbidden, Modal, Notice } from '../../components/ui'
 import { saveFile } from './Report'
 
@@ -63,8 +63,8 @@ function EmployeeList() {
   const list = s.employees
     .filter((e) => e.active)
     .filter((e) => {
-      if (needle && !(e.name.includes(needle) || e.empNo.includes(needle) || teamName(e.teamId).includes(needle))) return false
-      if (team && e.teamId !== team) return false
+      if (needle && !(e.name.includes(needle) || e.empNo.includes(needle) || teamNamesOf(s, e).includes(needle))) return false
+      if (team && !teamIdsOf(e).includes(team)) return false // 여러 팀을 맡은 임원은 맡은 팀 어느 것으로 걸러도 보임(D-237)
       if (roleF && positionById(s, e.positionId)?.id !== roleF) return false
       return true
     })
@@ -123,7 +123,7 @@ function EmployeeList() {
                 <tr><td colSpan={6 + fields.length} className="empty-row">조건에 맞는 직원이 없습니다.</td></tr>
               ) : list.map((e) => (
                 <tr key={e.id}>
-                  <td className="ec">{teamName(e.teamId)}</td>
+                  <td className="ec">{teamNamesOf(s, e)}</td>
                   <td className="ec">{positionName(s, e)}</td>
                   <td className="ec ec-name"><span className="cell-in name-grp"><b>{e.name}</b></span></td>
                   <td className="ec">{jobName(s, e.jobType)}</td>
@@ -231,7 +231,8 @@ function EmployeeModal({ emp, onClose }: { emp: Employee; onClose: () => void })
   const save = () => {
     const empNo = e.empNo.trim() // 글자 그대로 저장 → 앞자리 0 보존
     if (!e.name.trim() || !empNo) return setErr('이름과 사번은 필수입니다.')
-    if (!e.teamId) return setErr('팀을 선택하세요.')
+    const multiTeams = tier === '임원' ? teamIdsOf(e).filter((id) => activeTeams(s).some((t) => t.id === id)) : [e.teamId]
+    if (!multiTeams.length || !multiTeams[0]) return setErr('팀을 선택하세요.')
     if (s.employees.some((x) => x.empNo === empNo && x.id !== e.id)) return setErr(`사번 ${empNo}는 이미 있습니다.`)
     // 다른 사람이 이미 이 팀의 팀장이면 조용히 바꾸지 않고 확인
     if (replaced && !confirm(`${teamName(e.teamId)}의 팀장은 현재 ${replaced.name}입니다.\n${e.name.trim() || '이 직원'}(으)로 바꾸면 ${replaced.name}은(는) 사원이 됩니다. 계속할까요?`)) return
@@ -239,8 +240,12 @@ function EmployeeModal({ emp, onClose }: { emp: Employee; onClose: () => void })
       // 기존 직원: 같은 ID를 그대로 갱신(이전 저장 데이터의 다른 필드도 보존)
       let id = e.id
       const isNewEmp = !id
-      if (id) d.employees = d.employees.map((x) => (x.id === id ? { ...x, ...e, name: e.name.trim(), empNo } : x))
-      else { id = `e-${Date.now().toString(36)}`; d.employees.push({ ...e, id, name: e.name.trim(), empNo }) }
+      // D-237: 임원은 여러 팀을 맡을 수 있음(첫 팀 = 기본 팀), 그 외는 팀 하나
+      const teamPart = { teamId: multiTeams[0], teamIds: multiTeams.length > 1 ? multiTeams : undefined }
+      if (id) d.employees = d.employees.map((x) => (x.id === id ? { ...x, ...e, ...teamPart, name: e.name.trim(), empNo } : x))
+      else { id = `e-${Date.now().toString(36)}`; d.employees.push({ ...e, ...teamPart, id, name: e.name.trim(), empNo }) }
+      const saved = d.employees.find((x) => x.id === id)!
+      if (!saved.teamIds) delete saved.teamIds
       d.employees.find((x) => x.id === id)!.positionId = posId
       applyTier(d, id, tier)
       if (isNewEmp) joinOpenCycles(d, [id]) // 새 직원은 준비·진행 회차 참여자로 시작 (D-112)
@@ -260,11 +265,14 @@ function EmployeeModal({ emp, onClose }: { emp: Employee; onClose: () => void })
       <div className="grid form-grid">
         <label className="field">이름<input type="text" value={e.name} onChange={(x) => set('name', x.target.value)} /></label>
         <label className="field">사번<input type="text" inputMode="numeric" value={e.empNo} onChange={(x) => set('empNo', x.target.value)} /></label>
-        <label className="field">팀
-          <select value={e.teamId} onChange={(x) => set('teamId', x.target.value)}>
-            {activeTeams(s).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-          </select>
-        </label>
+        {tier === '임원'
+          // D-237: 임원은 여러 팀을 총괄할 수 있어 토글을 펼치면 팀 체크박스(여러 개)
+          ? <TeamMulti s={s} value={teamIdsOf(e)} onChange={(ids) => setE({ ...e, teamId: ids[0] ?? '', teamIds: ids })} />
+          : <label className="field">팀
+              <select value={e.teamId} onChange={(x) => setE({ ...e, teamId: x.target.value, teamIds: undefined })}>
+                {activeTeams(s).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
+            </label>}
         <label className="field">직급
           <select value={posId} onChange={(x) => setPosId(x.target.value)}>
             {positionsOf(s).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -917,5 +925,26 @@ function MembersRow({ id, cols, list }: { id: string; cols: number; list: Employ
         )}
       </td>
     </tr>
+  )
+}
+
+/** 임원의 팀(D-237): 토글을 펼치면 팀 체크박스 — 여러 팀 선택 가능, 처음 고른 팀이 기본 팀 */
+function TeamMulti({ s, value, onChange }: { s: AppState; value: string[]; onChange: (ids: string[]) => void }) {
+  const [open, setOpen] = useState(false)
+  const teams = activeTeams(s)
+  const names = value.map((id) => teams.find((t) => t.id === id)?.name).filter(Boolean)
+  const flip = (id: string, on: boolean) => onChange(on ? [...value.filter((x) => x !== id), id] : value.filter((x) => x !== id))
+  return (
+    <div className="field team-multi">
+      <span>팀 <span className="muted small">(여러 팀 선택 가능)</span></span>
+      <button type="button" className={`team-multi-btn ${open ? 'open' : ''}`} aria-expanded={open} onClick={() => setOpen(!open)}>
+        <span>{names.length ? names.join(' · ') : '팀 선택'}</span><span className="caret" aria-hidden>▾</span>
+      </button>
+      {open && (
+        <div className="team-multi-list" role="group" aria-label="맡은 팀">
+          {teams.map((t) => <label key={t.id} className="check"><input type="checkbox" checked={value.includes(t.id)} onChange={(x) => flip(t.id, x.target.checked)} /> {t.name}</label>)}
+        </div>
+      )}
+    </div>
   )
 }

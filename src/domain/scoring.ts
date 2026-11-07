@@ -175,7 +175,10 @@ function baseResult(state: AppState, cycle: Cycle, targetId: string): Omit<Perso
   })
   // 조직 단위는 회차 시작 시점 소속(스냅샷) 기준 — 나중에 팀을 옮겨도 과거 회차 KPI는 그대로
   const kpiDetail = deptKpi(state, cycle.id, target.departmentId, target.jobType) // 그 사람 직무에 적용되는 지표만(D-150)
-  const kpi = kpiDetail.score
+  // 여러 팀을 총괄하는 임원(D-237): 맡은 팀들의 팀 KPI 평균(점수 있는 팀만)
+  const multi = state.employees.find((e) => e.id === targetId)?.teamIds
+  const multiKpi = target.isExecutive && multi && multi.length > 1 ? multi.map((tid) => deptKpi(state, cycle.id, tid, target.jobType).score).filter((x): x is number => x !== null) : null
+  const kpi = multiKpi ? (multiKpi.length ? multiKpi.reduce((a, b) => a + b, 0) / multiKpi.length : null) : kpiDetail.score
   // D-215: 최종 점수 = (보정 점수가 있으면 그 값, 없으면 기초 점수) × (100 − 팀 KPI%) + 팀 KPI 점수 × 팀 KPI%.
   // 팀 KPI% = KPI 반영 > 직급별 비율의 그 직급 '팀 KPI'(켜진 경우, 사원 20·팀장 40·임원 60). 유효한 팀 KPI가 없으면 기초(보정) 점수 그대로.
   // 기초 점수: 사원·팀장 = 1·2·3단계(20/40/40) 합산, 임원 = 받은 상향평가 평균(모두 제출됐을 때). 팀 보정·최종 지정 점수는 쓰지 않음(D-197)

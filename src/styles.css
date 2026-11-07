@@ -1749,3 +1749,11 @@ body.drag-sorting, body.drag-sorting * { cursor: grabbing !important; user-selec
 /* D-236: 빼기 버튼 작게 */
 .exec-x { width: 18px; height: 18px; border-width: 1.3px; font-size: 13px; }
 .exec-x span { margin-top: -1px; }
+/* D-237: 임원 팀 여러 개 선택 — 토글 버튼 + 펼치면 팀 체크박스 */
+.team-multi { position: relative; }
+.team-multi-btn { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 44px; padding: 8px 12px; border: 1px solid var(--line-input); border-radius: 10px; background: #fff; font: inherit; color: var(--text); cursor: pointer; text-align: left; }
+.team-multi-btn .caret { color: var(--brand-blue); transition: transform 0.15s; }
+.team-multi-btn.open .caret { transform: rotate(180deg); }
+.team-multi-list { display: grid; gap: 6px; margin-top: 6px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-solid); }
+.team-multi-list { position: absolute; left: 0; right: 0; top: 100%; z-index: 20; box-shadow: var(--shadow-1); }
+.form-grid .field select { align-self: start; }

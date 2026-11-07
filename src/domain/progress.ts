@@ -166,9 +166,11 @@ export function personSnap(s: Pick<AppState, 'employees' | 'teams'>, cycle: Cycl
   if (t) return t
   const e = s.employees.find((x) => x.id === id)
   if (!e) return undefined
-  const team = s.teams.find((x) => x.id === e.teamId)?.name ?? ''
+  // 여러 팀을 총괄하는 임원(D-237)은 팀 이름을 모두(그룹·KPI 기준 팀은 첫 팀)
+  const team = (e.teamIds?.length ? e.teamIds : [e.teamId]).map((id) => s.teams.find((x) => x.id === id)?.name ?? '').filter(Boolean).join(' · ')
+  const first = s.teams.find((x) => x.id === e.teamId)?.name ?? ''
   return {
-    employeeId: e.id, name: e.name, empNo: e.empNo, companyName: '', departmentId: e.teamId, departmentName: team, teamName: team,
+    employeeId: e.id, name: e.name, empNo: e.empNo, companyName: '', departmentId: e.teamId, departmentName: first, teamName: team,
     position: e.position, jobType: e.jobType, isTeamLead: s.teams.some((x) => !x.archived && x.leadId === e.id), isExecutive: e.isExecutive || e.isCeo,
   }
 }

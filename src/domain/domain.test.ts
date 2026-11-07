@@ -3567,3 +3567,21 @@ describe('주관식 하나로 (D-230)', async () => {
     expect(Q.unifyTextV36(structuredClone(m.state))).toEqual([])
   })
 })
+
+describe('임원 여러 팀 총괄 (D-237)', async () => {
+  const O = await import('./org')
+  const P = await import('./progress')
+  it('맡은 팀 전부 표시, 첫 팀이 기본(결과 묶음), 팀 KPI는 맡은 팀들 평균', () => {
+    const s = createSeed(); const c = s.cycles.find((x) => x.status === '진행')!
+    const ex = s.employees.find((e) => e.isExecutive && e.active)!
+    const other = s.teams.find((t) => !t.archived && t.id !== ex.teamId)!
+    ex.teamIds = [ex.teamId, other.id]
+    expect(O.teamIdsOf(ex)).toEqual([ex.teamId, other.id])
+    expect(O.teamNamesOf(s, ex)).toContain(' · ')
+    const snap = P.personSnap(s, c, ex.id)!
+    expect(snap.departmentId).toBe(ex.teamId); expect(snap.teamName).toBe(O.teamNamesOf(s, ex))
+    s.kpi = [{ cycleId: c.id, departmentId: ex.teamId, score: 80, mode: 'manual' }, { cycleId: c.id, departmentId: other.id, score: 60, mode: 'manual' }] as any
+    s.kpiIndicators = []
+    expect(personResult(s, c, ex.id)!.kpi).toBe(70)
+  })
+})

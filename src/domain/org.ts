@@ -212,3 +212,8 @@ export function customValueText(f: CustomField, v: string | undefined): string {
   if (!v) return ''
   return f.type === 'select' ? f.options.find((o) => o.id === v)?.label ?? '' : v
 }
+
+/** 그 직원의 팀들(D-237): 여러 팀을 총괄하는 임원은 맡은 팀 전부, 그 외는 소속 팀 하나 */
+export const teamIdsOf = (e: Pick<Employee, 'teamId' | 'teamIds'>): string[] => (e.teamIds?.length ? e.teamIds : [e.teamId])
+/** 팀 이름 표시 — 여러 팀이면 '생산팀 · 현장팀' */
+export const teamNamesOf = (s: Pick<AppState, 'teams'>, e: Pick<Employee, 'teamId' | 'teamIds'>): string => teamIdsOf(e).map((id) => s.teams.find((t) => t.id === id)?.name ?? '').filter(Boolean).join(' · ')
