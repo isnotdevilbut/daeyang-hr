@@ -279,6 +279,8 @@ export interface KpiIndicator {
   departmentId: ID
   name: string
   unit: KpiUnit
+  /** 단위 '기타'일 때 직접 쓴 단위(예: 회, 시간, 개 — D-240). 없으면 단위 표시 없음 */
+  unitText?: string
   direction: 'higher' | 'lower' // 높을수록 좋음 / 낮을수록 좋음
   target: number | null // null = 미입력
   actual: number | null

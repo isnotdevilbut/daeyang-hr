@@ -179,8 +179,8 @@ function DeptEditor({ cycle, deptId, deptName, editable }: { cycle: Cycle; deptI
                   </>}
                 </div>
                 <div className="ki-stats">
-                  <div className="ki-tile"><span className="l">목표</span><b>{withUnit(ind.target, ind.unit)}</b></div>
-                  <div className="ki-tile"><span className="l">실적</span><b>{withUnit(ind.actual, ind.unit)}</b></div>
+                  <div className="ki-tile"><span className="l">목표</span><b>{withUnit(ind.target, ind.unit, ind.unitText)}</b></div>
+                  <div className="ki-tile"><span className="l">실적</span><b>{withUnit(ind.actual, ind.unit, ind.unitText)}</b></div>
                   <div className="ki-tile rate"><span className="l">달성률</span><b>{r.status === 'targetMet' ? '목표 달성' : r.rate !== null ? `${f1(r.rate)}%` : <span className="bad">{r.message}</span>}</b></div>
                   <div className="ki-tile"><span className="l">가중치</span><b>{ind.weight === null ? <span className="bad">미입력</span> : `${ind.weight}%`}</b></div>
                 </div>
@@ -233,7 +233,7 @@ function KpiModal({ dialog, cycle, deptId, blank, k, onClose, onSaved }: { dialo
     const switching = adding && k.mode === 'manual'
     if (switching && hasManual && !confirm(`현재 직접 입력한 팀 점수(${k.manualScore}점)가 적용 중입니다.\n지표를 추가하면 지표 계산 점수를 적용하고, 직접 입력 점수는 지우지 않고 보관합니다. 계속할까요?`)) return
     update((d) => {
-      const clean: KpiIndicator = { id: cur.id || `kpi-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`, cycleId: cur.cycleId, departmentId: cur.departmentId, name: cur.name.trim(), unit: cur.unit, direction: cur.direction, target: cur.target, actual: cur.actual, weight: cur.weight, ...(cur.jobs?.length ? { jobs: [...cur.jobs] } : {}) }
+      const clean: KpiIndicator = { id: cur.id || `kpi-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`, cycleId: cur.cycleId, departmentId: cur.departmentId, name: cur.name.trim(), unit: cur.unit, ...(cur.unit === 'other' && cur.unitText?.trim() ? { unitText: cur.unitText.trim() } : {}), direction: cur.direction, target: cur.target, actual: cur.actual, weight: cur.weight, ...(cur.jobs?.length ? { jobs: [...cur.jobs] } : {}) }
       const i = d.kpiIndicators.findIndex((x) => x.id === clean.id)
       if (i >= 0) d.kpiIndicators[i] = clean
       else d.kpiIndicators.push(clean)
@@ -278,6 +278,8 @@ function KpiModal({ dialog, cycle, deptId, blank, k, onClose, onSaved }: { dialo
               {(Object.keys(UNIT_LABEL) as KpiUnit[]).map((u) => <option key={u} value={u}>{UNIT_LABEL[u]}</option>)}
             </select>
           </label>
+          {/* D-240: '기타'를 고르면 단위를 직접 입력(예: 회, 시간, 개) */}
+          {f.unit === 'other' && <label className="field">단위 직접 입력<input type="text" maxLength={10} placeholder="예: 회, 시간, 개" value={f.unitText ?? ''} onChange={(e) => setF({ ...f, unitText: e.target.value })} /></label>}
           <label className="field" style={{ gridColumn: '1 / -1' }}>지표 이름<input type="text" value={f.name} autoFocus={!adding} onChange={(e) => setF({ ...f, name: e.target.value })} /></label>
           {/* D-150: 적용 직무 — 같은 팀 안에서도 직무마다 다른 지표. 전체 직무 = 그 팀 모두 */}
           <label className="field">적용 직무

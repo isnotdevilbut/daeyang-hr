@@ -11,9 +11,10 @@ import type { AppState, Cycle, JobType, KpiBlend, KpiEntry, KpiIndicator, KpiUni
 export const UNIT_TEXT: Record<KpiUnit, string> = { percent: '%', count: '건', point: '점', amount: '원', other: '' }
 export const UNIT_LABEL: Record<KpiUnit, string> = { percent: '%', count: '건', point: '점', amount: '금액(원)', other: '기타' }
 
-export function withUnit(v: number | null, unit: KpiUnit): string {
+export function withUnit(v: number | null, unit: KpiUnit, unitText?: string): string {
   if (v === null) return '미입력'
   const n = Number.isInteger(v) ? v.toLocaleString('ko-KR') : v.toLocaleString('ko-KR', { maximumFractionDigits: 2 })
+  if (unit === 'other') return unitText?.trim() ? `${n}${unitText.trim()}` : n // D-240: 기타 = 직접 쓴 단위
   return unit === 'amount' ? `${n}원` : `${n}${UNIT_TEXT[unit]}`
 }
 
