@@ -17,6 +17,7 @@ import { versionScopesV30, versionSlotsV32 } from '../domain/versions'
 import { purgeInactiveV33 } from '../domain/org'
 import { stripVirtualV34 } from '../domain/demoV34'
 import { gradeQNoExecV35 } from '../domain/gradeQV35'
+import { unifyTextV36 } from '../domain/qtypeV36'
 import { execUpwardFormV27, execUpwardPairsV28, upwardDemoMoreV29, upwardExecV26, upwardFormV22, upwardPairedV31, upwardV18 } from '../domain/upward'
 import { joinAllStaff } from '../domain/joinAllV19'
 import { leadUpwardOpen, moreDemo } from '../domain/demoV20'
@@ -313,7 +314,13 @@ export function migrate(raw: any, opts: { until?: number } = {}): MigrationResul
     s.schemaVersion = 35
   }
 
-  if (s.schemaVersion !== 35) return null
+  if (s.schemaVersion === 35) {
+    // v35 → v36 (D-230): 짧은 주관식·긴 서술형 → '주관식' 하나
+    notes.push(...unifyTextV36(s))
+    s.schemaVersion = 36
+  }
+
+  if (s.schemaVersion !== 36) return null
   return { state: s as AppState, notes }
 }
 

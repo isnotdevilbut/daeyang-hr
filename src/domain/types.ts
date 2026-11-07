@@ -50,8 +50,8 @@ export const QTYPE_LABEL: Record<QuestionType, string> = {
   ox: 'O/X (예/아니오)',
   scale5: '5점 척도',
   grade: '등급 선택',
-  short: '짧은 주관식',
-  long: '긴 서술형',
+  short: '주관식', // D-230: 짧은 주관식·긴 서술형 → '주관식' 하나
+  long: '주관식',
 }
 
 /**

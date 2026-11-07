@@ -47,9 +47,9 @@ export function ctxFor(cycle: Cycle, a: Assignment): QCtx {
 }
 
 // ── 문항 만들기 ─────────────────────────────────────
-export const BASIC_TYPES: QuestionType[] = ['short', 'long', 'single', 'ox', 'scale5']
+export const BASIC_TYPES: QuestionType[] = ['long', 'single', 'ox', 'scale5'] // D-230: 주관식은 하나(여러 줄 입력)
 export const TYPE_TEXT: Record<QuestionType, string> = {
-  short: '짧은 주관식', long: '긴 서술형', single: '단일선택 객관식', ox: '예/아니오(O/X)', scale5: '5점 척도', grade: '등급 선택',
+  short: '주관식', long: '주관식', single: '단일선택 객관식', ox: '예/아니오(O/X)', scale5: '5점 척도', grade: '등급 선택',
 }
 export const isChoice = (t: QuestionType) => t === 'single' || t === 'ox' || t === 'scale5' || t === 'grade'
 
@@ -109,7 +109,7 @@ export function validateQuestion(q: Question): string[] {
       e.push('점수에 반영하려면 모든 선택지에 점수를 입력하세요. (빈 점수를 0점으로 처리하지 않습니다)')
   }
   // D-103: 서술형은 배점을 입력했을 때만 점수 반영(관리자 채점). 자동 점수화하지 않음
-  if (!isChoice(q.type) && q.purpose === 'score' && !(typeof q.points === 'number' && q.points > 0)) e.push('서술형을 점수에 반영하려면 배점을 입력하세요(관리자가 채점).')
+  if (!isChoice(q.type) && q.purpose === 'score' && !(typeof q.points === 'number' && q.points > 0)) e.push('주관식을 점수에 반영하려면 배점을 입력하세요(관리자가 채점).')
   if (q.points !== undefined && q.points !== null && !(q.points >= 0 && Number.isFinite(q.points))) e.push('문항 배점은 0 이상 숫자로 입력하세요.')
   return e
 }
@@ -166,7 +166,7 @@ const Q_HEADER_ALIAS: Record<string, string> = {
 export const Q_MAX_ROWS = 500
 
 const TYPE_ALIAS: Record<string, QuestionType> = {
-  '짧은 주관식': 'short', 주관식: 'short', 단답형: 'short', '긴 서술형': 'long', 서술형: 'long',
+  '짧은 주관식': 'long', 주관식: 'long', 단답형: 'long', '긴 서술형': 'long', 서술형: 'long', // D-230: 모두 주관식 하나로
   '단일선택': 'single', '단일선택 객관식': 'single', 객관식: 'single',
   'O/X': 'ox', OX: 'ox', '예/아니오': 'ox', '예/아니오(O/X)': 'ox', '5점 척도': 'scale5', '5점척도': 'scale5', 척도: 'scale5',
   등급: 'grade', '등급 선택': 'grade',
@@ -271,7 +271,7 @@ export function parseQuestionTable(table: string[][], defaultRules: EvaluatorRul
     if (pts !== null && !areaMode) q.points = pts // 영역 표에서는 배점 = 영역 배점(문항 배점 아님)
     if (type === 'scale5' || type === 'grade') q.purpose = 'score'
     if (scoreRaw) {
-      if (!isChoice(type)) errors.push('선택지점수: 주관식·서술형은 점수에 반영할 수 없음')
+      if (!isChoice(type)) errors.push('선택지점수: 주관식은 점수에 반영할 수 없음')
       else {
         const vals = scoreRaw.split('|').map((x) => Number(x.trim()))
         if (vals.length !== q.options.length || vals.some((v) => Number.isNaN(v))) errors.push(`선택지점수: 선택지 ${q.options.length}개와 개수가 맞지 않거나 숫자가 아님`)

@@ -315,7 +315,7 @@ function QuestionEditor({ t, editing, answered, onClose, onSave }: {
         </div>
         <label className="check"><input type="checkbox" checked={q.required} onChange={(e) => set({ required: e.target.checked })} /> 필수 응답</label>
         {/* 문항 배점(D-103): 영역 안 문항 비중(선택형), 서술형은 채점 범위(0~배점) */}
-        <label className="field q-pts">문항 배점 <span className="muted">(선택 · 영역 안 비중, 서술형은 채점 만점)</span>
+        <label className="field q-pts">문항 배점 <span className="muted">(선택 · 영역 안 비중, 주관식은 채점 만점)</span>
           <input type="number" inputMode="decimal" className="no-spin" value={q.points ?? ''} placeholder="—" onWheel={(e) => e.currentTarget.blur()}
             onChange={(e) => set({ points: e.target.value === '' ? null : Number(e.target.value), ...(!isChoice(q.type) && e.target.value === '' ? { purpose: 'info' as const } : {}) })} />
         </label>

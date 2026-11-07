@@ -5,6 +5,7 @@ import { versionScopesV30, versionSlotsV32 } from './versions'
 import { purgeInactiveV33 } from './org'
 import { stripVirtualV34 } from './demoV34'
 import { gradeQNoExecV35 } from './gradeQV35'
+import { unifyTextV36 } from './qtypeV36'
 import { EXEC_BLEND_OLD, execUpwardFormV27, execUpwardPairsV28, upwardDemoMoreV29, upwardExecV26, upwardPairedV31, upwardV18 } from './upward'
 import { joinAllStaff } from './joinAllV19'
 import { leadUpwardOpen, moreDemo } from './demoV20'
@@ -25,7 +26,7 @@ import { createCycle, DEFAULT_TEMPLATE_BY_JOB, eligibleTargets } from './cycle'
 import { isUnlocked } from './progress'
 
 // v2: 상향평가 제외 / v3: 단계 반영 비율 회차별 / v4: KPI 지표·개인평가 반영. 이전 저장본은 data/migrate.ts에서 변환
-export const SCHEMA_VERSION = 35
+export const SCHEMA_VERSION = 36
 
 function rng(seed: number) {
   return () => {
@@ -245,5 +246,7 @@ export function createSeed(opts: { legacy?: boolean; until?: number } = {}): App
   stripVirtualV34(state) // '(가상)' 표시 떼기 (D-218) — 저장 데이터 변환과 같은 함수
   if ((opts.until ?? SCHEMA_VERSION) < 35) { state.schemaVersion = opts.until!; return state }
   gradeQNoExecV35(state) // 임원평가에서 종합 등급 빼기 (D-223) — 저장 데이터 변환과 같은 함수
+  if ((opts.until ?? SCHEMA_VERSION) < 36) { state.schemaVersion = opts.until!; return state }
+  unifyTextV36(state) // 주관식 하나로 (D-230) — 저장 데이터 변환과 같은 함수
   return state
 }

@@ -76,7 +76,7 @@ export function pointsErrors(t: Template): string[] {
   for (const s of t.sections) for (const q of s.questions) {
     if (!q.active) continue
     if (q.points !== undefined && q.points !== null && !(q.points >= 0)) e.push(`'${q.title}' 문항 배점은 0 이상이어야 합니다.`)
-    if (!isChoice(q.type) && q.purpose === 'score' && !(typeof q.points === 'number' && q.points > 0)) e.push(`'${q.title}' 서술형 점수 문항에는 배점을 입력하세요.`)
+    if (!isChoice(q.type) && q.purpose === 'score' && !(typeof q.points === 'number' && q.points > 0)) e.push(`'${q.title}' 주관식 점수 문항에는 배점을 입력하세요.`)
   }
   const g = gradeScaleOf(t)
   if (Object.values(g).some((v) => !Number.isFinite(v) || v < 0)) e.push('등급 환산 점수는 0 이상 숫자로 입력하세요.')
