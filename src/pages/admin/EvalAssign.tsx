@@ -9,7 +9,7 @@ import { GRADE_CUTS_DEFAULT } from '../../domain/scoring'
 import { pathFor, STAGE_OF_RULE, statusOf } from '../../domain/progress'
 import { cycleHasResponses, weightErrors, weightSum } from '../../domain/questions'
 import { type Cycle, type EvaluatorRule } from '../../domain/types'
-import { SecToggle } from '../../components/ui'
+import { Modal, SecToggle } from '../../components/ui'
 import { targetPosition } from '../../domain/catalog'
 
 type PathKey = 'member' | 'lead'
@@ -155,7 +155,7 @@ function Assignments({ cycle, locked, execDraft, setExecDraft, onSave, msg }: { 
   const [q, setQ] = useState('')
   const [team, setTeam] = useState('')
   const [note, setNote] = useState('') // 팀 전체 선택이 제출된 평가 때문에 일부만 반영됐을 때 짧은 안내
-  const [open, setOpen] = useState<Record<string, boolean>>({}) // `${임원}|${팀}` → 펼침 (선택과 무관)
+  const [adding, setAdding] = useState<string | null>(null) // D-231: '+ 추가'를 누른 임원
   const execs = cycleExecs(s, cycle)
   const name = (id: string) => s.employees.find((e) => e.id === id)?.name ?? '?'
   const rows = cycle.targets
@@ -215,68 +215,48 @@ function Assignments({ cycle, locked, execDraft, setExecDraft, onSave, msg }: { 
       </div>
       {unassigned.length > 0 && <p className="exec-free-note">미지정: {unassigned.map((r) => r.t.name).join(', ')} <span className="muted">— 담당 임원을 체크하기 전까지 임원평가 미완료</span></p>}
       {note && <p className="exec-free-note exec-note" role="status">{note}</p>}
+      {/* D-231: 임원 카드 = 그 임원이 맡은 사람만(팀별), ✕로 빼기 · '+ 추가'로 팀별 토글 → 직원 목록에서 골라 추가(체크박스 펼침 없앰) */}
       <div className="exec-cols">
         {execs.map((ex) => {
           const mine = rows.filter((r) => r.cur === ex.id)
+          const shownMine = mine.filter(visible)
           return (
             <section key={ex.id} className="exec-col" aria-label={`${ex.name} ${title}`}>
-              <header className="exec-col-head"><b>{ex.name}</b><span className="exec-n">{mine.length}명</span></header>
-              {teams.map((tm) => {
-                const all = rows.filter((r) => r.t.teamName === tm)
-                const shown = all.filter(visible)
-                if (!shown.length) return null
-                const key = `${ex.id}|${tm}`
-                const isOpen = !!open[key] || !!qq
-                const sel = all.filter((r) => r.cur === ex.id).length
-                const pick = shown.filter((r) => !fixed(r) || r.cur === ex.id) // 팀 전체 선택 대상: 보이는 사람만, 다른 임원에게 제출된 평가 제외
-                // 팀 체크(D-087): 보이는 팀원이 모두 이 임원 담당일 때만 체크, 일부·없음은 빈 칸(부분 표시 없음 — 인원은 담당 인원만, D-204)
-                const onAll = shown.length > 0 && shown.every((r) => r.cur === ex.id)
-                return (
-                  <div key={tm} className={`exec-team ${isOpen ? 'open' : ''}`}>
-                    <div className="exec-team-head">
-                      <input type="checkbox" aria-label={`${ex.name} ${tm} 전체 선택`} disabled={locked || !pick.some((r) => !fixed(r))} checked={onAll}
-                        onChange={() => {
-                          const to = onAll ? '' : ex.id
-                          const skipped = shown.filter((r) => fixed(r) && r.cur !== to && (to || r.cur === ex.id))
-                          if (setMany(pick, to) && skipped.length) setNote(`${tm}: ${skipped.map((r) => r.t.name).join(', ')}은(는) 바꿀 수 없어 그대로 두었습니다.`)
-                          else setNote('')
-                        }} />
-                      <button type="button" className="exec-team-toggle" aria-expanded={isOpen} onClick={() => setOpen((o) => ({ ...o, [key]: !o[key] }))}>
-                        <span>{tm}</span>{sel > 0 && <span className="exec-team-n on">{sel}명</span>}{/* D-204: 이 임원 담당 인원만 파란색, 0명이면 표시 없음 */}<span className="caret" aria-hidden>▾</span>
-                      </button>
-                    </div>
-                    {isOpen && (
-                      <ul className="exec-people">
-                        {shown.map((r) => {
-                          const on = r.cur === ex.id
-                          const other = r.cur && !on ? name(r.cur) : ''
-                          const lock = locked || fixed(r)
-                          return (
-                            <li key={r.t.employeeId} className={`${execDraft[r.t.employeeId] !== undefined ? 'changed' : ''} ${fixed(r) ? 'fixed' : ''}`}>
-                              <label>
-                                {fixed(r) && on
-                                  // 이 임원이 제출한 평가: 체크 고정(회색 비활성 대신 진한 체크), 해제·이동 불가
-                                  ? <input type="checkbox" className="locked-on" checked readOnly aria-disabled="true" aria-label={`${ex.name} 담당 ${r.t.name} (변경 불가)`} onClick={(e) => e.preventDefault()} />
-                                  : <input type="checkbox" checked={on} disabled={lock} aria-label={`${ex.name} 담당 ${r.t.name}`} onChange={(e) => { setNote(''); setMany([r], e.target.checked ? ex.id : '') }} />}
-                                <b>{r.t.name}</b><span className="muted">{targetPosition(s, cycle, r.t)}</span>
-                              </label>
-                              {/* D-163: '제출' 표시는 하지 않음(제출된 평가는 그대로 변경 불가 — 체크 고정) */}
-                              {other && <span className="muted small">{other} 담당</span>}
-                              {!fixed(r) && !r.cur && <span className="chip unassigned tag">미지정</span>}
-                              {r.st === 'draft' && on && execDraft[r.t.employeeId] === undefined && <span className="muted small">작성 중</span>}
+              <header className="exec-col-head"><b>{ex.name}</b><span className="exec-n">{mine.length}명</span><button type="button" className="btn small exec-add" disabled={locked} onClick={() => { setNote(''); setAdding(ex.id) }}>+ 추가</button></header>
+              {shownMine.length === 0 ? <p className="muted small exec-empty">{mine.length ? '검색 조건에 맞는 사람 없음' : '맡은 사람 없음'}</p> : (
+                <div className="exec-mine">
+                  {teams.map((tm) => {
+                    const list = shownMine.filter((r) => r.t.teamName === tm)
+                    if (!list.length) return null
+                    return (
+                      <div key={tm} className="exec-mine-team">
+                        <div className="exec-mine-tm">{tm} <span className="exec-team-n on">{list.length}명</span></div>
+                        <ul>
+                          {list.map((r) => (
+                            <li key={r.t.employeeId} className={execDraft[r.t.employeeId] !== undefined ? 'changed' : ''}>
+                              <b>{r.t.name}</b><span className="muted">{targetPosition(s, cycle, r.t)}</span>
+                              {r.st === 'draft' && execDraft[r.t.employeeId] === undefined && <span className="muted small">작성 중</span>}
                               {r.noLead && <span className="chip draft tag">팀장 설정 필요</span>}
+                              <span className="spacer" />
+                              {/* 제출된 평가는 담당 고정(빼기 없음, D-163) */}
+                              {!fixed(r) && <button type="button" className="exec-x" disabled={locked} aria-label={`${ex.name} 담당에서 ${r.t.name} 빼기`} title="빼기(미지정으로)" onClick={() => { setNote(''); setMany([r], '') }}>✕</button>}
                             </li>
-                          )
-                        })}
-                      </ul>
-                    )}
-                  </div>
-                )
-              })}
+                          ))}
+                        </ul>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </section>
           )
         })}
       </div>
+      {adding && (() => {
+        const ex = execs.find((x) => x.id === adding)!
+        return <ExecAddModal exName={ex.name} rows={rows.filter((r) => r.cur !== ex.id)} teams={teams} nameOf={name} posOf={(r) => targetPosition(s, cycle, r.t)} fixed={fixed}
+          onClose={() => setAdding(null)} onAdd={(list) => { if (setMany(list, ex.id)) setAdding(null) }} />
+      })()}
       </>}
     </section>
   )
@@ -349,5 +329,55 @@ function GradeRatios() {
         </div>
       )}
     </section>
+  )
+}
+
+/**
+ * 임원에게 사람 추가(D-231): 팀별 토글(처음엔 접힘) → 펼치면 그 팀 직원 목록에서 체크해 추가.
+ * 지금 다른 임원 담당이면 '(지금: OO 담당)' 표시 — 추가하면 이 임원으로 옮김(한 사람 = 담당 임원 한 명). 제출된 평가는 옮길 수 없음
+ */
+type ExecRow = { t: Cycle['targets'][number]; cur: string; st: string }
+function ExecAddModal<R extends ExecRow>({ exName, rows, teams, nameOf, posOf, fixed, onClose, onAdd }: { exName: string; rows: R[]; teams: string[]; nameOf: (id: string) => string; posOf: (r: R) => string; fixed: (r: R) => boolean; onClose: () => void; onAdd: (list: R[]) => void }) {
+  const [q, setQ] = useState('')
+  const [open, setOpen] = useState<Record<string, boolean>>({})
+  const [pick, setPick] = useState<Set<string>>(new Set())
+  const qq = q.trim()
+  const shown = rows.filter((r) => !qq || r.t.name.includes(qq) || r.t.teamName.includes(qq))
+  const toggle = (id: string, on: boolean) => { const n = new Set(pick); if (on) n.add(id); else n.delete(id); setPick(n) }
+  return (
+    <Modal title={`${exName}에게 추가`} onClose={onClose}>
+      <div className="exec-add">
+        <input type="search" placeholder="이름·팀 검색" aria-label="추가할 사람 검색" value={q} onChange={(e) => setQ(e.target.value)} />
+        <div className="exec-add-teams">
+          {teams.map((tm) => {
+            const list = shown.filter((r) => r.t.teamName === tm)
+            if (!list.length) return null
+            const isOpen = !!open[tm] || !!qq
+            const n = list.filter((r) => pick.has(r.t.employeeId)).length
+            return (
+              <div key={tm} className={`exec-team ${isOpen ? 'open' : ''}`}>
+                <button type="button" className="exec-team-toggle" aria-expanded={isOpen} onClick={() => setOpen((o) => ({ ...o, [tm]: !o[tm] }))}>
+                  <span>{tm}</span>{n > 0 && <span className="exec-team-n on">{n}명 선택</span>}<span className="muted small">{list.length}명</span><span className="caret" aria-hidden>▾</span>
+                </button>
+                {isOpen && (
+                  <ul className="exec-people">
+                    {list.map((r) => (
+                      <li key={r.t.employeeId} className={fixed(r) ? 'fixed' : ''}>
+                        <label>
+                          <input type="checkbox" disabled={fixed(r)} checked={pick.has(r.t.employeeId)} aria-label={`${r.t.name} 추가`} onChange={(e) => toggle(r.t.employeeId, e.target.checked)} />
+                          <b>{r.t.name}</b><span className="muted">{posOf(r)}</span>
+                        </label>
+                        <span className="muted small">{fixed(r) ? `${nameOf(r.cur)} 제출 — 옮길 수 없음` : r.cur ? `지금: ${nameOf(r.cur)} 담당` : '담당 없음'}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )
+          })}
+        </div>
+        <div className="row" style={{ marginTop: 12 }}><span className="muted small">{pick.size ? `${pick.size}명 선택` : ''}</span><span className="spacer" /><button className="btn" onClick={onClose}>취소</button><button className="btn primary" disabled={!pick.size} onClick={() => onAdd(rows.filter((r) => pick.has(r.t.employeeId)))}>추가</button></div>
+      </div>
+    </Modal>
   )
 }

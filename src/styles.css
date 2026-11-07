@@ -1707,3 +1707,22 @@ body.drag-sorting, body.drag-sorting * { cursor: grabbing !important; user-selec
 .a4 h3 .rp-who-inline { margin-left: 8px; font-size: 13px; font-weight: 700; color: var(--text); }
 /* D-228: 평가 회차·기간 캡션은 오른쪽 */
 .a4 .rp-caption { justify-content: flex-end; }
+/* D-231: 임원 평가 배정 — 카드에는 맡은 사람만(팀별), ✕로 빼기, '+ 추가' 창은 팀별 토글 → 직원 목록 */
+.exec-col-head { padding-right: 0; gap: 10px; }
+.exec-col-head .exec-n { margin-left: auto; }
+.exec-col-head .exec-add { min-height: 30px; padding: 2px 10px; }
+.exec-empty { margin: 10px 0 4px; }
+.exec-mine-team { padding: 6px 0 2px; border-bottom: 1px solid var(--line-soft); }
+.exec-mine-team:last-child { border-bottom: 0; }
+.exec-mine-tm { font-weight: 800; font-size: 14px; color: var(--text-sub); display: flex; gap: 8px; align-items: baseline; }
+.exec-mine ul { list-style: none; margin: 4px 0 4px; padding: 0; }
+.exec-mine li { display: flex; align-items: center; gap: 8px; padding: 3px 0; }
+.exec-mine li.changed b { color: var(--brand-blue); }
+.exec-x { border: 0; background: transparent; color: var(--danger); font-weight: 900; cursor: pointer; width: 28px; height: 28px; border-radius: 50%; }
+.exec-x:hover:not(:disabled) { background: var(--danger-bg); }
+.exec-add input[type=search] { width: 100%; margin-bottom: 10px; }
+.exec-add-teams { max-height: 52vh; overflow: auto; border: 1px solid var(--line); border-radius: 12px; padding: 4px 10px; }
+.exec-add-teams .exec-team { border-bottom: 1px solid var(--line-soft); }
+.exec-add-teams .exec-team:last-child { border-bottom: 0; }
+.exec-add-teams .exec-team-toggle { width: 100%; }
+.exec-add-teams .exec-people li { display: flex; align-items: center; gap: 10px; justify-content: space-between; }
