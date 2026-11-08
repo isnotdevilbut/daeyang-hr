@@ -76,7 +76,8 @@ function ReportBody({ s, cycle, t, from }: { s: AppState; cycle: Cycle; t: Targe
   ]
   const itemsOf = (g: Group) => [...g.items, ...(g.sub ?? []).flatMap((x) => x.items)]
   const allKeys = groups.flatMap(itemsOf).map((i) => i.key)
-  const [off, setOff] = useState<Set<string>>(new Set())
+  // D-248: 처음엔 자기평가 답변·1단계(자기평가) 점수만 켬 — 팀장·임원평가 답변·의견과 2·3단계 점수는 필요할 때 포함 항목에서 켬
+  const [off, setOff] = useState<Set<string>>(() => new Set(allKeys.filter((k) => /^(lead|exec):/.test(k) || (k.startsWith('stage:') && k !== 'stage:1'))))
   const on = (k: string) => !off.has(k)
   const set = (keys: string[], v: boolean) => { const n = new Set(off); keys.forEach((k) => (v ? n.delete(k) : n.add(k))); setOff(n) }
 

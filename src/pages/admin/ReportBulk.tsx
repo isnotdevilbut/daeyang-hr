@@ -23,7 +23,7 @@ const KINDS: [Kind, string][] = [['print', '인쇄·PDF 저장'], ['xlsx', '엑�
 
 export function BulkDownload({ cycle, ids, onClose }: { cycle: Cycle; ids: string[]; onClose: () => void }) {
   const s = useAppState()
-  const [inc, setInc] = useState<Record<string, boolean>>({ self: true, lead: true, exec: true, 'stage:1': true, 'stage:2': true, 'stage:3': true })
+  const [inc, setInc] = useState<Record<string, boolean>>({ self: true, lead: false, exec: false, 'stage:1': true, 'stage:2': false, 'stage:3': false }) // D-248: 처음엔 자기평가만
   const [kind, setKind] = useState<Kind>('xlsx')
   const on = (k: string) => { if (k in inc) return inc[k]; const g = k.split(':')[0]; return g in inc ? inc[g] : true }
   // 파일 안 순서 = 결과 화면과 같은 고정 순서(팀 가나다 → 직급 → 이름, D-169)
