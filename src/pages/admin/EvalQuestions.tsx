@@ -4,8 +4,8 @@ import { update, useAppState } from '../../data/store'
 import { useDirty } from '../../data/dirty'
 import {
   answeredCount, appendImported, BASIC_TYPES, ctxFor, cycleHasResponses, defaultOptions, directionsFromRules, isChoice,
-  newQuestion, newSection, parseQuestionTable, questionBlocks, Q_COLUMNS, questionSetIds, RULE_TEXT, RULES, rulesOf, TYPE_TEXT, validateQuestion,
-  trBasis, applyTranslations, markDuplicates, dupTranslation, Q_TR_COLUMNS, type QUploadResult,
+  newQuestion, newSection, parseQuestionTable, questionBlocks, questionSetIds, RULE_TEXT, RULES, rulesOf, TYPE_TEXT, validateQuestion,
+  trBasis, applyTranslations, markDuplicates, dupTranslation, type QUploadResult,
 } from '../../domain/questions'
 import { type AnswerValue, type Cycle, type EvaluatorRule, type JobType, type Lang, type Question, type QuestionTr, type QuestionType, type Template } from '../../domain/types'
 import { visibleSections } from '../../components/QuestionView'
@@ -603,15 +603,18 @@ function Import({ cycle, t, onClose, onDone, mut }: { cycle: Cycle; t: Template;
     <Modal title="문항 일괄 업로드" onClose={onClose} wide>
       <div className="upload q-upload">
         {/* D-251·D-252: 안내는 최소 — 질문 열 하나면 됨. 번역은 AI로 열을 붙여 같은 파일을 다시 올리면 됨. 중복은 넣지 않음 */}
-        <ul className="q-guide">
-          <li><b>질문</b> 열만 있으면 돼요. 객관식이면 <b>선택지</b> 열에 보기를 적어요(예: 매우 우수, 우수, 보통).</li>
-          <li><b>러시아어 번역</b>: 이 파일을 챗GPT나 Claude에 넣고 "러시아어 열 추가해줘" → 받은 파일을 여기에 올리면 번역이 한 번에 들어가요.</li>
-          <li>이미 있는 문항은 다시 넣지 않아요(번역만 저장).</li>
-        </ul>
-        <details className="upload-more">
-          <summary className="muted">더 쓸 수 있는 열</summary>
-          <p className="muted small">{Q_COLUMNS.filter((c) => !['질문', '선택지'].includes(c) && !(Q_TR_COLUMNS as readonly string[]).includes(c)).join(' · ')} · 여러 값은 | 또는 쉼표·줄바꿈으로 구분</p>
-        </details>
+        {/* D-254: 안내를 '문항'·'번역' 두 묶음으로. 열 목록은 보이지 않음 — 모르는 열은 조용히 무시 */}
+        <div className="q-guide">
+          <div className="q-guide-grp"><b>문항</b>
+            <ul><li><b>질문</b> 열만 있으면 돼요. 객관식이면 <b>선택지</b> 열에 보기를 적어요(예: 매우 우수, 우수, 보통).</li></ul>
+          </div>
+          <div className="q-guide-grp"><b>번역</b>
+            <ul>
+              <li>이 파일을 챗GPT나 Claude에 넣고 "러시아어 열 추가해줘" → 받은 파일을 여기에 올리면 번역이 한 번에 들어가요.</li>
+              <li>이미 있는 문항은 다시 넣지 않아요(번역만 저장).</li>
+            </ul>
+          </div>
+        </div>
         <div className="row upload-pick">
           <label className="btn primary file-btn">
             파일 선택
@@ -642,7 +645,6 @@ function Import({ cycle, t, onClose, onDone, mut }: { cycle: Cycle; t: Template;
               <span>새 문항 <b>{ok.length}</b></span>
               {dupCount > 0 && <span>중복(넣지 않음) <b>{dupCount}</b>{trCount > 0 && <> · 번역 저장 <b>{trCount}</b></>}</span>}
               <span className={bad.length ? 'err' : ''}>오류 <b>{bad.length}</b>행</span>
-              {res.ignored.length > 0 && <span className="muted">쓰지 않는 열(등록 안 함): {res.ignored.join(', ')}</span>}
             </div>
             {res.notes?.map((n, i) => <p key={i} className="muted small q-note">{n}</p>)}
             <ModePick mode={mode} setMode={setMode} hasResp={hasResp} />
