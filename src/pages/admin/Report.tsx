@@ -64,13 +64,8 @@ function ReportBody({ s, cycle, t, from }: { s: AppState; cycle: Cycle; t: Targe
   const groups: Group[] = [
     ...(parts.self.length ? [{ key: 'self', label: '자기평가 답변', items: qItems('self', parts.selfQ) }] : []),
     ...(parts.lead.length ? [{ key: 'lead', label: '팀장평가 답변·의견', items: qItems('lead', parts.leadQ) }] : []),
-    ...(parts.exec.length ? [{
-      key: 'exec', label: '임원평가 답변·의견', items: [],
-      sub: [
-        { label: '임원', items: parts.exec.map((a) => ({ key: `exec:e:${a.evaluatorId}`, label: parts.name(a.evaluatorId) })) },
-        { label: '문항', items: qItems('exec', parts.execQ) },
-      ],
-    }] : []),
+    // D-249: 임원 이름 줄 없앰(평가 임원이 보통 한 명이라 전체 체크와 같음) — 문항만 고름. 그 임원들의 답변은 묶음 체크로 넣고 뺌
+    ...(parts.exec.length ? [{ key: 'exec', label: '임원평가 답변·의견', items: qItems('exec', parts.execQ) }] : []),
     // D-225: 단계별 점수도 단계마다 골라서(평가자가 준 점수를 본인에게 보이지 않게 뺄 수 있게)
     ...(stageList.length ? [{ key: 'stage', label: '단계별 점수', items: stageList.map((st) => ({ key: `stage:${st.order}`, label: `${st.order}단계 ${st.label}` })) }] : []),
   ]
