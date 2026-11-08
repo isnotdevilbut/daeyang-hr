@@ -4,7 +4,7 @@ import { update, useAppState } from '../../data/store'
 import { useDirty } from '../../data/dirty'
 import {
   answeredCount, appendImported, BASIC_TYPES, ctxFor, cycleHasResponses, defaultOptions, directionsFromRules, isChoice,
-  newQuestion, newSection, parseQuestionTable, questionBlocks, canImportQuestions, Q_COLUMNS, Q_REQUIRED, questionSetIds, RULE_TEXT, RULES, rulesOf, TYPE_TEXT, validateQuestion,
+  newQuestion, newSection, parseQuestionTable, questionBlocks, canImportQuestions, Q_COLUMNS, questionSetIds, RULE_TEXT, RULES, rulesOf, TYPE_TEXT, validateQuestion,
   trBasis, parseTranslationTable, applyTranslations, Q_TR_COLUMNS, type QUploadResult,
 } from '../../domain/questions'
 import { type AnswerValue, type Cycle, type EvaluatorRule, type JobType, type Lang, type Question, type QuestionTr, type QuestionType, type Template } from '../../domain/types'
@@ -654,8 +654,12 @@ function Import({ cycle, t, onClose, onDone, mut }: { cycle: Cycle; t: Template;
   return (
     <Modal title="문항 일괄 업로드" onClose={onClose} wide>
       <div className="upload q-upload">
-        <p className="muted upload-cols">필수 열: {Q_REQUIRED.join(' · ')} · 선택 열: {Q_COLUMNS.filter((c) => !(Q_REQUIRED as readonly string[]).includes(c) && !(Q_TR_COLUMNS as readonly string[]).includes(c)).join(' · ')} · 여러 값은 | 로 구분</p>
-        <p className="muted upload-cols">번역 열(선택): '러시아어' 열 = 질문 번역 · 선택지(러시아어) · 도움말(러시아어) · 영역(러시아어) — 기존 문항 파일에 번역 열만 붙여 올리면 '번역만 반영'으로 문항은 그대로 두고 번역만 저장</p>
+        {/* D-251: 안내는 최소 — 질문 열 하나면 됨(선택지는 있으면). 나머지 열은 접어 둠 */}
+        <p className="upload-cols"><b>질문</b> 열만 있으면 됩니다. 객관식이면 <b>선택지</b> 열에 보기를 적으세요(예: 매우 우수, 우수, 보통). 영역·유형은 나중에 문항 수정에서 고칠 수 있어요.</p>
+        <details className="upload-more">
+          <summary className="muted">더 쓸 수 있는 열</summary>
+          <p className="muted small">{Q_COLUMNS.filter((c) => !['질문', '선택지'].includes(c) && !(Q_TR_COLUMNS as readonly string[]).includes(c)).join(' · ')} · 번역: 러시아어(질문)·선택지(러시아어)·도움말(러시아어)·영역(러시아어). 여러 값은 | 또는 쉼표·줄바꿈으로 구분</p>
+        </details>
         <div className="row upload-pick">
           <label className="btn primary file-btn">
             파일 선택

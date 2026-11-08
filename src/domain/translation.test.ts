@@ -40,3 +40,15 @@ describe('D-250 번역 열', () => {
     expect(newSection('x').title).toBe('x')
   })
 })
+
+describe('D-251 질문·선택지만으로 문항 만들기', () => {
+  it('질문만 → 주관식, 선택지(쉼표·| ·줄바꿈) → 객관식, 영역 없으면 미분류', () => {
+    const r = parseQuestionTable([['질문', '선택지'], ['성과는?', ''], ['협업은?', '매우 우수, 우수, 보통'], ['만족도', '만족|보통'], ['태도', '좋음\n나쁨']])
+    expect(r.headerError).toBeNull()
+    expect(r.rows.every((x) => x.errors.length === 0)).toBe(true)
+    expect(r.rows.map((x) => x.question!.type)).toEqual(['long', 'single', 'single', 'single'])
+    expect(r.rows[1].question!.options.map((o) => o.label)).toEqual(['매우 우수', '우수', '보통'])
+    expect(r.rows[3].question!.options.map((o) => o.label)).toEqual(['좋음', '나쁨'])
+    expect(r.rows[0].section).toBe('미분류')
+  })
+})

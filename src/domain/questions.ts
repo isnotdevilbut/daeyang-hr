@@ -226,6 +226,8 @@ export function parseQuestionTable(table: string[][], defaultRules: EvaluatorRul
   const body = table.slice(hi + 1).map((c, i) => ({ c, line: lineOffset + hi + i + 2 })).filter(({ c }) => c.some((x) => (x ?? '').trim()))
   if (body.length > Q_MAX_ROWS) return { headerError: `한 번에 ${Q_MAX_ROWS}행까지 올릴 수 있습니다.`, ignored, rows: [] }
   const col = (cells: string[], k: string) => (header.includes(k) ? (cells[header.indexOf(k)] ?? '').replace(/\s*\n\s*/g, ' ').trim() : '')
+  // D-251: 여러 값 칸(선택지 등)은 | 가 기본, 없으면 칸 안 줄바꿈 또는 쉼표로도 나눔(엑셀에 그냥 적은 그대로)
+  const list = (cells: string[], k: string) => splitList(header.includes(k) ? cells[header.indexOf(k)] ?? '' : '')
   // D-123: '합계' 줄은 문항이 아님 — 영역 배점 합과 맞는지만 확인
   const TOTAL = ['합계', '계', '총계', '소계', '총점']
   const isTotal = (c: string[]) => TOTAL.includes(col(c, '영역').replace(/\s/g, '')) && !col(c, '질문')
@@ -246,14 +248,14 @@ export function parseQuestionTable(table: string[][], defaultRules: EvaluatorRul
     let type: QuestionType | undefined = TYPE_ALIAS[typeRaw.replace(/\s+/g, ' ')] ?? TYPE_ALIAS[typeRaw.replace(/\s/g, '')]
     if (!type) {
       // 배점이 있으면 점수 문항(5점 척도), 선택지가 2개 이상이면 단일선택, 그 외 긴 서술형
-      type = col(c, '선택지').split('|').filter((x) => x.trim()).length >= 2 ? 'single' : scored ? 'scale5' : 'long'
+      type = list(c, '선택지').length >= 2 ? 'single' : scored ? 'scale5' : 'long'
       notes.push(typeRaw ? `유형 '${typeRaw}' 모름 → ${TYPE_TEXT[type]}` : `유형 없음 → ${TYPE_TEXT[type]}`)
     }
     const reqRaw = col(c, '필수')
     const required = reqRaw === '' ? true : ['Y', 'y', '예', '필수', 'O'].includes(reqRaw) ? true : ['N', 'n', '아니오', '선택', 'X'].includes(reqRaw) ? false : null
     if (required === null) errors.push(`필수: '${reqRaw}'는 Y/N이 아님`)
     const ruleRaw = col(c, '적용평가')
-    const rules = ruleRaw ? ruleRaw.split('|').map((x) => RULE_ALIAS[x.trim().replace(/\s/g, '')]) : [...defaultRules]
+    const rules = ruleRaw ? list(c, '적용평가').map((x) => RULE_ALIAS[x.trim().replace(/\s/g, '')]) : [...defaultRules]
     if (rules.some((r) => !r)) errors.push(`적용평가: '${ruleRaw}' — 자기|팀원→팀장|팀장|임원 중에서 쓰세요`)
     const ptsRaw = col(c, '배점')
     const pts = ptsRaw === '' ? null : Number(ptsRaw)
@@ -272,12 +274,12 @@ export function parseQuestionTable(table: string[][], defaultRules: EvaluatorRul
     const optRaw = col(c, '선택지')
     const scoreRaw = col(c, '선택지점수')
     if (type === 'single') {
-      const labels = optRaw.split('|').map((x) => x.trim()).filter(Boolean)
+      const labels = list(c, '선택지')
       if (labels.length < 2) errors.push('선택지: 단일선택은 | 로 구분한 선택지 2개 이상 필요')
       q.options = labels.map((label, k) => ({ id: `${q.id}-o${k}`, label, value: null }))
     } else if (optRaw && isChoice(type)) {
       // 5점 척도·O/X·등급도 선택지 글자를 바꿔 올릴 수 있음(개수는 기본과 같게)
-      const labels = optRaw.split('|').map((x) => x.trim()).filter(Boolean)
+      const labels = list(c, '선택지')
       if (labels.length !== q.options.length) errors.push(`선택지: ${TYPE_TEXT[type]}는 선택지 ${q.options.length}개(| 로 구분)`)
       else q.options = q.options.map((o, k) => ({ ...o, label: labels[k] }))
     }
@@ -286,7 +288,7 @@ export function parseQuestionTable(table: string[][], defaultRules: EvaluatorRul
     if (scoreRaw) {
       if (!isChoice(type)) errors.push('선택지점수: 주관식은 점수에 반영할 수 없음')
       else {
-        const vals = scoreRaw.split('|').map((x) => Number(x.trim()))
+        const vals = list(c, '선택지점수').map((x) => Number(x))
         if (vals.length !== q.options.length || vals.some((v) => Number.isNaN(v))) errors.push(`선택지점수: 선택지 ${q.options.length}개와 개수가 맞지 않거나 숫자가 아님`)
         else { q.options.forEach((o, k) => (o.value = vals[k])); q.purpose = 'score' }
       }
@@ -302,7 +304,7 @@ export function parseQuestionTable(table: string[][], defaultRules: EvaluatorRul
       if (ruT) tr.title = ruT
       if (ruH) tr.help = ruH
       if (ruO) {
-        const labels = ruO.split('|').map((x) => x.trim())
+        const labels = list(c, '선택지(러시아어)')
         if (labels.length === q.options.length) tr.options = Object.fromEntries(q.options.map((o, k) => [o.id, labels[k]]).filter(([, v]) => v))
         else notes.push(`선택지(러시아어): 선택지 ${q.options.length}개와 개수가 달라 넣지 않음`)
       }
@@ -320,6 +322,14 @@ export function parseQuestionTable(table: string[][], defaultRules: EvaluatorRul
   }
   if (areaMode) tnotes.push('구분·배점·평가내용 표: 한 줄 = 영역 하나(배점 = 영역 배점, 평가내용 = 그 영역의 문항·영역 설명)')
   return { headerError: null, ignored, rows, notes: tnotes }
+}
+
+/** 여러 값 칸 나누기(D-251): | → 줄바꿈 → 쉼표 순서로 처음 있는 구분자 */
+export function splitList(raw: string): string[] {
+  const v = raw.trim()
+  if (!v) return []
+  const sep = v.includes('|') ? '|' : /\n/.test(v) ? /\r?\n/ : ','
+  return v.split(sep).map((x) => x.trim()).filter(Boolean)
 }
 
 /**
@@ -380,7 +390,7 @@ export function parseTranslationTable(table: string[][], t: Template, lineOffset
   const rows = table.slice(hi + 1).map((c, i) => ({ c, line: lineOffset + hi + i + 2 })).filter(({ c }) => c.some((x) => (x ?? '').trim())).map(({ c, line }): TrRow => {
     const title = col(c, '질문'), section = col(c, '영역')
     const opts = col(c, '선택지(러시아어)')
-    const ru = { ...(col(c, '질문(러시아어)') ? { title: col(c, '질문(러시아어)') } : {}), ...(col(c, '도움말(러시아어)') ? { help: col(c, '도움말(러시아어)') } : {}), ...(opts ? { options: opts.split('|').map((x) => x.trim()) } : {}) }
+    const ru = { ...(col(c, '질문(러시아어)') ? { title: col(c, '질문(러시아어)') } : {}), ...(col(c, '도움말(러시아어)') ? { help: col(c, '도움말(러시아어)') } : {}), ...(opts ? { options: splitList(header.includes('선택지(러시아어)') ? c[header.indexOf('선택지(러시아어)')] ?? '' : '') } : {}) }
     const sectionRu = col(c, '영역(러시아어)') || undefined
     const hits = all.filter((x) => qnorm(x.q.title) === qnorm(title))
     const hit = hits.find((x) => section && x.sec.title === section) ?? hits[0]

@@ -1,6 +1,6 @@
 # 대양롤랜트 인사평가 목업 — 작업 안내 (Claude Code용)
 
-이 파일은 새 계정·새 세션의 Claude Code가 이 폴더를 열면 자동으로 읽는다. 자세한 결정 이력은 `docs/decisions.md`(D-001 ~ D-250)에 있다.
+이 파일은 새 계정·새 세션의 Claude Code가 이 폴더를 열면 자동으로 읽는다. 자세한 결정 이력은 `docs/decisions.md`(D-001 ~ D-251)에 있다.
 
 ## 무엇인가
 - 대양롤랜트(주) 인사평가 **목업**(가상 데이터). Vite + React 18 + TypeScript, HashRouter, 테스트 vitest.
@@ -21,7 +21,7 @@
 - 이전 Netlify 사이트는 쓰지 않음.
 
 ## 개발·검증
-- `npm run dev`(vite, 0.0.0.0:5173 — 같은 와이파이 휴대폰 접속 가능), `npm run build`, `npx vitest run`(현재 261개 통과).
+- `npm run dev`(vite, 0.0.0.0:5173 — 같은 와이파이 휴대폰 접속 가능), `npm run build`, `npx vitest run`(현재 262개 통과).
 - 화면 점검: puppeteer-core 스크립트(로컬 Chrome). 이전 세션의 점검 스크립트 사본은 `_local/e2e/`(gitignore, 로컬 전용) — `login.mjs`가 로그인 도우미.
 - 실제 사용자 데이터로 변환 시험할 때는 Chrome 프로필 사본(`userDataDir`)을 쓰고 원본 프로필은 건드리지 않는다.
 
