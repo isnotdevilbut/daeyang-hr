@@ -1785,3 +1785,6 @@ body.drag-sorting, body.drag-sorting * { cursor: grabbing !important; user-selec
 .q-editor .field .tr-input { margin-top: 6px; }
 .opt-row:has(.opt-tr) { flex-wrap: wrap; }
 .opt-row .tr-input.opt-tr { flex: 0 0 calc(100% - 30px); box-sizing: border-box; margin: 0 0 4px 30px; width: auto; }
+/* D-252: 문항 일괄 업로드 안내(세 줄)·중복 행 */
+.q-guide { margin: 4px 0 10px; padding: 10px 14px 10px 32px; display: grid; gap: 4px; font-size: 15px; border-radius: 10px; background: var(--surface-tint, #f3f7fc); }
+.upload-preview tr.row-dup td { color: var(--text-sub); background: #f6f7f9; }

@@ -4,8 +4,8 @@ import { update, useAppState } from '../../data/store'
 import { useDirty } from '../../data/dirty'
 import {
   answeredCount, appendImported, BASIC_TYPES, ctxFor, cycleHasResponses, defaultOptions, directionsFromRules, isChoice,
-  newQuestion, newSection, parseQuestionTable, questionBlocks, canImportQuestions, Q_COLUMNS, questionSetIds, RULE_TEXT, RULES, rulesOf, TYPE_TEXT, validateQuestion,
-  trBasis, parseTranslationTable, applyTranslations, Q_TR_COLUMNS, type QUploadResult,
+  newQuestion, newSection, parseQuestionTable, questionBlocks, Q_COLUMNS, questionSetIds, RULE_TEXT, RULES, rulesOf, TYPE_TEXT, validateQuestion,
+  trBasis, applyTranslations, markDuplicates, dupTranslation, Q_TR_COLUMNS, type QUploadResult,
 } from '../../domain/questions'
 import { type AnswerValue, type Cycle, type EvaluatorRule, type JobType, type Lang, type Question, type QuestionTr, type QuestionType, type Template } from '../../domain/types'
 import { visibleSections } from '../../components/QuestionView'
@@ -286,7 +286,7 @@ export default function EvalQuestions({ cycle }: { cycle: Cycle }) {
         />
       )}
       {preview && <Preview t={t} cycle={live} onClose={() => setPreview(false)} />}
-      {importing && <Import cycle={live} t={t} onClose={() => setImporting(false)} onDone={(n) => { setImporting(false); setMsg(n < 0 ? `번역 ${-n}개를 저장했습니다.` : `문항 ${n}개를 가져왔습니다.`) }} mut={mut} />}
+      {importing && <Import cycle={live} t={t} onClose={() => setImporting(false)} onDone={(n, tr) => { setImporting(false); setMsg([n ? `문항 ${n}개를 가져왔습니다.` : '', tr ? `번역 ${tr}개를 저장했습니다.` : ''].filter(Boolean).join(' ')) }} mut={mut} />}
     </>
   )
 }
@@ -590,11 +590,11 @@ type QLoaded = { file: string; sheets: Sheet[]; sheet: number; block: number | n
  * 문항 일괄 업로드(D-118) — 조직 관리 명단 업로드와 같은 흐름: 파일 선택(.xlsx/.csv, 여러 시트면 시트 선택) → 표 미리보기·행별 검증 →
  * 오류가 하나라도 있으면 아무것도 넣지 않음(부분 등록 없음) → 추가(같은 이름의 영역 뒤, 없으면 새 영역) 또는 교체(응답 없는 평가만)
  */
-function Import({ cycle, t, onClose, onDone, mut }: { cycle: Cycle; t: Template; onClose: () => void; onDone: (n: number) => void; mut: (fn: (t: Template) => void) => void }) {
+function Import({ cycle, t, onClose, onDone, mut }: { cycle: Cycle; t: Template; onClose: () => void; onDone: (n: number, tr: number) => void; mut: (fn: (t: Template) => void) => void }) {
   const s = useAppState()
   const [loaded, setLoaded] = useState<QLoaded | null>(null)
   const [readErr, setReadErr] = useState('')
-  const [modePick, setMode] = useState<'append' | 'replace' | 'translate' | null>(null)
+  const [mode, setMode] = useState<'append' | 'replace'>('append')
   const [inputKey, setInputKey] = useState(0)
   const hasResp = cycleHasResponses(s, cycle)
   // 적용평가 칸이 비었을 때 = 이 평가표 버전의 적용 평가(예: 팀원→팀장 평가표 → 팀원→팀장평가, 팀장 자기평가표 → 자기평가). 버전이 없으면 자기평가
@@ -620,13 +620,14 @@ function Import({ cycle, t, onClose, onDone, mut }: { cycle: Cycle; t: Template;
     }
     return r
   })() : null
-  const ok = res?.rows.filter((r) => r.question) ?? []
-  const bad = res?.rows.filter((r) => !r.question) ?? []
-  // D-250: 번역 열이 있으면 '번역만 반영'(같은 질문을 찾아 러시아어만) — 대부분 기존 질문과 같으면 처음부터 이 방식
-  const trRes = table ? parseTranslationTable(table, t, offset) : null
-  const hasTr = !!trRes && !trRes.headerError
-  const trFound = trRes?.rows.filter((r) => r.found) ?? []
-  const mode = modePick ?? (hasTr && trRes!.rows.length > 0 && trFound.length * 2 >= trRes!.rows.length ? 'translate' : 'append')
+  // D-252: 중복 문항(평가표에 이미 있는 질문·파일 안 반복)은 넣지 않음 — 이미 있는 질문에 번역 열이 있으면 번역만 저장
+  const dups = res && !res.headerError ? markDuplicates(t, res.rows, mode === 'replace') : []
+  const trs = res?.rows.map((r, i) => (dups[i] === 'existing' ? dupTranslation(r) : null)) ?? []
+  const trCount = trs.filter(Boolean).length
+  const ok = res?.rows.filter((r, i) => r.question && !dups[i]) ?? []
+  const bad = res?.rows.filter((r, i) => !r.question && !dups[i]) ?? []
+  const dupCount = dups.filter(Boolean).length
+  const canApply = !!res && !res.headerError && bad.length === 0 && (ok.length > 0 || trCount > 0) && !(mode === 'replace' && hasResp)
   const pick = async (f: File | undefined) => {
     setReadErr(''); setLoaded(null)
     if (!f) return
@@ -635,30 +636,28 @@ function Import({ cycle, t, onClose, onDone, mut }: { cycle: Cycle; t: Template;
     setLoaded({ file: f.name, sheets: r.sheets, sheet: 0, block: null })
   }
   const apply = () => {
-    if (mode === 'translate') {
-      if (!trFound.length) return
-      let n = 0
-      mut((x) => { n = applyTranslations(x, trRes!.rows) })
-      onDone(-trFound.length || n)
-      return
-    }
-    if (!res || !canImportQuestions(res)) return
+    if (!canApply) return
     if (mode === 'replace' && !confirm(`기존 문항을 모두 지우고 ${ok.length}개로 교체할까요?`)) return
     mut((x) => {
       if (mode === 'replace') x.sections = []
       appendImported(x, ok)
+      applyTranslations(x, trs.filter((r): r is NonNullable<typeof r> => !!r))
     })
-    onDone(ok.length)
+    onDone(ok.length, trCount)
   }
-  const reset = () => { setLoaded(null); setReadErr(''); setMode(null); setInputKey((k) => k + 1) }
+  const reset = () => { setLoaded(null); setReadErr(''); setInputKey((k) => k + 1) }
   return (
     <Modal title="문항 일괄 업로드" onClose={onClose} wide>
       <div className="upload q-upload">
-        {/* D-251: 안내는 최소 — 질문 열 하나면 됨(선택지는 있으면). 나머지 열은 접어 둠 */}
-        <p className="upload-cols"><b>질문</b> 열만 있으면 됩니다. 객관식이면 <b>선택지</b> 열에 보기를 적으세요(예: 매우 우수, 우수, 보통). 영역·유형은 나중에 문항 수정에서 고칠 수 있어요.</p>
+        {/* D-251·D-252: 안내는 최소 — 질문 열 하나면 됨. 번역은 AI로 열을 붙여 같은 파일을 다시 올리면 됨. 중복은 넣지 않음 */}
+        <ul className="q-guide">
+          <li><b>질문</b> 열만 있으면 돼요. 객관식이면 <b>선택지</b> 열에 보기를 적어요(예: 매우 우수, 우수, 보통).</li>
+          <li><b>러시아어 번역</b>: 이 파일을 챗GPT나 Claude에 넣고 "러시아어 열 추가해줘" → 받은 파일을 여기에 올리면 번역이 한 번에 들어가요.</li>
+          <li>이미 있는 문항은 다시 넣지 않아요(번역만 저장).</li>
+        </ul>
         <details className="upload-more">
           <summary className="muted">더 쓸 수 있는 열</summary>
-          <p className="muted small">{Q_COLUMNS.filter((c) => !['질문', '선택지'].includes(c) && !(Q_TR_COLUMNS as readonly string[]).includes(c)).join(' · ')} · 번역: 러시아어(질문)·선택지(러시아어)·도움말(러시아어)·영역(러시아어). 여러 값은 | 또는 쉼표·줄바꿈으로 구분</p>
+          <p className="muted small">{Q_COLUMNS.filter((c) => !['질문', '선택지'].includes(c) && !(Q_TR_COLUMNS as readonly string[]).includes(c)).join(' · ')} · 여러 값은 | 또는 쉼표·줄바꿈으로 구분</p>
         </details>
         <div className="row upload-pick">
           <label className="btn primary file-btn">
@@ -682,66 +681,37 @@ function Import({ cycle, t, onClose, onDone, mut }: { cycle: Cycle; t: Template;
           )}
         </div>
         {readErr && <p className="feedback fail" role="alert">✕ {readErr}</p>}
-        {res?.headerError && mode !== 'translate' && <p className="feedback fail" role="alert">✕ {res.headerError}</p>}
-        {mode === 'translate' && trRes && (
-          <>
-            <div className="row upload-sum" aria-live="polite">
-              <span>전체 <b>{trRes.rows.length}</b>행</span>
-              <span>번역 반영 <b>{trFound.length}</b></span>
-              <span className={trRes.rows.length - trFound.length ? 'err' : ''}>건너뜀 <b>{trRes.rows.length - trFound.length}</b>행</span>
-            </div>
-            <ModePick mode={mode} setMode={setMode} hasTr={hasTr} hasResp={hasResp} />
-            <div className="table-wrap upload-preview" tabIndex={0}>
-              <table className="tbl">
-                <thead><tr><th className="num">행</th><th>질문</th><th>러시아어</th><th>확인</th></tr></thead>
-                <tbody>
-                  {trRes.rows.length === 0 ? <tr><td colSpan={4} className="empty-row">머리글 아래에 행이 없습니다.</td></tr> : trRes.rows.map((r) => (
-                    <tr key={r.line} className={r.found ? '' : 'row-err'}>
-                      <td className="num">{r.line}</td>
-                      <td>{r.title || <span className="muted">(빈 칸)</span>}</td>
-                      <td lang="ru">{r.ru.title ?? <span className="muted">—</span>}{r.ru.options && <div className="muted small">선택지: {r.ru.options.join(' | ')}</div>}{r.sectionRu && <div className="muted small">영역: {r.sectionRu}</div>}</td>
-                      <td>{r.found ? <><span className="chip submitted">✓</span>{r.note && <div className="muted small">{r.note}</div>}</> : <div className="err-msg">{r.note}</div>}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="row" style={{ marginTop: 12 }}>
-              <button className="btn primary" disabled={!trFound.length} onClick={apply}>번역 {trFound.length}개 반영</button>
-              <button className="btn" onClick={reset}>다른 파일</button>
-              {trRes.rows.length > trFound.length && <span className="muted">건너뛴 행은 넣지 않고, 찾은 질문만 번역을 저장합니다.</span>}
-            </div>
-          </>
-        )}
-        {res && !res.headerError && mode !== 'translate' && (
+        {res?.headerError && <p className="feedback fail" role="alert">✕ {res.headerError}</p>}
+        {res && !res.headerError && (
           <>
             <div className="row upload-sum" aria-live="polite">
               <span>전체 <b>{res.rows.length}</b>행</span>
-              <span>등록 가능 <b>{ok.length}</b></span>
+              <span>새 문항 <b>{ok.length}</b></span>
+              {dupCount > 0 && <span>중복(넣지 않음) <b>{dupCount}</b>{trCount > 0 && <> · 번역 저장 <b>{trCount}</b></>}</span>}
               <span className={bad.length ? 'err' : ''}>오류 <b>{bad.length}</b>행</span>
               {res.ignored.length > 0 && <span className="muted">쓰지 않는 열(등록 안 함): {res.ignored.join(', ')}</span>}
             </div>
             {res.notes?.map((n, i) => <p key={i} className="muted small q-note">{n}</p>)}
-            <ModePick mode={mode} setMode={setMode} hasTr={hasTr} hasResp={hasResp} />
+            <ModePick mode={mode} setMode={setMode} hasResp={hasResp} />
             <div className="table-wrap upload-preview" tabIndex={0}>
               <table className="tbl">
                 <thead><tr><th className="num">행</th><th>영역</th><th>질문</th><th>유형</th><th>적용평가</th><th>확인</th></tr></thead>
                 <tbody>
-                  {res.rows.length === 0 ? <tr><td colSpan={6} className="empty-row">머리글 아래에 문항 행이 없습니다.</td></tr> : res.rows.map((r) => (
-                    <tr key={r.line} className={r.errors.length ? 'row-err' : ''}>
+                  {res.rows.length === 0 ? <tr><td colSpan={6} className="empty-row">머리글 아래에 문항 행이 없습니다.</td></tr> : res.rows.map((r, ri) => (
+                    <tr key={r.line} className={dups[ri] ? 'row-dup' : r.errors.length ? 'row-err' : ''}>
                       <td className="num">{r.line}</td>
-                      <td>{r.section || <span className="muted">(빈 칸)</span>}</td>
-                      <td>{r.question?.title ?? <span className="muted">—</span>}</td>
-                      <td>{r.question ? TYPE_TEXT[r.question.type] : '—'}</td>
-                      <td>{r.question ? rulesOf(r.question).map((x) => RULE_TEXT[x]).join('·') : '—'}</td>
-                      <td>{r.errors.length ? r.errors.map((e, i) => <div key={i} className="err-msg">{e}</div>) : <><span className="chip submitted">✓</span>{r.notes?.map((n, i) => <div key={i} className="muted small">{n}</div>)}</>}</td>
+                      <td>{dups[ri] ? '—' : r.section || <span className="muted">(빈 칸)</span>}</td>
+                      <td>{r.question?.title ?? r.title ?? <span className="muted">—</span>}{r.question?.i18n?.ru?.title && <div className="muted small" lang="ru">{r.question.i18n.ru.title}</div>}</td>
+                      <td>{r.question && !dups[ri] ? TYPE_TEXT[r.question.type] : '—'}</td>
+                      <td>{r.question && !dups[ri] ? rulesOf(r.question).map((x) => RULE_TEXT[x]).join('·') : '—'}</td>
+                      <td>{dups[ri] ? <><span className="chip na">중복</span><div className="muted small">{dups[ri] === 'existing' ? (trs[ri] ? '이미 있는 문항 — 번역만 저장' : '이미 있는 문항 — 넣지 않음') : '파일 안에서 반복 — 넣지 않음'}</div></> : r.errors.length ? r.errors.map((e, i) => <div key={i} className="err-msg">{e}</div>) : <><span className="chip submitted">✓</span>{r.notes?.map((n, i) => <div key={i} className="muted small">{n}</div>)}</>}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
             <div className="row" style={{ marginTop: 12 }}>
-              <button className="btn primary" disabled={!canImportQuestions(res) || (mode === 'replace' && hasResp)} onClick={apply}>{ok.length}개 {mode === 'replace' ? '교체' : '추가'}</button>
+              <button className="btn primary" disabled={!canApply} onClick={apply}>{ok.length > 0 ? `${ok.length}개 ${mode === 'replace' ? '교체' : '추가'}${trCount ? ` · 번역 ${trCount}개 저장` : ''}` : trCount > 0 ? `번역 ${trCount}개 저장` : '넣을 새 문항 없음'}</button>
               <button className="btn" onClick={reset}>다른 파일</button>
               {bad.length > 0 && <span className="feedback fail">오류가 있어 등록할 수 없습니다.</span>}
             </div>
@@ -752,13 +722,12 @@ function Import({ cycle, t, onClose, onDone, mut }: { cycle: Cycle; t: Template;
   )
 }
 
-function ModePick({ mode, setMode, hasTr, hasResp }: { mode: string; setMode: (m: 'append' | 'replace' | 'translate') => void; hasTr: boolean; hasResp: boolean }) {
+function ModePick({ mode, setMode, hasResp }: { mode: string; setMode: (m: 'append' | 'replace') => void; hasResp: boolean }) {
   return (
     <fieldset className="sub-settings">
       <legend>가져오기 방식</legend>
-      <label className="check"><input type="radio" name="qmode" checked={mode === 'append'} onChange={() => setMode('append')} /> 추가 (기존 문항 뒤에, 같은 이름의 영역에 넣음)</label>
+      <label className="check"><input type="radio" name="qmode" checked={mode === 'append'} onChange={() => setMode('append')} /> 추가 (기존 문항 뒤에, 같은 이름의 영역에 넣음 · 이미 있는 문항은 넣지 않음)</label>
       <label className="check"><input type="radio" name="qmode" disabled={hasResp} checked={mode === 'replace'} onChange={() => setMode('replace')} /> 교체 (기존 문항 모두 삭제)</label>
-      {hasTr && <label className="check"><input type="radio" name="qmode" checked={mode === 'translate'} onChange={() => setMode('translate')} /> 번역만 반영 (같은 질문을 찾아 러시아어만 저장 — 문항·응답은 그대로)</label>}
       {hasResp && <span className="muted">응답이 있는 평가라 교체할 수 없습니다.</span>}
     </fieldset>
   )

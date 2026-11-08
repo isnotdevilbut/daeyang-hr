@@ -192,7 +192,7 @@ export function splitCsvLine(line: string): string[] {
   return out
 }
 
-export interface QRow { line: number; section: string; question: Question | null; errors: string[]; /** 막지 않는 안내(기본값으로 채운 영역·유형) */ notes?: string[]; /** 영역 배점·설명(D-123: 구분·배점·평가내용 표) */ sectionPoints?: number | null; sectionDesc?: string; /** D-250: 영역 이름 러시아어 */ sectionRu?: string }
+export interface QRow { line: number; section: string; /** 파일의 질문 글자(오류 행도) */ title?: string; question: Question | null; errors: string[]; /** 막지 않는 안내(기본값으로 채운 영역·유형) */ notes?: string[]; /** 영역 배점·설명(D-123: 구분·배점·평가내용 표) */ sectionPoints?: number | null; sectionDesc?: string; /** D-250: 영역 이름 러시아어 */ sectionRu?: string }
 export interface QUploadResult { headerError: string | null; ignored: string[]; rows: QRow[]; /** 표 전체 안내(합계 확인 등) */ notes?: string[] }
 
 /** CSV 글자(붙여넣기·이전 호환) → 표 → 검증 */
@@ -264,7 +264,7 @@ export function parseQuestionTable(table: string[][], defaultRules: EvaluatorRul
     const secPts = secPtsRaw === '' ? null : Number(secPtsRaw)
     if (!areaMode && secPts !== null && !(Number.isFinite(secPts) && secPts >= 0)) errors.push(`영역배점: '${secPtsRaw}'은(는) 0 이상 숫자가 아님`)
     if (areaMode && secPts !== null && Number.isFinite(secPts)) notes.push(`영역 배점 ${secPts}점`)
-    if (errors.length) return { line, section, question: null, errors, notes }
+    if (errors.length) return { line, section, title, question: null, errors, notes }
     const q = newQuestion(type)
     q.title = title
     q.help = col(c, '도움말')
@@ -312,7 +312,7 @@ export function parseQuestionTable(table: string[][], defaultRules: EvaluatorRul
     }
     const secRu = col(c, '영역(러시아어)')
     const extra = { ...(secPts !== null && Number.isFinite(secPts) && secPts >= 0 ? { sectionPoints: secPts, ...(areaMode ? { sectionDesc: title } : {}) } : {}), ...(secRu ? { sectionRu: secRu } : {}) }
-    return { line, section, question: errors.length ? null : q, errors, notes, ...extra }
+    return { line, section, title, question: errors.length ? null : q, errors, notes, ...extra }
   })
   const tnotes: string[] = []
   if (totals.length) {
@@ -419,4 +419,27 @@ export function applyTranslations(t: Template, rows: TrRow[]): number {
     }
   }
   return n
+}
+
+// ── D-252: 중복 문항은 넣지 않음 — 평가표에 이미 있는 질문(추가일 때)·파일 안에서 앞에 나온 질문. 이미 있는 질문의 번역 열은 그 문항에 저장 ──
+export type QDup = 'existing' | 'file' | null
+export function markDuplicates(t: Template, rows: QRow[], replace: boolean): QDup[] {
+  const have = new Set(replace ? [] : t.sections.flatMap((sec) => sec.questions.filter((q) => q.active).map((q) => qnorm(q.title))))
+  const seen = new Set<string>()
+  return rows.map((r) => {
+    const k = qnorm(r.question?.title ?? r.title ?? '')
+    if (!k) return null
+    if (have.has(k)) return 'existing'
+    if (seen.has(k)) return 'file'
+    seen.add(k)
+    return null
+  })
+}
+/** 이미 있는 질문 행의 번역(질문·도움말·선택지·영역) → 번역 반영 줄. 번역이 없으면 null */
+export function dupTranslation(r: QRow): TrRow | null {
+  const q = r.question
+  const tr = q?.i18n?.ru
+  if (!q || (!tr && !r.sectionRu)) return null
+  const options = tr?.options ? q.options.map((o) => tr.options![o.id] ?? '') : undefined
+  return { line: r.line, title: q.title, section: r.section, ru: { ...(tr?.title ? { title: tr.title } : {}), ...(tr?.help ? { help: tr.help } : {}), ...(options?.some(Boolean) ? { options } : {}) }, sectionRu: r.sectionRu, found: true }
 }

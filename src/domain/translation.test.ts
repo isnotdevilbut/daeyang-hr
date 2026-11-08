@@ -52,3 +52,18 @@ describe('D-251 질문·선택지만으로 문항 만들기', () => {
     expect(r.rows[0].section).toBe('미분류')
   })
 })
+
+describe('D-252 중복 문항', () => {
+  it('이미 있는 질문·파일 안 반복은 넣지 않고, 이미 있는 질문의 번역은 저장', async () => {
+    const { markDuplicates, dupTranslation, applyTranslations } = await import('./questions')
+    const t = tpl()
+    const r = parseQuestionTable([['질문', '선택지', '러시아어'], ['본인의 주요 성과를 적어주세요', '', 'Достижения'], ['새 질문', '', ''], ['새 질문', '', ''], ['협업은 어떠했나요?', '좋음|보통|나쁨', '']])
+    const d = markDuplicates(t, r.rows, false)
+    expect(d).toEqual(['existing', null, 'file', 'existing'])
+    const trs = r.rows.map((x, i) => (d[i] === 'existing' ? dupTranslation(x) : null))
+    expect(trs.filter(Boolean).length).toBe(1)
+    applyTranslations(t, trs.filter((x): x is NonNullable<typeof x> => !!x))
+    expect(t.sections[0].questions[0].i18n?.ru?.title).toBe('Достижения')
+    expect(markDuplicates(t, r.rows, true)).toEqual([null, null, 'file', null])
+  })
+})
