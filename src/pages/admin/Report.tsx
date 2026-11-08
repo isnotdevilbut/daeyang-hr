@@ -226,7 +226,7 @@ export function ReportSheet({ s, cycle, parts, m }: { s: AppState; cycle: Cycle;
       {execShown.length > 0 && execQ.length > 0 && <Answers title="임원평가" as={execShown} qs={execQ} s={s} cycle={cycle} showWho name={parts.name} />}
       {m.stagesShown.length > 0 && (
         <div className="rp-block">
-          <h3>단계별 점수 <span className="rp-assume">※ 개발용 가정 계산 · 회사 산식 아님</span></h3>
+          <h3>단계별 점수</h3>
           <table>
             <thead><tr><th style={{ width: '24%' }}>단계</th><th>평가자</th><th style={{ width: '14%' }}>점수</th><th style={{ width: '10%' }}>등급</th></tr></thead>
             <tbody>
