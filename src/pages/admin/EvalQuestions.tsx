@@ -534,7 +534,6 @@ function PreviewFlow({ rule, sections, frameRef }: { rule: EvaluatorRule; sectio
       onLang={setLang}
       topLeft={<span className="chip info">미리보기 · 저장 안 됨</span>}
       status={note ? <p className="save-state" style={{ color: 'var(--text-sub)' }}>{note}</p> : null}
-      onSave={() => setNote('미리보기에서는 저장하지 않습니다. 입력 내용은 이 창을 닫으면 사라집니다.')}
       onSubmit={() => { if (confirm('[미리보기] 최종 제출하면 수정할 수 없습니다. 제출할까요?\n(미리보기라 실제로 제출되지 않습니다)')) setFinished(true) }}
     />
   )

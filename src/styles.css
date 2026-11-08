@@ -1815,3 +1815,4 @@ body.drag-sorting, body.drag-sorting * { cursor: grabbing !important; user-selec
 /* D-259: 미리보기 평가지를 조금 작게 — 한 화면에 최대한 보이게(좌우 여백은 늘어남) */
 .preview-compact { zoom: 0.82; }
 .preview-modal { height: min(94vh, 960px); }
+.m-foot-inner.two { grid-template-columns: 1fr 1.3fr; } /* D-261: 임시저장 없는 미리보기 */

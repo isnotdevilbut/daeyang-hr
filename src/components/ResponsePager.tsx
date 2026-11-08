@@ -20,7 +20,8 @@ export interface PagerProps {
   /** 진행 표시 아래 상태 줄 (저장 상태 등) */
   status?: ReactNode
   busy?: boolean // 저장 중: 이동·저장·제출 버튼 잠금
-  onSave: () => void
+  /** 없으면 임시저장 버튼을 숨김(미리보기, D-261) */
+  onSave?: () => void
   /** "다음" 직전 (실제: 바뀐 내용 임시저장) */
   beforeNext?: () => Promise<void>
   /** 최종 제출. true면 부모가 완료 화면으로 바꾼다 */
@@ -129,9 +130,9 @@ export function ResponsePager(p: PagerProps) {
       </div>
 
       <div className="m-foot">
-        <div className="m-foot-inner">
+        <div className={`m-foot-inner ${p.onSave ? '' : 'two'}`}>
           <button className="m-btn" disabled={step === 0} onClick={() => setStep(step - 1)}>{t('form.prev', lang)}</button>
-          <button className="m-btn" disabled={p.busy} onClick={p.onSave}>{t('form.save', lang)}</button>
+          {p.onSave && <button className="m-btn" disabled={p.busy} onClick={p.onSave}>{t('form.save', lang)}</button>}
           {step < reviewStep
             ? <button className="m-btn primary" disabled={p.busy} onClick={next}>{step === reviewStep - 1 ? t('form.review', lang) : t('form.next', lang)}</button>
             : <button className="m-btn primary" disabled={prog.missing.length > 0 || p.busy} onClick={submit}>{t('form.submit', lang)}</button>}
