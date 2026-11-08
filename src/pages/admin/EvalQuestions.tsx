@@ -5,7 +5,7 @@ import { useDirty } from '../../data/dirty'
 import {
   answeredCount, appendImported, BASIC_TYPES, ctxFor, cycleHasResponses, defaultOptions, directionsFromRules, isChoice,
   newQuestion, newSection, parseQuestionTable, questionBlocks, questionSetIds, RULE_TEXT, RULES, rulesOf, TYPE_TEXT, validateQuestion,
-  trBasis, applyTranslations, markDuplicates, dupTranslation, type QUploadResult,
+  trBasis, applyTranslations, cloneQuestion, markDuplicates, dupTranslation, type QUploadResult,
 } from '../../domain/questions'
 import { type AnswerValue, type Cycle, type EvaluatorRule, type JobType, type Lang, type Question, type QuestionTr, type QuestionType, type Template } from '../../domain/types'
 import { visibleSections } from '../../components/QuestionView'
@@ -18,7 +18,7 @@ import type { Sheet } from '../../domain/xlsx'
 import { jobName, positionName, positionsOf } from '../../domain/catalog'
 import { activeTeams } from '../../domain/org'
 import { pointsErrors, usesPoints } from '../../domain/points'
-import { activeVersions, liveVersions, addVersion, applyVersion, applyVersions, blankTemplate, cloneTemplate, deleteVersion, pickKey, resolveVersion, saveVersionDraft, scopeTargets, slotMode, slotScope, SLOTS, versionUsed, withScope, type VersionProblem } from '../../domain/versions'
+import { activeVersions, liveVersions, addVersion, applyVersion, applyVersions, blankTemplate, cloneTemplate, deleteVersion, pickKey, resolveVersion, saveVersionDraft, scopeTargets, slotMode, slotScope, SLOTS, versionUsed, withScope, templateRules, type VersionProblem } from '../../domain/versions'
 import type { AppState, SlotKey, TemplateVersion, VersionScope } from '../../domain/types'
 
 /** 끌어서 옮길 자리: list = 영역 번호(영역을 옮길 때는 0), slot = 그 목록에서 끼워 넣을 자리(0 ~ 개수) */
@@ -117,6 +117,13 @@ function DragHandle({ label, onStart, onKey }: { label: string; onStart: (e: Rea
 
 type Editing = { sectionId: string; q: Question; isNew: boolean; index?: number }
 
+// D-255: 문항 복사·붙여넣기 — 평가표(탭)를 옮겨 다니며 붙여넣기. 이 브라우저 탭에만 잠시 보관(sessionStorage)
+type ClipItem = { q: Question; section: string; secPoints?: number | null; secRu?: string; from: string; fromTid?: string }
+const CLIP_KEY = 'daeyang-hr-q-clip'
+const readClip = (): ClipItem[] => { try { return JSON.parse(sessionStorage.getItem(CLIP_KEY) ?? '[]') } catch { return [] } }
+const writeClip = (x: ClipItem[]) => { try { sessionStorage.setItem(CLIP_KEY, JSON.stringify(x)) } catch { /* 저장 안 돼도 이 화면에서는 동작 */ } }
+const qkey = (x: string) => x.replace(/\s+/g, ' ').trim()
+
 export default function EvalQuestions({ cycle }: { cycle: Cycle }) {
   const s = useAppState()
   const versioned = !!s.cycles.find((c) => c.id === cycle.id)?.versions // 평가표 버전 (D-082). 없으면 이전 방식(직무별 문항 세트)
@@ -128,6 +135,8 @@ export default function EvalQuestions({ cycle }: { cycle: Cycle }) {
   const [preview, setPreview] = useState(false)
   const [importing, setImporting] = useState(false)
   const [msg, setMsg] = useState('')
+  const [clip, setClipState] = useState<ClipItem[]>(readClip)
+  const setClip = (x: ClipItem[]) => { setClipState(x); writeClip(x) }
   const drop = useDragSort((kind, from, to) => reorder(kind, from, to))
   const live = s.cycles.find((c) => c.id === cycle.id)!
   const t = live.templates[setId]
@@ -140,10 +149,36 @@ export default function EvalQuestions({ cycle }: { cycle: Cycle }) {
       x.version += 1
     })
   const answered = (qid: string) => answeredCount(s, live, qid)
+  // D-255: 평가표가 맡은 평가 = 문항의 적용 평가(문항마다 고르지 않음). 화살표 없는 이전 방식이면 null
+  const fixedRules = templateRules(live, setId)
+  const inClip = (q: Question) => clip.some((c) => c.q.id === q.id && c.fromTid === setId) // 나눈 평가표끼리 문항 ID가 같을 수 있어 평가표까지 봄
+  const copyQ = (sec: Template['sections'][number], qs: Question[]) => {
+    const add = qs.filter((q) => !inClip(q)).map((q): ClipItem => ({ q: structuredClone(q), section: sec.title, secPoints: sec.points ?? null, secRu: sec.i18n?.ru?.title, from: t.name, fromTid: setId }))
+    setClip([...clip, ...add])
+    setMsg(`문항 ${add.length}개를 복사했습니다. 붙여넣을 평가표를 고른 뒤 '붙여넣기'를 누르세요.`)
+  }
+  /** 붙여넣기: 같은 질문이 이미 있으면 넣지 않음. toSection = 그 영역에, 없으면 복사한 영역과 같은 이름의 영역(없으면 새로 만듦) */
+  const paste = (toSection?: string) => {
+    const have = new Set(t.sections.flatMap((sec) => sec.questions.filter((q) => q.active).map((q) => qkey(q.title))))
+    const fresh = clip.filter((c) => !have.has(qkey(c.q.title)) && (have.add(qkey(c.q.title)), true))
+    const skipped = clip.length - fresh.length
+    if (fresh.length) mut((x) => {
+      for (const c of fresh) {
+        let sec = toSection ? x.sections.find((y) => y.id === toSection) : x.sections.find((y) => y.title === c.section)
+        if (!sec) { sec = newSection(c.section); if (typeof c.secPoints === 'number') sec.points = c.secPoints; if (c.secRu) sec.i18n = { ru: { title: c.secRu, basis: c.section } }; x.sections.push(sec) }
+        const q = cloneQuestion(c.q, true)
+        q.active = true
+        if (fixedRules) { q.rules = [...fixedRules]; q.directions = directionsFromRules(fixedRules) }
+        sec.questions.push(q)
+      }
+    })
+    setMsg(`문항 ${fresh.length}개를 붙여넣었습니다.${skipped ? ` 이미 있는 문항 ${skipped}개는 넣지 않았습니다.` : ''}`)
+  }
   // 새 문항의 적용 평가: 팀원→팀장평가만 쓰는 평가표(D-114)면 팀원→팀장평가로 시작(그 외는 기본 자기평가)
   const newFor = (ty: QuestionType): Question => {
     const v = live.versions?.find((x) => x.templateId === setId)
     const q = newQuestion(ty)
+    if (fixedRules) return { ...q, rules: [...fixedRules], directions: directionsFromRules(fixedRules) }
     return v && v.scope.rules.length === 1 && v.scope.rules[0] === 'upward' ? { ...q, rules: ['upward'], directions: ['up'] } : q
   }
   const closedCycle = live.status === '확정' // 확정 회차의 배점은 바꾸지 않음(과거 결과 보존)
@@ -199,6 +234,14 @@ export default function EvalQuestions({ cycle }: { cycle: Cycle }) {
         <button className="btn" onClick={() => setImporting(true)}>엑셀·CSV 가져오기</button>
       </div>
       {msg && <p className="feedback ok" role="status">✓ {msg}</p>}
+      {clip.length > 0 && (
+        <div className="clip-bar" role="region" aria-label="복사한 문항">
+          <span>📋 복사한 문항 <b>{clip.length}</b>개 <span className="muted">({[...new Set(clip.map((c) => c.from))].join(', ')}에서)</span></span>
+          <span className="spacer" />
+          <button className="btn small primary" onClick={() => paste()}>이 평가표에 붙여넣기</button>
+          <button className="btn small" onClick={() => { setClip([]); setMsg('복사한 문항을 비웠습니다.') }}>비우기</button>
+        </div>
+      )}
       <PointsBar t={t} />
       {t.sections.length === 0 && <div className="panel pad empty-start"><p>문항이 없습니다. 아래 '+ 영역 추가'로 영역을 만든 뒤 그 안에서 문항을 추가하거나 엑셀·CSV로 가져오세요.</p></div>}
 
@@ -212,6 +255,7 @@ export default function EvalQuestions({ cycle }: { cycle: Cycle }) {
             <label className="sec-pts">배점<input type="number" inputMode="decimal" className="no-spin" aria-label={`${sec.title} 영역 배점`} disabled={closedCycle} value={sec.points ?? ''} placeholder="—"
               onWheel={(e) => e.currentTarget.blur()} onChange={(e) => mut((x) => { x.sections[si].points = e.target.value === '' ? null : Number(e.target.value) })} />점</label>
             <span className="spacer" />
+            <button className="btn small" disabled={!sec.questions.some((q) => q.active)} onClick={() => copyQ(sec, sec.questions.filter((q) => q.active))}>영역 복사</button>
             <button className="btn small danger" onClick={() => removeSection(si)}>영역 삭제</button>
           </div>
           {/* D-161: 영역 설명(메모) 입력칸은 표시하지 않음 — 저장된 값은 지우지 않고 그대로 둠(평가 화면에는 원래 보이지 않음) */}
@@ -219,7 +263,7 @@ export default function EvalQuestions({ cycle }: { cycle: Cycle }) {
             <ol className="q-list">
               {sec.questions.map((q, qi) => {
                 const rules = rulesOf(q)
-                const scope = [rules.map((r) => RULE_TEXT[r]).join('·'), q.jobs?.length === 1 ? `${jobName(s, q.jobs[0])}만` : '', q.targetRoles?.length === 1 ? (q.targetRoles[0] === 'lead' ? '팀장 대상' : '사원 대상') : '', q.teams?.length ? `팀 ${q.teams.length}곳만` : '', q.positions?.length ? `직급 ${q.positions.length}개만` : ''].filter(Boolean).join(' · ')
+                const scope = [fixedRules ? '' : rules.map((r) => RULE_TEXT[r]).join('·'), q.jobs?.length === 1 ? `${jobName(s, q.jobs[0])}만` : '', q.targetRoles?.length === 1 ? (q.targetRoles[0] === 'lead' ? '팀장 대상' : '사원 대상') : '', q.teams?.length ? `팀 ${q.teams.length}곳만` : '', q.positions?.length ? `직급 ${q.positions.length}개만` : ''].filter(Boolean).join(' · ')
                 return (
                   <li key={q.id} className={`q-row ${q.active ? '' : 'off'} ${drop.cls('q', si, qi, sec.questions.length)}`} data-drag-group="q">
                     <DragHandle label={`${q.title || '문항'} 순서 바꾸기 — 끌어서 옮기기(키보드 ↑↓)`} onStart={drop.start('q', { list: si, slot: qi })} onKey={(d) => mut((x) => move(x.sections[si].questions, qi, d))} />
@@ -235,6 +279,7 @@ export default function EvalQuestions({ cycle }: { cycle: Cycle }) {
                     </div>
                     <div className="q-actions">
                       <button className="btn small q-edit" onClick={() => setEditing({ sectionId: sec.id, q: structuredClone(q), isNew: false })}>수정</button>
+                      {q.active && <button className={`btn small ${inClip(q) ? 'copied' : ''}`} aria-pressed={inClip(q)} onClick={() => (inClip(q) ? setClip(clip.filter((c) => !(c.q.id === q.id && c.fromTid === setId))) : copyQ(sec, [q]))}>{inClip(q) ? '복사됨 ✓' : '복사'}</button>}
                       {q.active
                         ? <button className="btn small danger" onClick={() => removeQ(sec.id, q)}>삭제</button>
                         : <button className="btn small" onClick={() => mut((x) => { x.sections[si].questions[qi].active = true })}>다시 사용</button>}
@@ -244,7 +289,7 @@ export default function EvalQuestions({ cycle }: { cycle: Cycle }) {
               })}
             </ol>
           )}
-          <div className="q-sec-foot"><button className="q-add" onClick={() => setPicking({ sectionId: sec.id })}>+ 이 영역에 문항 추가</button></div>
+          <div className="q-sec-foot"><button className="q-add" onClick={() => setPicking({ sectionId: sec.id })}>+ 이 영역에 문항 추가</button>{clip.length > 0 && <button className="q-add" onClick={() => paste(sec.id)}>📋 이 영역에 붙여넣기 ({clip.length})</button>}</div>
         </section>
       ))}
       {/* D-126: 영역 추가는 문항 목록 맨 아래에서 — 새 영역이 생기면 그 영역으로 이동, 영역 안의 '+ 이 영역에 문항 추가'로 문항을 넣음 */}
@@ -267,7 +312,7 @@ export default function EvalQuestions({ cycle }: { cycle: Cycle }) {
       )}
       {editing && (
         <QuestionEditor
-          t={t} editing={editing} answered={editing.isNew ? 0 : answered(editing.q.id)}
+          t={t} editing={editing} answered={editing.isNew ? 0 : answered(editing.q.id)} fixedRules={fixedRules}
           onClose={() => setEditing(null)}
           onSave={(q, sectionId, secRu) => {
             mut((x) => {
@@ -306,8 +351,8 @@ function PointsBar({ t }: { t: Template }) {
   )
 }
 
-function QuestionEditor({ t, editing, answered, onClose, onSave }: {
-  t: Template; editing: Editing; answered: number; onClose: () => void; onSave: (q: Question, sectionId: string, secRu: string) => void
+function QuestionEditor({ t, editing, answered, onClose, onSave, fixedRules }: {
+  t: Template; editing: Editing; answered: number; onClose: () => void; onSave: (q: Question, sectionId: string, secRu: string) => void; fixedRules: EvaluatorRule[] | null
 }) {
   const [q, setQ] = useState<Question>(editing.q)
   const [sectionId, setSectionId] = useState(editing.sectionId)
@@ -411,12 +456,13 @@ function QuestionEditor({ t, editing, answered, onClose, onSave }: {
           <label className="check"><input type="checkbox" disabled={!(typeof q.points === 'number' && q.points > 0)} checked={q.purpose === 'score'} onChange={(e) => set({ purpose: e.target.checked ? 'score' : 'info' })} /> 점수에 반영 <span className="muted">(배점 입력 시 · 관리자 채점, 자동 점수화 없음)</span></label>
         )}
 
-        <fieldset className="sub-settings">
+        {/* D-255: 화살표 방식 평가표는 문항별 적용 평가 없음 — 평가표가 맡은 평가에 모두 보임 */}
+        {!fixedRules && <fieldset className="sub-settings">
           <legend>적용 평가</legend>
           {RULES.map((r) => (
             <label key={r} className="check"><input type="checkbox" checked={rules.includes(r)} onChange={(e) => setRules(e.target.checked ? [...rules, r] : rules.filter((x) => x !== r))} /> {RULE_TEXT[r]}</label>
           ))}
-        </fieldset>
+        </fieldset>}
       </div>
       {errors.length > 0 && <div className="feedback fail" role="alert">{errors.map((e) => <div key={e}>✕ {e}</div>)}</div>}
       <div className="row" style={{ marginTop: 14 }}><span className="spacer" /><button className="btn primary" onClick={save}>{editing.isNew ? '추가' : '저장'}</button></div>
@@ -552,6 +598,7 @@ function Import({ cycle, t, onClose, onDone, mut }: { cycle: Cycle; t: Template;
   const hasResp = cycleHasResponses(s, cycle)
   // 적용평가 칸이 비었을 때 = 이 평가표 버전의 적용 평가(예: 팀원→팀장 평가표 → 팀원→팀장평가, 팀장 자기평가표 → 자기평가). 버전이 없으면 자기평가
   const v = cycle.versions?.find((x) => x.templateId === t.id)
+  const fixedRules = templateRules(cycle, t.id)
   const defRules: EvaluatorRule[] = v?.scope.rules.length ? [...v.scope.rules] : ['self']
   // 한 시트에 표가 여러 개면(D-123) 표 제목으로 고름 — 처음엔 이 평가표에 맞는 표(팀원→팀장 → '상향', 팀장 자기평가 → '본인·자기')
   const blocks = loaded ? questionBlocks(loaded.sheets[loaded.sheet]?.rows ?? []) : []
@@ -566,6 +613,9 @@ function Import({ cycle, t, onClose, onDone, mut }: { cycle: Cycle; t: Template;
   // 이 평가표 버전의 적용 평가와 겹치지 않는 문항은 어디에도 보이지 않으므로 행 오류로(예: 공통 평가표에 팀원→팀장평가 문항)
   const res: QUploadResult | null = table ? (() => {
     const r = parseQuestionTable(table, defRules, offset)
+    // D-255: 화살표 방식 평가표면 파일의 적용평가 칸은 쓰지 않고 이 평가표의 평가로
+    const fixed = templateRules(cycle, t.id)
+    if (fixed) { for (const row of r.rows) { if (row.question) { row.question.rules = [...fixed]; row.question.directions = directionsFromRules(fixed) } row.errors = row.errors.filter((e) => !e.startsWith('적용평가')); if (!row.errors.length && !row.question) row.errors.push('행을 읽을 수 없음') } return r }
     const scope = v?.scope.rules
     if (scope?.length) for (const row of r.rows) {
       const q = row.question
@@ -650,7 +700,7 @@ function Import({ cycle, t, onClose, onDone, mut }: { cycle: Cycle; t: Template;
             <ModePick mode={mode} setMode={setMode} hasResp={hasResp} />
             <div className="table-wrap upload-preview" tabIndex={0}>
               <table className="tbl">
-                <thead><tr><th className="num">행</th><th>영역</th><th>질문</th><th>유형</th><th>적용평가</th><th>확인</th></tr></thead>
+                <thead><tr><th className="num">행</th><th>영역</th><th>질문</th><th>유형</th>{!fixedRules && <th>적용평가</th>}<th>확인</th></tr></thead>
                 <tbody>
                   {res.rows.length === 0 ? <tr><td colSpan={6} className="empty-row">머리글 아래에 문항 행이 없습니다.</td></tr> : res.rows.map((r, ri) => (
                     <tr key={r.line} className={dups[ri] ? 'row-dup' : r.errors.length ? 'row-err' : ''}>
@@ -658,7 +708,7 @@ function Import({ cycle, t, onClose, onDone, mut }: { cycle: Cycle; t: Template;
                       <td>{dups[ri] ? '—' : r.section || <span className="muted">(빈 칸)</span>}</td>
                       <td>{r.question?.title ?? r.title ?? <span className="muted">—</span>}{r.question?.i18n?.ru?.title && <div className="muted small" lang="ru">{r.question.i18n.ru.title}</div>}</td>
                       <td>{r.question && !dups[ri] ? TYPE_TEXT[r.question.type] : '—'}</td>
-                      <td>{r.question && !dups[ri] ? rulesOf(r.question).map((x) => RULE_TEXT[x]).join('·') : '—'}</td>
+                      {!fixedRules && <td>{r.question && !dups[ri] ? rulesOf(r.question).map((x) => RULE_TEXT[x]).join('·') : '—'}</td>}
                       <td>{dups[ri] ? <><span className="chip na">중복</span><div className="muted small">{dups[ri] === 'existing' ? (trs[ri] ? '이미 있는 문항 — 번역만 저장' : '이미 있는 문항 — 넣지 않음') : '파일 안에서 반복 — 넣지 않음'}</div></> : r.errors.length ? r.errors.map((e, i) => <div key={i} className="err-msg">{e}</div>) : <><span className="chip submitted">✓</span>{r.notes?.map((n, i) => <div key={i} className="muted small">{n}</div>)}</>}</td>
                     </tr>
                   ))}

@@ -5,7 +5,7 @@
 //   관리자가 고른 버전(versionPicks)이 없는 한 바꾸지 않고 "충돌"로 알린다(임의 우선순위 없음). 문항은 합치지 않는다
 // - 응답(작성 중·제출)이 있는 배정의 평가표는 조용히 바꾸지 않는다. 확정 회차는 다루지 않는다
 import type { AppState, Assignment, Cycle, EvaluatorRule, ID, SlotKey, Template, TemplateVersion, VersionScope } from './types'
-import { cloneQuestion, ctxFor, RULES, RULE_TEXT, applies } from './questions'
+import { cloneQuestion, ctxFor, directionsFromRules, RULES, RULE_TEXT, applies } from './questions'
 import { pathFor } from './progress'
 import { templateFor } from './catalog'
 
@@ -203,8 +203,25 @@ export function applyVersion(s: Pick<AppState, 'responses'>, c: Cycle, templateI
   c.versions = withScope(c, templateId, name.trim(), scope).versions // draft·pending 해제. 화살표는 다른 평가표에서 옮겨 옴(D-211)
   c.templates[templateId].name = name.trim()
   c.versionPicks = picks
+  // D-255: 문항별 적용 평가는 고르지 않음 — 이 평가표가 맡은 평가를 문항 모두에 맞춤(화살표를 옮겨 온 다른 평가표도)
+  for (const v of c.versions ?? []) syncQuestionRules(c, v.templateId)
   applyVersions(s, c)
   return { errors: [], conflicts: [] }
+}
+
+/** 화살표 방식 평가표가 맡은 평가 종류(D-255). 화살표가 없으면 null */
+export function templateRules(c: Pick<Cycle, 'versions'>, templateId: ID): EvaluatorRule[] | null {
+  const v = (c.versions ?? []).find((x) => x.templateId === templateId)
+  if (!v?.scope.slots?.length) return null
+  return [...new Set(SLOTS.filter((x) => v.scope.slots!.includes(x.key)).map((x) => x.rule))]
+}
+/** 평가표 문항의 적용 평가를 그 평가표가 맡은 평가로(D-255 — 문항별로 다르게 두지 않음). 확정 회차·화살표 없는 평가표는 그대로 */
+export function syncQuestionRules(c: Cycle, templateId: ID) {
+  const rules = templateRules(c, templateId)
+  const t = c.templates[templateId]
+  if (!rules || !t || c.status === '확정') return
+  const dirs = directionsFromRules(rules)
+  for (const sec of t.sections) for (const q of sec.questions) { q.rules = [...rules]; q.directions = [...dirs] }
 }
 
 /** 삭제: 사용 이력(응답)이 있으면 목록에서만 숨김(기록용 문항 보존), 없으면 지움. 응답 없는 배정은 다시 연결 */

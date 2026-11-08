@@ -1791,3 +1791,7 @@ body.drag-sorting, body.drag-sorting * { cursor: grabbing !important; user-selec
 .q-guide-grp > b { color: var(--brand-navy); padding-top: 1px; }
 .q-guide-grp ul { margin: 0; padding-left: 18px; display: grid; gap: 2px; }
 .upload-preview tr.row-dup td { color: var(--text-sub); background: #f6f7f9; }
+/* D-255: 문항 복사·붙여넣기 */
+.clip-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 8px 0; padding: 10px 14px; border: 1px dashed var(--brand-blue); border-radius: 10px; background: #f2f7fd; }
+.q-actions .btn.copied { background: #e8f1fb; border-color: var(--brand-blue); color: var(--brand-blue); }
+.q-sec-foot { display: flex; gap: 16px; flex-wrap: wrap; }

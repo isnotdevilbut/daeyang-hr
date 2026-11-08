@@ -18,6 +18,7 @@ import { purgeInactiveV33 } from '../domain/org'
 import { stripVirtualV34 } from '../domain/demoV34'
 import { gradeQNoExecV35 } from '../domain/gradeQV35'
 import { unifyTextV36 } from '../domain/qtypeV36'
+import { splitByRuleV37 } from '../domain/splitV37'
 import { execUpwardFormV27, execUpwardPairsV28, upwardDemoMoreV29, upwardExecV26, upwardFormV22, upwardPairedV31, upwardV18 } from '../domain/upward'
 import { joinAllStaff } from '../domain/joinAllV19'
 import { leadUpwardOpen, moreDemo } from '../domain/demoV20'
@@ -320,7 +321,14 @@ export function migrate(raw: any, opts: { until?: number } = {}): MigrationResul
     s.schemaVersion = 36
   }
 
-  if (s.schemaVersion !== 36) return null
+  if (opts.until === 36 && s.schemaVersion === 36) return { state: s as AppState, notes }
+  if (s.schemaVersion === 36) {
+    // v36 → v37 (D-255): 문항마다 보이는 평가가 다른 평가표(공통평가표)를 평가별 평가표로 나눔 — 문항 ID·응답 그대로, 준비·진행 회차만
+    notes.push(...splitByRuleV37(s))
+    s.schemaVersion = 37
+  }
+
+  if (s.schemaVersion !== 37) return null
   return { state: s as AppState, notes }
 }
 
