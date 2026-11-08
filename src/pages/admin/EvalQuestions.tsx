@@ -18,7 +18,7 @@ import type { Sheet } from '../../domain/xlsx'
 import { jobName, positionName, positionsOf } from '../../domain/catalog'
 import { activeTeams } from '../../domain/org'
 import { pointsErrors, usesPoints } from '../../domain/points'
-import { activeVersions, liveVersions, addVersion, applyVersion, applyVersions, blankTemplate, cloneTemplate, deleteVersion, pickKey, resolveVersion, saveVersionDraft, scopeTargets, slotMode, slotScope, SLOTS, versionUsed, withScope, templateRules, type VersionProblem } from '../../domain/versions'
+import { activeVersions, liveVersions, addVersion, applyVersion, applyVersions, blankTemplate, cloneTemplate, deleteVersion, pickKey, saveVersionDraft, scopeTargets, slotMode, slotScope, SLOTS, versionUsed, withScope, templateRules, type VersionProblem } from '../../domain/versions'
 import type { AppState, SlotKey, TemplateVersion, VersionScope } from '../../domain/types'
 
 /** 끌어서 옮길 자리: list = 영역 번호(영역을 옮길 때는 0), slot = 그 목록에서 끼워 넣을 자리(0 ~ 개수) */
@@ -476,66 +476,23 @@ function QuestionEditor({ t, editing, answered, onClose, onSave, fixedRules }: {
  * 평가 유형·직무·대상을 바꾸면 문항과 화면 구성을 다시 계산하고 처음부터 시작. 화면 폭은 PC 하나(D-152).
  */
 function Preview({ t: current, cycle, onClose }: { t: Template; cycle: Cycle; onClose: () => void }) {
-  const [rule, setRule] = useState<EvaluatorRule>('self')
-  const s = useAppState()
-  const [job0, setJob] = useState<JobType>('office')
-  const [lead, setLead] = useState(false)
-  const mobile = false // D-152: 미리보기는 PC 화면 하나(모바일·PC 전환 제거)
+  // D-259: 위 필터(평가 유형·직무·대상자·팀·직급) 없앰 — 지금 연 평가표의 문항을 그 평가표가 맡은 평가로 그대로 보여 줌
+  const rules = templateRules(cycle, current.id) ?? rulesOf(current.sections.flatMap((x) => x.questions).find((q) => q.active) ?? ({ directions: ['self'] } as unknown as Question))
+  const rule: EvaluatorRule = rules[0] ?? 'self'
   const frameRef = useRef<HTMLDivElement>(null)
-  // 평가표 버전(D-082): 평가 유형·대상 팀·대상 직급으로 실제와 같은 함수(resolveVersion)로 고른 평가표를 보여 준다
-  const versioned = !!cycle.versions
-  const [team0, setTeam] = useState(activeTeams(s)[0]?.id ?? '')
-  const [pos0, setPos] = useState(positionsOf(s).find((p) => p.evalClass === '사원')?.id ?? '')
-  // 특정 대상자로 보기(D-087): 직접 선택한 사람 범위도 실제와 같이 직원 ID로 고른다. 그 사람의 팀·직급·직무를 그대로 씀
-  const [who, setWho] = useState('')
-  const whoT = cycle.targets.find((x) => x.employeeId === who)
-  const team = whoT ? whoT.departmentId : team0
-  const pos = whoT ? whoT.positionId ?? '' : pos0
-  const job: JobType = whoT ? whoT.jobType : job0
-  const posLead = positionsOf(s).find((p) => p.id === pos)?.evalClass === '팀장'
-  // 적용 전 초안(또는 적용 평가가 빈 버전)을 열고 있으면 그 버전 문항을 그대로 미리보기 — 실제 배정·선택에는 쓰이지 않음 (D-085)
-  const curV = cycle.versions?.find((v) => v.templateId === current.id)
-  const draftPreview = versioned && !!curV && !liveVersions(cycle).includes(curV)
-  const res = versioned && !draftPreview ? resolveVersion(cycle, { rule, teamId: team, positionId: pos, employeeId: who || undefined, jobType: job, tier: positionsOf(s).find((p) => p.id === pos)?.evalClass }) /* 화살표 방식은 평가받는 사람의 직급 구분으로(D-211) */ : null
-  const t = versioned && !draftPreview ? (res?.templateId ? cycle.templates[res.templateId] : undefined) : current
-  const vName = (id: string) => cycle.versions?.find((v) => v.templateId === id)?.name ?? id
-  const isLead = versioned ? posLead : lead
-  const sections = t ? visibleSections(t, { direction: rule === 'self' ? 'self' : rule === 'upward' ? 'up' : 'down', rule, jobType: job, isLead, teamId: versioned ? team : undefined, positionId: versioned ? pos : undefined }) : []
+  const sections = visibleSections(current, { direction: rule === 'self' ? 'self' : rule === 'upward' ? 'up' : 'down', rule })
   return createPortal( // 문서 맨 위에 그려 헤더까지 덮음 (D-070)
     <div className="modal-bg" onClick={onClose}>
       <div className="modal preview-modal" role="dialog" aria-modal="true" aria-label="문항 미리보기" onClick={(e) => e.stopPropagation()}>
         <div className="row">
-          <h2 style={{ margin: 0 }}>미리보기</h2>
+          <h2 style={{ margin: 0 }}>미리보기 <span className="muted small">{cycle.versions?.find((v) => v.templateId === current.id)?.name ?? current.name}</span></h2>
           <span className="spacer" />
           <button type="button" className="modal-x" aria-label="닫기" title="닫기" onClick={onClose}>✕</button>
         </div>
-        <div className="filters preview-controls">
-          <select aria-label="평가 유형" value={rule} onChange={(e) => setRule(e.target.value as EvaluatorRule)}>
-            {RULES.map((r) => <option key={r} value={r}>{RULE_TEXT[r]}</option>)}
-          </select>
-          <select aria-label="직무" value={job} disabled={!!whoT} onChange={(e) => setJob(e.target.value as JobType)}>
-            <option value="office">{jobName(s, 'office')}</option><option value="production">{jobName(s, 'production')}</option>
-          </select>
-          {versioned ? <>
-            <select aria-label="대상자" value={who} onChange={(e) => setWho(e.target.value)}>
-              <option value="">조건으로 보기</option>
-              {[...cycle.targets].sort((a, b) => a.teamName.localeCompare(b.teamName, 'ko') || a.name.localeCompare(b.name, 'ko')).map((x) => <option key={x.employeeId} value={x.employeeId}>{x.teamName} · {x.name}</option>)}
-            </select>
-            <select aria-label="대상 팀" value={team} disabled={!!whoT} onChange={(e) => setTeam(e.target.value)}>{activeTeams(s).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select>
-            <select aria-label="대상 직급" value={pos} disabled={!!whoT} onChange={(e) => setPos(e.target.value)}>{positionsOf(s).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select>
-          </> : (
-            <select aria-label="평가받는 사람" value={lead ? 'lead' : 'member'} onChange={(e) => setLead(e.target.value === 'lead')}>
-              <option value="member">사원</option><option value="lead">팀장</option>
-            </select>
-          )}
-          <span className="muted">입력해도 저장되지 않습니다</span>
-        </div>
-        {draftPreview && <p className="preview-version" role="status">초안 미리보기: <b>{curV!.pending?.name ?? curV!.name}</b> (적용 전)</p>}
-        {versioned && !draftPreview && <p className="preview-version" role="status">{res?.conflict ? `⚠ 평가표 충돌: ${res.candidates.map(vName).join(' · ')} — 문항 관리에서 적용 버전을 고르세요` : res?.templateId ? <>적용 평가표: <b>{vName(res.templateId)}</b></> : '⚠ 이 조건에 적용되는 평가표가 없습니다'}</p>}
-        <div ref={frameRef} className={`preview-frame ${mobile ? 'preview-phone' : 'preview-pc'}`}>
+        <div ref={frameRef} className="preview-frame preview-pc preview-compact">
           {sections.length === 0
-            ? <div className="m-body"><p>이 조건에 해당하는 문항이 없습니다.</p></div>
-            : <PreviewFlow key={`${rule}|${job}|${isLead}|${team}|${pos}|${who}|${t?.id}`} rule={rule} sections={sections} frameRef={frameRef} />}
+            ? <div className="m-body"><p>문항이 없습니다.</p></div>
+            : <PreviewFlow key={current.id} rule={rule} sections={sections} frameRef={frameRef} />}
         </div>
       </div>
     </div>,

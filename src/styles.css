@@ -1807,3 +1807,13 @@ body.drag-sorting, body.drag-sorting * { cursor: grabbing !important; user-selec
 .slot-btn .slot-state { font-size: 12px; line-height: 1; }
 .slot-btn .slot-check { right: 10px; font-size: 15px; }
 @media (max-width: 640px) { .slot-btn { height: 34px; } }
+/* D-259: 평가표 탭 구분 — 하늘색 바탕, 고른 탭은 진한 파랑 */
+.version-tabs { gap: 6px; border-bottom: 0; padding-bottom: 6px; }
+.version-tabs button { background: #e6f1fb; border: 1px solid #c9def3; border-radius: 10px; color: var(--brand-navy); }
+.version-tabs button:hover { background: #d6e8f8; }
+.version-tabs button.on { background: var(--brand-blue); border-color: var(--brand-blue); color: #fff; margin-bottom: 0; }
+.version-tabs button.on .v-count { background: rgba(255, 255, 255, 0.25); color: #fff; }
+.version-tabs .v-add { background: #fff; border-style: dashed; }
+/* D-259: 미리보기 평가지를 조금 작게 — 한 화면에 최대한 보이게(좌우 여백은 늘어남) */
+.preview-compact { zoom: 0.82; }
+.preview-modal { height: min(94vh, 960px); }
