@@ -1203,7 +1203,8 @@ ul.target-list { list-style: none; margin: 4px 0 0; padding: 0; }
   .hdr-participant .brand img { max-width: 100%; height: auto; max-height: 34px; }
   .hdr-participant .hdr-user.has-extra { display: contents; }
   .hdr-participant .user-id { grid-area: id; justify-self: end; min-width: 0; }
-  .hdr-participant .hdr-user .lang-select { grid-area: lang; width: auto; min-width: 7.5em; }
+  .hdr-participant .hdr-user .lang-wrap { grid-area: lang; }
+  .hdr-participant .hdr-user .lang-select { width: auto; min-width: 7.5em; }
   .hdr-participant .hdr-user > .btn { grid-area: out; }
   .hdr-participant .admin-nav { grid-column: 1 / -1; grid-row: 3; }
   .task-tbl tbody tr:hover td, .task-tbl tbody td { background: transparent; }
@@ -1774,3 +1775,6 @@ body.drag-sorting, body.drag-sorting * { cursor: grabbing !important; user-selec
 .team-multi-btn { font-weight: 700; font-size: 16px; padding-right: 50px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%2309529e' stop-opacity='0.09'/%3E%3Cstop offset='1' stop-color='%2320b8ca' stop-opacity='0.16'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='28' height='28' rx='8' fill='url%28%23g%29'/%3E%3Cpath d='M7.5 11 14 17.5 20.5 11' fill='none' stroke='%2309529e' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; background-size: 28px 28px; box-shadow: 0 1px 2px rgba(27, 30, 77, 0.06); }
 .team-multi-btn .caret { display: none; }
 .panel-head h2 .tk-count { margin-left: 8px; } /* D-244: 평가자 '내 평가' 제목과 건수 사이 간격 */
+/* D-246: 언어 선택 앞 지구본 */
+.lang-wrap { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; }
+.lang-globe { flex: none; color: var(--brand-blue); }
