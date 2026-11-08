@@ -1,5 +1,5 @@
 // 문항 적용 범위·문항 생성·단계 반영 비율 검증·문항 CSV 가져오기.
-import type { AppState, Assignment, Cycle, Direction, EvaluatorRule, JobType, Option, Question, QuestionType, Section, Template } from './types'
+import type { AppState, Assignment, Cycle, Direction, EvaluatorRule, JobType, Option, Question, QuestionTr, QuestionType, Section, Template } from './types'
 
 // ── 적용 범위 ───────────────────────────────────────
 /** 응답 상황. teamId·positionId = 평가받는 대상자의 팀·직급 (D-082) */
@@ -151,7 +151,9 @@ export function weightSum(stages: { order: number }[], w: Record<number, number 
 
 // ── 문항 일괄 업로드 (엑셀 .xlsx / CSV, D-118 — 조직 관리 명단 업로드와 같은 흐름) ─────────────
 // 파일 → 표(첫 번째로 비어 있지 않은 행 = 머리글, 열 이름으로 찾아 순서 무관) → 행마다 검증 → 오류가 하나라도 있으면 아무것도 넣지 않음
-export const Q_COLUMNS = ['영역', '질문', '유형', '필수', '선택지', '선택지점수', '적용평가', '배점', '영역배점', '도움말'] as const
+export const Q_COLUMNS = ['영역', '질문', '유형', '필수', '선택지', '선택지점수', '적용평가', '배점', '영역배점', '도움말', '질문(러시아어)', '선택지(러시아어)', '도움말(러시아어)', '영역(러시아어)'] as const
+/** D-250: 번역 열(러시아어) — '러시아어'·'번역'·'RU'·'Russian' 등이 들어간 머리글. 앞말이 없으면 질문 번역 */
+export const Q_TR_COLUMNS = ['질문(러시아어)', '선택지(러시아어)', '도움말(러시아어)', '영역(러시아어)'] as const
 /** 꼭 있어야 하는 열은 질문 하나(D-120). 영역이 없으면 '미분류', 유형이 없으면 선택지가 있으면 단일선택·없으면 긴 서술형 — 문항 관리에서 나중에 고침 */
 export const Q_REQUIRED = ['질문'] as const
 export const Q_DEFAULT_SECTION = '미분류'
@@ -190,7 +192,7 @@ export function splitCsvLine(line: string): string[] {
   return out
 }
 
-export interface QRow { line: number; section: string; question: Question | null; errors: string[]; /** 막지 않는 안내(기본값으로 채운 영역·유형) */ notes?: string[]; /** 영역 배점·설명(D-123: 구분·배점·평가내용 표) */ sectionPoints?: number | null; sectionDesc?: string }
+export interface QRow { line: number; section: string; question: Question | null; errors: string[]; /** 막지 않는 안내(기본값으로 채운 영역·유형) */ notes?: string[]; /** 영역 배점·설명(D-123: 구분·배점·평가내용 표) */ sectionPoints?: number | null; sectionDesc?: string; /** D-250: 영역 이름 러시아어 */ sectionRu?: string }
 export interface QUploadResult { headerError: string | null; ignored: string[]; rows: QRow[]; /** 표 전체 안내(합계 확인 등) */ notes?: string[] }
 
 /** CSV 글자(붙여넣기·이전 호환) → 표 → 검증 */
@@ -198,7 +200,18 @@ export function parseQuestionCsv(text: string, defaultRules?: EvaluatorRule[]): 
   return parseQuestionTable(text.replace(/^﻿/, '').split(/\r?\n/).map(splitCsvLine), defaultRules)
 }
 
-const hnorm = (h: string) => { const k = h.replace(/^﻿/, '').replace(/[\s*]/g, ''); return Q_HEADER_ALIAS[k] ?? k }
+const TR_MARK = /러시아어|러시아|번역본|번역|russian|русский|рус|\bru\b/i
+const hnorm = (h: string) => {
+  const k = h.replace(/^\ufeff/, '').replace(/[\s*]/g, '')
+  if (Q_HEADER_ALIAS[k]) return Q_HEADER_ALIAS[k]
+  if (TR_MARK.test(h) || /(^|[^a-z])ru$/i.test(k) || /\(ru\)/i.test(k)) {
+    // D-250: '러시아어 번역'·'질문(러시아어)'·'선택지 RU'·'Russian' → 표준 번역 열
+    const base = k.replace(/러시아어|러시아|번역본|번역|russian|русский|рус/gi, '').replace(/\(?ru\)?$/i, '').replace(/[()（）\[\]_\-:]/g, '')
+    const std = base === '' ? '질문' : (Q_HEADER_ALIAS[base] ?? base)
+    if (['질문', '선택지', '도움말', '영역'].includes(std)) return `${std}(러시아어)`
+  }
+  return k
+}
 /** 표(엑셀 시트·CSV) → 문항 행. defaultRules = 적용평가 칸이 비었을 때(없으면 자기평가) — 팀원→팀장 평가표면 팀원→팀장평가 */
 export function parseQuestionTable(table: string[][], defaultRules: EvaluatorRule[] = ['self'], lineOffset = 0): QUploadResult {
   const hi = table.findIndex((r) => r.some((c) => (c ?? '').trim()))
@@ -282,7 +295,21 @@ export function parseQuestionTable(table: string[][], defaultRules: EvaluatorRul
     } else if (type !== 'scale5') {
       q.purpose = 'info'
     }
-    const extra = secPts !== null && Number.isFinite(secPts) && secPts >= 0 ? { sectionPoints: secPts, ...(areaMode ? { sectionDesc: title } : {}) } : {}
+    // D-250: 번역 열이 있으면 러시아어 번역도 함께 저장(선택지 번역은 개수가 같을 때만)
+    const ruT = col(c, '질문(러시아어)'), ruH = col(c, '도움말(러시아어)'), ruO = col(c, '선택지(러시아어)')
+    if (ruT || ruH || ruO) {
+      const tr: QuestionTr = {}
+      if (ruT) tr.title = ruT
+      if (ruH) tr.help = ruH
+      if (ruO) {
+        const labels = ruO.split('|').map((x) => x.trim())
+        if (labels.length === q.options.length) tr.options = Object.fromEntries(q.options.map((o, k) => [o.id, labels[k]]).filter(([, v]) => v))
+        else notes.push(`선택지(러시아어): 선택지 ${q.options.length}개와 개수가 달라 넣지 않음`)
+      }
+      if (tr.title || tr.help || tr.options) { tr.basis = trBasis(q); q.i18n = { ru: tr } }
+    }
+    const secRu = col(c, '영역(러시아어)')
+    const extra = { ...(secPts !== null && Number.isFinite(secPts) && secPts >= 0 ? { sectionPoints: secPts, ...(areaMode ? { sectionDesc: title } : {}) } : {}), ...(secRu ? { sectionRu: secRu } : {}) }
     return { line, section, question: errors.length ? null : q, errors, notes, ...extra }
   })
   const tnotes: string[] = []
@@ -329,6 +356,57 @@ export function appendImported(t: Template, rows: QRow[]) {
     if (!sec) { sec = newSection(r.section); t.sections.push(sec) }
     if (typeof r.sectionPoints === 'number') sec.points = r.sectionPoints // 파일에 영역 배점이 있으면 그 값(D-123)
     if (r.sectionDesc && !sec.desc) sec.desc = r.sectionDesc
+    if (r.sectionRu) sec.i18n = { ...(sec.i18n ?? {}), ru: { title: r.sectionRu, basis: sec.title } } // D-250
     sec.questions.push(r.question)
   }
+}
+
+/** 번역할 때의 한국어 원문(나중에 한국어를 고치면 '번역 재확인' 표시) */
+export function trBasis(q: Question): NonNullable<QuestionTr['basis']> {
+  return { title: q.title, help: q.help, options: Object.fromEntries(q.options.map((o) => [o.id, o.label])) }
+}
+
+// ── D-250: 번역만 올리기 — 질문(한국어) + 번역 열. 지금 평가표의 같은 질문을 찾아 러시아어만 채움(문항·응답·점수는 그대로) ──
+export interface TrRow { line: number; title: string; section: string; ru: { title?: string; help?: string; options?: string[] }; sectionRu?: string; found: boolean; note?: string }
+const qnorm = (x: string) => x.replace(/\s+/g, ' ').trim()
+export function parseTranslationTable(table: string[][], t: Template, lineOffset = 0): { headerError: string | null; rows: TrRow[] } {
+  const hi = table.findIndex((r) => r.some((c) => (c ?? '').trim()))
+  if (hi < 0) return { headerError: '빈 파일입니다.', rows: [] }
+  const header = table[hi].map((h) => hnorm(h ?? ''))
+  if (!header.includes('질문')) return { headerError: '필수 열이 없습니다: 질문', rows: [] }
+  if (!Q_TR_COLUMNS.some((k) => header.includes(k))) return { headerError: "번역 열이 없습니다 — '러시아어' 같은 이름의 열을 추가하세요", rows: [] }
+  const col = (cells: string[], k: string) => (header.includes(k) ? (cells[header.indexOf(k)] ?? '').replace(/\s*\n\s*/g, ' ').trim() : '')
+  const all = t.sections.flatMap((sec) => sec.questions.map((q) => ({ sec, q })))
+  const rows = table.slice(hi + 1).map((c, i) => ({ c, line: lineOffset + hi + i + 2 })).filter(({ c }) => c.some((x) => (x ?? '').trim())).map(({ c, line }): TrRow => {
+    const title = col(c, '질문'), section = col(c, '영역')
+    const opts = col(c, '선택지(러시아어)')
+    const ru = { ...(col(c, '질문(러시아어)') ? { title: col(c, '질문(러시아어)') } : {}), ...(col(c, '도움말(러시아어)') ? { help: col(c, '도움말(러시아어)') } : {}), ...(opts ? { options: opts.split('|').map((x) => x.trim()) } : {}) }
+    const sectionRu = col(c, '영역(러시아어)') || undefined
+    const hits = all.filter((x) => qnorm(x.q.title) === qnorm(title))
+    const hit = hits.find((x) => section && x.sec.title === section) ?? hits[0]
+    if (!title) return { line, title, section, ru, sectionRu, found: false, note: '질문: 비어 있음' }
+    if (!hit) return { line, title, section, ru, sectionRu, found: false, note: '이 평가표에 같은 질문이 없음' }
+    if (!ru.title && !ru.help && !ru.options && !sectionRu) return { line, title, section, ru, sectionRu, found: false, note: '번역 칸이 비어 있음' }
+    const note = ru.options && ru.options.length !== hit.q.options.length ? `선택지 번역 ${ru.options.length}개 ≠ 선택지 ${hit.q.options.length}개 — 선택지는 넣지 않음` : undefined
+    return { line, title, section: section || hit.sec.title, ru, sectionRu, found: true, note }
+  })
+  return { headerError: null, rows }
+}
+/** 찾은 줄의 번역을 문항(같은 질문 모두)·영역에 넣음. 비어 있는 번역 칸은 기존 번역을 지우지 않음 */
+export function applyTranslations(t: Template, rows: TrRow[]): number {
+  let n = 0
+  for (const r of rows) {
+    if (!r.found) continue
+    for (const sec of t.sections) {
+      if (r.sectionRu && sec.title === r.section) sec.i18n = { ...(sec.i18n ?? {}), ru: { title: r.sectionRu, basis: sec.title } }
+      for (const q of sec.questions) {
+        if (qnorm(q.title) !== qnorm(r.title)) continue
+        const prev = q.i18n?.ru ?? {}
+        const options = r.ru.options && r.ru.options.length === q.options.length ? Object.fromEntries(q.options.map((o, k) => [o.id, r.ru.options![k]]).filter(([, v]) => v)) : prev.options
+        q.i18n = { ...(q.i18n ?? {}), ru: { ...prev, ...(r.ru.title ? { title: r.ru.title } : {}), ...(r.ru.help ? { help: r.ru.help } : {}), ...(options ? { options } : {}), basis: trBasis(q) } }
+        n++
+      }
+    }
+  }
+  return n
 }

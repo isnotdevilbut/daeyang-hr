@@ -1778,3 +1778,10 @@ body.drag-sorting, body.drag-sorting * { cursor: grabbing !important; user-selec
 /* D-246: 언어 선택 앞 지구본 */
 .lang-wrap { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; }
 .lang-globe { flex: none; color: var(--brand-blue); }
+/* D-250: 문항 수정 창 — 번역 언어 버튼, 한국어 칸 바로 아래 러시아어 칸 */
+.tr-toggle { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
+.tr-toggle .btn.on { background: var(--brand-blue); color: #fff; border-color: var(--brand-blue); }
+.q-editor .tr-input { width: 100%; box-sizing: border-box; margin-top: -4px; font-size: 15px; background: #f4f8fd; border-style: dashed; }
+.q-editor .field .tr-input { margin-top: 6px; }
+.opt-row:has(.opt-tr) { flex-wrap: wrap; }
+.opt-row .tr-input.opt-tr { flex: 0 0 calc(100% - 30px); box-sizing: border-box; margin: 0 0 4px 30px; width: auto; }

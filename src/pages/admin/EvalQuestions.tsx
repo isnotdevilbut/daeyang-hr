@@ -5,9 +5,9 @@ import { useDirty } from '../../data/dirty'
 import {
   answeredCount, appendImported, BASIC_TYPES, ctxFor, cycleHasResponses, defaultOptions, directionsFromRules, isChoice,
   newQuestion, newSection, parseQuestionTable, questionBlocks, canImportQuestions, Q_COLUMNS, Q_REQUIRED, questionSetIds, RULE_TEXT, RULES, rulesOf, TYPE_TEXT, validateQuestion,
-  type QUploadResult,
+  trBasis, parseTranslationTable, applyTranslations, Q_TR_COLUMNS, type QUploadResult,
 } from '../../domain/questions'
-import { type AnswerValue, type Cycle, type EvaluatorRule, type JobType, type Lang, type Question, type QuestionTr, type QuestionType, type Section, type Template } from '../../domain/types'
+import { type AnswerValue, type Cycle, type EvaluatorRule, type JobType, type Lang, type Question, type QuestionTr, type QuestionType, type Template } from '../../domain/types'
 import { visibleSections } from '../../components/QuestionView'
 import { ResponsePager } from '../../components/ResponsePager'
 import { MobileHead } from '../employee/mobile'
@@ -211,7 +211,6 @@ export default function EvalQuestions({ cycle }: { cycle: Cycle }) {
             {/* 영역 배점(D-103) — 비우면 점수에 넣지 않는 영역 */}
             <label className="sec-pts">배점<input type="number" inputMode="decimal" className="no-spin" aria-label={`${sec.title} 영역 배점`} disabled={closedCycle} value={sec.points ?? ''} placeholder="—"
               onWheel={(e) => e.currentTarget.blur()} onChange={(e) => mut((x) => { x.sections[si].points = e.target.value === '' ? null : Number(e.target.value) })} />점</label>
-            <SectionRu sec={sec} onChange={(fn) => mut((x) => fn(x.sections[si]))} />
             <span className="spacer" />
             <button className="btn small danger" onClick={() => removeSection(si)}>영역 삭제</button>
           </div>
@@ -270,8 +269,11 @@ export default function EvalQuestions({ cycle }: { cycle: Cycle }) {
         <QuestionEditor
           t={t} editing={editing} answered={editing.isNew ? 0 : answered(editing.q.id)}
           onClose={() => setEditing(null)}
-          onSave={(q, sectionId) => {
+          onSave={(q, sectionId, secRu) => {
             mut((x) => {
+              // D-250: 수정 창에서 고친 영역 이름 러시아어(그 영역 공통)
+              const target = x.sections.find((y) => y.id === sectionId)
+              if (target && (target.i18n?.ru?.title ?? '') !== secRu) target.i18n = secRu.trim() ? { ...(target.i18n ?? {}), ru: { title: secRu.trim(), basis: target.title } } : undefined
               for (const sec of x.sections) sec.questions = sec.questions.filter((y) => y.id !== q.id || sec.id === sectionId)
               const sec = x.sections.find((y) => y.id === sectionId)!
               const i = sec.questions.findIndex((y) => y.id === q.id)
@@ -284,7 +286,7 @@ export default function EvalQuestions({ cycle }: { cycle: Cycle }) {
         />
       )}
       {preview && <Preview t={t} cycle={live} onClose={() => setPreview(false)} />}
-      {importing && <Import cycle={live} t={t} onClose={() => setImporting(false)} onDone={(n) => { setImporting(false); setMsg(`문항 ${n}개를 가져왔습니다.`) }} mut={mut} />}
+      {importing && <Import cycle={live} t={t} onClose={() => setImporting(false)} onDone={(n) => { setImporting(false); setMsg(n < 0 ? `번역 ${-n}개를 저장했습니다.` : `문항 ${n}개를 가져왔습니다.`) }} mut={mut} />}
     </>
   )
 }
@@ -305,14 +307,22 @@ function PointsBar({ t }: { t: Template }) {
 }
 
 function QuestionEditor({ t, editing, answered, onClose, onSave }: {
-  t: Template; editing: Editing; answered: number; onClose: () => void; onSave: (q: Question, sectionId: string) => void
+  t: Template; editing: Editing; answered: number; onClose: () => void; onSave: (q: Question, sectionId: string, secRu: string) => void
 }) {
   const [q, setQ] = useState<Question>(editing.q)
   const [sectionId, setSectionId] = useState(editing.sectionId)
+  // D-250: 번역은 수정 창 안에서 언어 버튼으로 켜고 끔(문항 목록·영역 머리글에는 RU 버튼 없음). 번역이 있으면 켜진 채로 열림
+  const secOf = (id: string) => t.sections.find((x) => x.id === id)
+  const [secRu, setSecRu] = useState(secOf(editing.sectionId)?.i18n?.ru?.title ?? '')
+  const [showRu, setShowRu] = useState(() => !!(q.i18n?.ru?.title || q.i18n?.ru?.help || Object.values(q.i18n?.ru?.options ?? {}).some(Boolean) || secRu))
+  const ru = q.i18n?.ru ?? {}
+  const setRu = (patch: Partial<QuestionTr>) => setQ((cur) => ({ ...cur, i18n: { ...(cur.i18n ?? {}), ru: { ...(cur.i18n?.ru ?? {}), ...patch } } }))
+  const review = needsReview(q)
+  const secReview = !!secOf(sectionId) && sectionNeedsReview(secOf(sectionId)!) && secRu === (secOf(sectionId)?.i18n?.ru?.title ?? '')
   const s = useAppState()
   const [errors, setErrors] = useState<string[]>([])
-  const original = JSON.stringify(editing.q) + editing.sectionId
-  useDirty(JSON.stringify(q) + sectionId !== original)
+  const original = JSON.stringify(editing.q) + editing.sectionId + (secOf(editing.sectionId)?.i18n?.ru?.title ?? '')
+  useDirty(JSON.stringify(q) + sectionId + secRu !== original)
   const locked = answered > 0 // 응답이 있으면 의미가 바뀌는 변경(유형·선택지 삭제·점수)을 막는다
   const set = (patch: Partial<Question>) => setQ({ ...q, ...patch })
   const rules = rulesOf(q)
@@ -327,18 +337,26 @@ function QuestionEditor({ t, editing, answered, onClose, onSave }: {
   })
   const optDrag = useListDrag('opt', moveOpt)
   const typeChoices: QuestionType[] = q.type === 'grade' ? [...BASIC_TYPES, 'grade'] : BASIC_TYPES
-  const close = () => { if (JSON.stringify(q) + sectionId === original || confirm('저장하지 않은 변경이 있습니다. 닫을까요?')) onClose() }
+  const close = () => { if (JSON.stringify(q) + sectionId + secRu === original || confirm('저장하지 않은 변경이 있습니다. 닫을까요?')) onClose() }
   const save = () => {
     const e = validateQuestion(q)
     setErrors(e)
-    if (!e.length) onSave(finishTranslation({ ...q, title: q.title.trim() }, editing.q), sectionId) // 러시아어가 비어 있어도 저장 가능
+    if (!e.length) onSave(finishTranslation({ ...q, title: q.title.trim() }, editing.q), sectionId, secRu) // 러시아어가 비어 있어도 저장 가능
   }
   return (
     <Modal title={editing.isNew ? `문항 추가 — ${TYPE_TEXT[q.type]}` : '문항 수정'} onClose={close}>
       {locked && <p className="save-note">응답 {answered}건이 있는 문항이라 유형·선택지 삭제·점수는 바꿀 수 없습니다. 문구 수정과 선택지 추가는 가능합니다.</p>}
       <div className="q-editor">
+        {/* D-250: 번역 언어 버튼 — 나중에 언어가 늘면 버튼만 옆에 추가 */}
+        <div className="tr-toggle" role="group" aria-label="번역 표시">
+          <span className="muted">번역</span>
+          <button type="button" className={`btn small ${showRu ? 'on' : ''}`} aria-pressed={showRu} onClick={() => setShowRu(!showRu)}>RU 러시아어{(review || secReview) && <span className="chip draft tag">재확인</span>}</button>
+        </div>
+        {showRu && review && <p className="save-note">한국어 원문이 번역 이후 바뀌었습니다. 번역을 확인해 고치거나 <button type="button" className="link-btn" onClick={() => setRu({ basis: trBasis(q) })}>그대로 확인</button>하세요.</p>}
         <label className="field">질문<input type="text" value={q.title} autoFocus onChange={(e) => set({ title: e.target.value })} /></label>
+        {showRu && <input type="text" className="tr-input" lang="ru" aria-label="질문 (러시아어)" placeholder="러시아어 — 비우면 한국어로 표시" value={ru.title ?? ''} onChange={(e) => setRu({ title: e.target.value })} />}
         <label className="field">도움말 <span className="muted">(선택)</span><input type="text" value={q.help} onChange={(e) => set({ help: e.target.value })} /></label>
+        {showRu && (q.help || ru.help) && <input type="text" className="tr-input" lang="ru" aria-label="도움말 (러시아어)" placeholder="러시아어 — 비우면 한국어로 표시" value={ru.help ?? ''} onChange={(e) => setRu({ help: e.target.value })} />}
         <div className="grid form-grid">
           <label className="field">유형
             <select value={q.type} disabled={locked} onChange={(e) => {
@@ -349,11 +367,13 @@ function QuestionEditor({ t, editing, answered, onClose, onSave }: {
             </select>
           </label>
           <label className="field">영역
-            <select value={sectionId} onChange={(e) => setSectionId(e.target.value)}>
+            <select value={sectionId} onChange={(e) => { setSectionId(e.target.value); setSecRu(secOf(e.target.value)?.i18n?.ru?.title ?? '') }}>
               {t.sections.map((x) => <option key={x.id} value={x.id}>{x.title}</option>)}
             </select>
           </label>
         </div>
+        {showRu && <label className="field">영역 이름 <span className="muted">(러시아어 · 이 영역 공통)</span><input type="text" className="tr-input" lang="ru" aria-label="영역 이름 (러시아어)" placeholder="러시아어 — 비우면 한국어로 표시" value={secRu} onChange={(e) => setSecRu(e.target.value)} /></label>}
+        {showRu && secReview && <span className="muted small">영역 이름이 번역 이후 바뀌었습니다 — 번역을 확인하세요</span>}
         <label className="check"><input type="checkbox" checked={q.required} onChange={(e) => set({ required: e.target.checked })} /> 필수 응답</label>
         {/* 문항 배점(D-103): 영역 안 문항 비중(선택형), 서술형은 채점 범위(0~배점) */}
         <label className="field q-pts">문항 배점 <span className="muted">(선택 · 영역 안 비중, 주관식은 채점 만점)</span>
@@ -377,6 +397,7 @@ function QuestionEditor({ t, editing, answered, onClose, onSave }: {
                     onChange={(e) => set({ options: q.options.map((x, k) => (k === i ? { ...x, value: e.target.value === '' ? null : Number(e.target.value) } : x)) })} />
                 )}
                 <button className="btn small danger" disabled={locked || q.options.length <= 2} onClick={() => set({ options: q.options.filter((_, k) => k !== i) })}>삭제</button>
+                {showRu && <input type="text" className="tr-input opt-tr" lang="ru" aria-label={`선택지 ${i + 1} 러시아어`} placeholder="러시아어 — 비우면 한국어로 표시" value={ru.options?.[o.id] ?? ''} onChange={(e) => setRu({ options: { ...(ru.options ?? {}), [o.id]: e.target.value } })} />}
               </div>
             ))}
             {q.type !== 'ox' && (
@@ -392,8 +413,6 @@ function QuestionEditor({ t, editing, answered, onClose, onSave }: {
         {!isChoice(q.type) && (
           <label className="check"><input type="checkbox" disabled={!(typeof q.points === 'number' && q.points > 0)} checked={q.purpose === 'score'} onChange={(e) => set({ purpose: e.target.checked ? 'score' : 'info' })} /> 점수에 반영 <span className="muted">(배점 입력 시 · 관리자 채점, 자동 점수화 없음)</span></label>
         )}
-
-        <RuEditor q={q} onChange={(ru) => set({ i18n: ru ? { ...(q.i18n ?? {}), ru } : undefined })} />
 
         <fieldset className="sub-settings">
           <legend>적용 평가</legend>
@@ -575,7 +594,7 @@ function Import({ cycle, t, onClose, onDone, mut }: { cycle: Cycle; t: Template;
   const s = useAppState()
   const [loaded, setLoaded] = useState<QLoaded | null>(null)
   const [readErr, setReadErr] = useState('')
-  const [mode, setMode] = useState<'append' | 'replace'>('append')
+  const [modePick, setMode] = useState<'append' | 'replace' | 'translate' | null>(null)
   const [inputKey, setInputKey] = useState(0)
   const hasResp = cycleHasResponses(s, cycle)
   // 적용평가 칸이 비었을 때 = 이 평가표 버전의 적용 평가(예: 팀원→팀장 평가표 → 팀원→팀장평가, 팀장 자기평가표 → 자기평가). 버전이 없으면 자기평가
@@ -603,6 +622,11 @@ function Import({ cycle, t, onClose, onDone, mut }: { cycle: Cycle; t: Template;
   })() : null
   const ok = res?.rows.filter((r) => r.question) ?? []
   const bad = res?.rows.filter((r) => !r.question) ?? []
+  // D-250: 번역 열이 있으면 '번역만 반영'(같은 질문을 찾아 러시아어만) — 대부분 기존 질문과 같으면 처음부터 이 방식
+  const trRes = table ? parseTranslationTable(table, t, offset) : null
+  const hasTr = !!trRes && !trRes.headerError
+  const trFound = trRes?.rows.filter((r) => r.found) ?? []
+  const mode = modePick ?? (hasTr && trRes!.rows.length > 0 && trFound.length * 2 >= trRes!.rows.length ? 'translate' : 'append')
   const pick = async (f: File | undefined) => {
     setReadErr(''); setLoaded(null)
     if (!f) return
@@ -611,6 +635,13 @@ function Import({ cycle, t, onClose, onDone, mut }: { cycle: Cycle; t: Template;
     setLoaded({ file: f.name, sheets: r.sheets, sheet: 0, block: null })
   }
   const apply = () => {
+    if (mode === 'translate') {
+      if (!trFound.length) return
+      let n = 0
+      mut((x) => { n = applyTranslations(x, trRes!.rows) })
+      onDone(-trFound.length || n)
+      return
+    }
     if (!res || !canImportQuestions(res)) return
     if (mode === 'replace' && !confirm(`기존 문항을 모두 지우고 ${ok.length}개로 교체할까요?`)) return
     mut((x) => {
@@ -619,11 +650,12 @@ function Import({ cycle, t, onClose, onDone, mut }: { cycle: Cycle; t: Template;
     })
     onDone(ok.length)
   }
-  const reset = () => { setLoaded(null); setReadErr(''); setInputKey((k) => k + 1) }
+  const reset = () => { setLoaded(null); setReadErr(''); setMode(null); setInputKey((k) => k + 1) }
   return (
     <Modal title="문항 일괄 업로드" onClose={onClose} wide>
       <div className="upload q-upload">
-        <p className="muted upload-cols">필수 열: {Q_REQUIRED.join(' · ')} · 선택 열: {Q_COLUMNS.filter((c) => !(Q_REQUIRED as readonly string[]).includes(c)).join(' · ')} · 여러 값은 | 로 구분</p>
+        <p className="muted upload-cols">필수 열: {Q_REQUIRED.join(' · ')} · 선택 열: {Q_COLUMNS.filter((c) => !(Q_REQUIRED as readonly string[]).includes(c) && !(Q_TR_COLUMNS as readonly string[]).includes(c)).join(' · ')} · 여러 값은 | 로 구분</p>
+        <p className="muted upload-cols">번역 열(선택): '러시아어' 열 = 질문 번역 · 선택지(러시아어) · 도움말(러시아어) · 영역(러시아어) — 기존 문항 파일에 번역 열만 붙여 올리면 '번역만 반영'으로 문항은 그대로 두고 번역만 저장</p>
         <div className="row upload-pick">
           <label className="btn primary file-btn">
             파일 선택
@@ -646,8 +678,38 @@ function Import({ cycle, t, onClose, onDone, mut }: { cycle: Cycle; t: Template;
           )}
         </div>
         {readErr && <p className="feedback fail" role="alert">✕ {readErr}</p>}
-        {res?.headerError && <p className="feedback fail" role="alert">✕ {res.headerError}</p>}
-        {res && !res.headerError && (
+        {res?.headerError && mode !== 'translate' && <p className="feedback fail" role="alert">✕ {res.headerError}</p>}
+        {mode === 'translate' && trRes && (
+          <>
+            <div className="row upload-sum" aria-live="polite">
+              <span>전체 <b>{trRes.rows.length}</b>행</span>
+              <span>번역 반영 <b>{trFound.length}</b></span>
+              <span className={trRes.rows.length - trFound.length ? 'err' : ''}>건너뜀 <b>{trRes.rows.length - trFound.length}</b>행</span>
+            </div>
+            <ModePick mode={mode} setMode={setMode} hasTr={hasTr} hasResp={hasResp} />
+            <div className="table-wrap upload-preview" tabIndex={0}>
+              <table className="tbl">
+                <thead><tr><th className="num">행</th><th>질문</th><th>러시아어</th><th>확인</th></tr></thead>
+                <tbody>
+                  {trRes.rows.length === 0 ? <tr><td colSpan={4} className="empty-row">머리글 아래에 행이 없습니다.</td></tr> : trRes.rows.map((r) => (
+                    <tr key={r.line} className={r.found ? '' : 'row-err'}>
+                      <td className="num">{r.line}</td>
+                      <td>{r.title || <span className="muted">(빈 칸)</span>}</td>
+                      <td lang="ru">{r.ru.title ?? <span className="muted">—</span>}{r.ru.options && <div className="muted small">선택지: {r.ru.options.join(' | ')}</div>}{r.sectionRu && <div className="muted small">영역: {r.sectionRu}</div>}</td>
+                      <td>{r.found ? <><span className="chip submitted">✓</span>{r.note && <div className="muted small">{r.note}</div>}</> : <div className="err-msg">{r.note}</div>}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="row" style={{ marginTop: 12 }}>
+              <button className="btn primary" disabled={!trFound.length} onClick={apply}>번역 {trFound.length}개 반영</button>
+              <button className="btn" onClick={reset}>다른 파일</button>
+              {trRes.rows.length > trFound.length && <span className="muted">건너뛴 행은 넣지 않고, 찾은 질문만 번역을 저장합니다.</span>}
+            </div>
+          </>
+        )}
+        {res && !res.headerError && mode !== 'translate' && (
           <>
             <div className="row upload-sum" aria-live="polite">
               <span>전체 <b>{res.rows.length}</b>행</span>
@@ -656,12 +718,7 @@ function Import({ cycle, t, onClose, onDone, mut }: { cycle: Cycle; t: Template;
               {res.ignored.length > 0 && <span className="muted">쓰지 않는 열(등록 안 함): {res.ignored.join(', ')}</span>}
             </div>
             {res.notes?.map((n, i) => <p key={i} className="muted small q-note">{n}</p>)}
-            <fieldset className="sub-settings">
-              <legend>가져오기 방식</legend>
-              <label className="check"><input type="radio" name="qmode" checked={mode === 'append'} onChange={() => setMode('append')} /> 추가 (기존 문항 뒤에, 같은 이름의 영역에 넣음)</label>
-              <label className="check"><input type="radio" name="qmode" disabled={hasResp} checked={mode === 'replace'} onChange={() => setMode('replace')} /> 교체 (기존 문항 모두 삭제)</label>
-              {hasResp && <span className="muted">응답이 있는 평가라 교체할 수 없습니다.</span>}
-            </fieldset>
+            <ModePick mode={mode} setMode={setMode} hasTr={hasTr} hasResp={hasResp} />
             <div className="table-wrap upload-preview" tabIndex={0}>
               <table className="tbl">
                 <thead><tr><th className="num">행</th><th>영역</th><th>질문</th><th>유형</th><th>적용평가</th><th>확인</th></tr></thead>
@@ -691,6 +748,18 @@ function Import({ cycle, t, onClose, onDone, mut }: { cycle: Cycle; t: Template;
   )
 }
 
+function ModePick({ mode, setMode, hasTr, hasResp }: { mode: string; setMode: (m: 'append' | 'replace' | 'translate') => void; hasTr: boolean; hasResp: boolean }) {
+  return (
+    <fieldset className="sub-settings">
+      <legend>가져오기 방식</legend>
+      <label className="check"><input type="radio" name="qmode" checked={mode === 'append'} onChange={() => setMode('append')} /> 추가 (기존 문항 뒤에, 같은 이름의 영역에 넣음)</label>
+      <label className="check"><input type="radio" name="qmode" disabled={hasResp} checked={mode === 'replace'} onChange={() => setMode('replace')} /> 교체 (기존 문항 모두 삭제)</label>
+      {hasTr && <label className="check"><input type="radio" name="qmode" checked={mode === 'translate'} onChange={() => setMode('translate')} /> 번역만 반영 (같은 질문을 찾아 러시아어만 저장 — 문항·응답은 그대로)</label>}
+      {hasResp && <span className="muted">응답이 있는 평가라 교체할 수 없습니다.</span>}
+    </fieldset>
+  )
+}
+
 // ── 러시아어 번역 편집 (D-075) ─────────────────────────
 // 저장해 둔 번역문을 관리자가 직접 입력·수정한다. 자동 번역하지 않는다. 선택지 번역은 선택지 ID로 연결.
 // basis = 번역할 때의 한국어 원문 — 한국어를 고치면 이 편집 영역에만 "번역 재확인 필요" 표시(번역은 지우지 않음).
@@ -710,58 +779,7 @@ function finishTranslation(q: Question, before: Question): Question {
   return { ...q, i18n: { ...(q.i18n ?? {}), ru: clean } }
 }
 
-function RuEditor({ q, onChange }: { q: Question; onChange: (ru: QuestionTr | undefined) => void }) {
-  const ru = q.i18n?.ru ?? {}
-  const review = needsReview(q)
-  const filledCount = (ru.title?.trim() ? 1 : 0) + Object.values(ru.options ?? {}).filter((v) => v.trim()).length
-  const setRu = (patch: Partial<QuestionTr>) => onChange({ ...ru, ...patch })
-  return (
-    <details className="sub-settings q-tr" open={review || undefined}>
-      <summary>
-        러시아어 번역
-        {review ? <span className="chip draft tag">번역 재확인 필요</span> : !ru.title?.trim() ? <span className="muted"> · 미입력 (한국어로 표시)</span> : <span className="muted"> · 입력됨</span>}
-      </summary>
-      {review && (
-        <p className="save-note">한국어 원문이 번역 이후 바뀌었습니다. 번역을 확인해 고치거나 <button type="button" className="link-btn" onClick={() => setRu({ basis: koBasis(q) })}>그대로 확인</button>하세요.</p>
-      )}
-      <label className="field">질문 (러시아어)<input type="text" lang="ru" value={ru.title ?? ''} placeholder="비우면 한국어로 표시" onChange={(e) => setRu({ title: e.target.value })} /></label>
-      {(q.help || ru.help) && <label className="field">도움말 (러시아어)<input type="text" lang="ru" value={ru.help ?? ''} placeholder="비우면 한국어로 표시" onChange={(e) => setRu({ help: e.target.value })} /></label>}
-      {q.options.length > 0 && (
-        <div className="tr-opts">
-          {q.options.map((o, i) => (
-            <label key={o.id} className="field tr-opt">
-              <span>선택지 {i + 1} <span className="muted">· {o.label}</span></span>
-              <input type="text" lang="ru" aria-label={`선택지 ${i + 1} 러시아어`} value={ru.options?.[o.id] ?? ''} placeholder="비우면 한국어로 표시"
-                onChange={(e) => setRu({ options: { ...(ru.options ?? {}), [o.id]: e.target.value } })} />
-            </label>
-          ))}
-        </div>
-      )}
-      <p className="muted tr-count">입력 {filledCount}개 · 저장해 둔 번역문만 표시합니다(자동 번역 없음)</p>
-    </details>
-  )
-}
 
-/** 평가영역 이름의 러시아어 — 영역 머리글에서 펼쳐 입력 */
-function SectionRu({ sec, onChange }: { sec: Section; onChange: (fn: (s: Section) => void) => void }) {
-  const [open, setOpen] = useState(false)
-  const v = sec.i18n?.ru?.title ?? ''
-  const review = sectionNeedsReview(sec)
-  return (
-    <span className="sec-ru">
-      <button type="button" className={`btn small ${v ? '' : 'ghost'}`} aria-expanded={open} aria-label={`${sec.title} 영역 러시아어 이름`} onClick={() => setOpen(!open)}>
-        RU{review && <span className="chip draft tag">재확인</span>}
-      </button>
-      {open && (
-        <span className="sec-ru-edit">
-          <input type="text" lang="ru" aria-label={`${sec.title} 영역 이름 (러시아어)`} placeholder="러시아어 이름 (비우면 한국어)" value={v}
-            onChange={(e) => onChange((x) => { const t = e.target.value; x.i18n = t.trim() ? { ...(x.i18n ?? {}), ru: { title: t, basis: x.title } } : undefined })} />
-          {review && <button type="button" className="btn small" onClick={() => onChange((x) => { if (x.i18n?.ru) x.i18n.ru.basis = x.title })}>그대로 확인</button>}
-        </span>
-      )}
-    </span>
-  )
-}
 
 /**
  * 평가표 버전 탭과 적용 범위 (D-082). 엑셀 시트처럼 용도별 평가표를 만들고 전환한다.
