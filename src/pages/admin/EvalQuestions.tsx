@@ -314,12 +314,11 @@ function QuestionEditor({ t, editing, answered, onClose, onSave }: {
   // D-250: 번역은 수정 창 안에서 언어 버튼으로 켜고 끔(문항 목록·영역 머리글에는 RU 버튼 없음). 번역이 있으면 켜진 채로 열림
   const secOf = (id: string) => t.sections.find((x) => x.id === id)
   const [secRu, setSecRu] = useState(secOf(editing.sectionId)?.i18n?.ru?.title ?? '')
-  const [showRu, setShowRu] = useState(() => !!(q.i18n?.ru?.title || q.i18n?.ru?.help || Object.values(q.i18n?.ru?.options ?? {}).some(Boolean) || secRu))
+  const [showRu, setShowRu] = useState(false) // D-253: 처음엔 숨김 — 'RU 러시아어'를 눌러야 보임
   const ru = q.i18n?.ru ?? {}
   const setRu = (patch: Partial<QuestionTr>) => setQ((cur) => ({ ...cur, i18n: { ...(cur.i18n ?? {}), ru: { ...(cur.i18n?.ru ?? {}), ...patch } } }))
   const review = needsReview(q)
   const secReview = !!secOf(sectionId) && sectionNeedsReview(secOf(sectionId)!) && secRu === (secOf(sectionId)?.i18n?.ru?.title ?? '')
-  const s = useAppState()
   const [errors, setErrors] = useState<string[]>([])
   const original = JSON.stringify(editing.q) + editing.sectionId + (secOf(editing.sectionId)?.i18n?.ru?.title ?? '')
   useDirty(JSON.stringify(q) + sectionId + secRu !== original)
@@ -327,8 +326,6 @@ function QuestionEditor({ t, editing, answered, onClose, onSave }: {
   const set = (patch: Partial<Question>) => setQ({ ...q, ...patch })
   const rules = rulesOf(q)
   const setRules = (r: EvaluatorRule[]) => set({ rules: r, directions: directionsFromRules(r) })
-  const jobs = q.jobs?.length ? q.jobs : (['office', 'production'] as JobType[])
-  const roles = q.targetRoles?.length ? q.targetRoles : (['member', 'lead'] as ('member' | 'lead')[])
   // 선택지 순서 바꾸기(D-238): 끌어 놓기·키보드 ↑↓ 공통
   const moveOpt = (from: number, to: number) => setQ((cur) => {
     if (to < 0 || to >= cur.options.length || to === from) return cur
@@ -345,7 +342,7 @@ function QuestionEditor({ t, editing, answered, onClose, onSave }: {
   }
   return (
     <Modal title={editing.isNew ? `문항 추가 — ${TYPE_TEXT[q.type]}` : '문항 수정'} onClose={close}>
-      {locked && <p className="save-note">응답 {answered}건이 있는 문항이라 유형·선택지 삭제·점수는 바꿀 수 없습니다. 문구 수정과 선택지 추가는 가능합니다.</p>}
+      {/* D-253: 응답 있는 문항 안내 문구 없앰 — 바꿀 수 없는 칸은 그대로 잠김 */}
       <div className="q-editor">
         {/* D-250: 번역 언어 버튼 — 나중에 언어가 늘면 버튼만 옆에 추가 */}
         <div className="tr-toggle" role="group" aria-label="번역 표시">
@@ -420,50 +417,6 @@ function QuestionEditor({ t, editing, answered, onClose, onSave }: {
             <label key={r} className="check"><input type="checkbox" checked={rules.includes(r)} onChange={(e) => setRules(e.target.checked ? [...rules, r] : rules.filter((x) => x !== r))} /> {RULE_TEXT[r]}</label>
           ))}
         </fieldset>
-        {/* 기본 적용 범위는 평가표 버전 단위(D-082). 아래는 꼭 필요할 때만 쓰는 문항별 추가 제한 — 버전 범위와 함께 둘 다 만족해야 보임 */}
-        <details className="q-extra" open={!!(q.jobs?.length || q.targetRoles?.length || q.teams?.length || q.positions?.length)}>
-        <summary>추가 설정 <span className="muted">선택 · 문항별 제한</span></summary>
-        <div className="grid form-grid">
-          <fieldset className="sub-settings">
-            <legend>직무</legend>
-            {(['office', 'production'] as JobType[]).map((j) => (
-              <label key={j} className="check"><input type="checkbox" checked={jobs.includes(j)} onChange={(e) => {
-                const next = e.target.checked ? [...jobs, j] : jobs.filter((x) => x !== j)
-                set({ jobs: next.length === 2 ? [] : next })
-              }} /> {jobName(s, j)}</label>
-            ))}
-          </fieldset>
-          <fieldset className="sub-settings">
-            <legend>평가받는 사람</legend>
-            {(['member', 'lead'] as const).map((r) => (
-              <label key={r} className="check"><input type="checkbox" checked={roles.includes(r)} onChange={(e) => {
-                const next = e.target.checked ? [...roles, r] : roles.filter((x) => x !== r)
-                set({ targetRoles: next.length === 2 ? [] : next })
-              }} /> {r === 'lead' ? '팀장' : '사원'}</label>
-            ))}
-          </fieldset>
-          <fieldset className="sub-settings">
-            <legend>적용 팀 <span className="muted">평가받는 사람</span></legend>
-            {activeTeams(s).map((tm) => (
-              <label key={tm.id} className="check"><input type="checkbox" checked={!!q.teams?.includes(tm.id)} onChange={(e) => {
-                const next = e.target.checked ? [...(q.teams ?? []), tm.id] : (q.teams ?? []).filter((x) => x !== tm.id)
-                set({ teams: next.length ? next : undefined })
-              }} /> {tm.name}</label>
-            ))}
-            <span className="muted">비우면 버전 범위 그대로</span>
-          </fieldset>
-          <fieldset className="sub-settings">
-            <legend>적용 직급 <span className="muted">평가받는 사람</span></legend>
-            {positionsOf(s).map((p) => (
-              <label key={p.id} className="check"><input type="checkbox" checked={!!q.positions?.includes(p.id)} onChange={(e) => {
-                const next = e.target.checked ? [...(q.positions ?? []), p.id] : (q.positions ?? []).filter((x) => x !== p.id)
-                set({ positions: next.length ? next : undefined })
-              }} /> {p.name}</label>
-            ))}
-            <span className="muted">비우면 버전 범위 그대로</span>
-          </fieldset>
-        </div>
-        </details>
       </div>
       {errors.length > 0 && <div className="feedback fail" role="alert">{errors.map((e) => <div key={e}>✕ {e}</div>)}</div>}
       <div className="row" style={{ marginTop: 14 }}><span className="spacer" /><button className="btn primary" onClick={save}>{editing.isNew ? '추가' : '저장'}</button></div>
