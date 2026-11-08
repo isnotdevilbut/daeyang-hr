@@ -1061,7 +1061,7 @@ function SlotPicker({ cycle, v, scope, setScope }: { cycle: Cycle; v: TemplateVe
         </div>
       ))}
     </fieldset>
-    <fieldset className="scope-set team-set"><legend>적용 팀 <span className="muted small">(중복 선택 가능)</span></legend>
+    <fieldset className="scope-set team-set"><legend>적용 팀</legend>
       <div className="team-checks">
         {teams.map((tm) => <label key={tm.id} className="check"><input type="checkbox" checked={picked(tm.id)} onChange={(e) => setTeam(tm.id, e.target.checked)} /> {tm.name}</label>)}
       </div>
