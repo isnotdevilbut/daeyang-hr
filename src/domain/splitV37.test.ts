@@ -47,3 +47,26 @@ describe('D-255 평가별 평가표로 나누기 (v36 → v37)', () => {
     expect(nn.some((x) => x.startsWith('자기평가('))).toBe(true); expect(nn).not.toContain('공통 평가표')
   })
 })
+
+describe('D-256 평가표 적용 팀', async () => {
+  const V = await import('./versions')
+  const { activeTeams } = await import('./org')
+  it('같은 화살표를 팀으로 나눠 맡음 — 고른 팀은 그 평가표, 나머지는 전체 팀 평가표, 적용 대상 수도 팀만큼', () => {
+    const s = createSeed(); const c = s.cycles.find((x) => x.status === '진행')!
+    const lead = V.liveVersions(c).find((v) => v.name === '팀장평가표')!
+    const team = activeTeams(s).find((t) => c.targets.some((x) => x.departmentId === t.id && !x.isTeamLead))!
+    const t2 = V.cloneTemplate(c.templates[lead.templateId], '설계팀 팀장평가표')
+    V.addVersion(c, t2, t2.name, V.slotScope([]))
+    const sc = V.slotScope(['lead-member'], [team.id])
+    expect(V.scopeErrors(c, t2.id, sc)).toEqual([])
+    const r = V.applyVersion(s, c, t2.id, t2.name, sc, {})
+    expect(r.errors).toEqual([])
+    expect(V.liveVersions(c).find((v) => v.templateId === lead.templateId)!.scope.slots).toContain('lead-member') // 전체 팀 평가표에서 빠지지 않음
+    const lm = c.assignments.filter((a) => !a.excluded && V.assignmentCtx(c, a).rule === 'teamLead')
+    for (const a of lm) if (!s.responses[a.id]) expect(a.templateId).toBe(V.assignmentCtx(c, a).teamId === team.id ? t2.id : lead.templateId) // 응답 있는 배정은 평가표를 바꾸지 않음
+    for (const a of lm) expect(V.resolveVersion(c, V.assignmentCtx(c, a)).templateId).toBe(V.assignmentCtx(c, a).teamId === team.id ? t2.id : lead.templateId)
+    const n = V.scopeTargets(c, sc).length
+    expect(n).toBe(new Set(lm.filter((a) => V.assignmentCtx(c, a).teamId === team.id).map((a) => a.targetId)).size)
+    expect(n).toBeGreaterThan(0)
+  })
+})

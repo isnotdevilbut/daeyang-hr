@@ -59,7 +59,7 @@ export function splitByRule(c: Cycle): number {
     })
     const slotsOf = (rs: EvaluatorRule[]): SlotKey[] => slots.filter((k) => rs.includes(SLOTS.find((x) => x.key === k)!.rule))
     const at = c.versions.indexOf(v)
-    c.versions.splice(at, 1, ...made.map((m, i) => ({ templateId: m.tid, name: m.name, scope: slotScope(slotsOf(m.rules)), ...(i === 0 && v.pending ? { pending: v.pending } : {}) })))
+    c.versions.splice(at, 1, ...made.map((m, i) => ({ templateId: m.tid, name: m.name, scope: slotScope(slotsOf(m.rules), v.scope.teams), ...(i === 0 && v.pending ? { pending: v.pending } : {}) })))
     for (const a of c.assignments) {
       if (a.templateId !== tpl.id) continue
       const rule = assignmentCtx(c, a).rule

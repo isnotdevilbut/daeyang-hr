@@ -883,7 +883,7 @@ function ScopeEditor({ cycle, v, onDup, onRemove, msg, setMsg }: { cycle: Cycle;
       {preview.length > 0 && (
         <div className="feedback fail scope-preview" role="status">
           ⚠ 이대로 적용하면 — {problemText(cycle, preview, s)}
-          <div className="muted small">{arrows ? "이대로면 위 평가는 어느 평가표도 맡지 않아 '평가 미배치'가 돼요. 그 화살표를 이 평가표나 다른 평가표에서 골라 주세요." : "이대로면 위 평가는 어느 평가표에도 체크되지 않아 '평가 미배치'가 돼요. 이 평가표에 다시 체크하거나, 그 평가를 맡을 다른 평가표에서 체크하세요(팀·직급·사람은 평가받는 사람 기준)."}</div>
+          <div className="muted small">{arrows ? "이대로면 위 평가는 어느 평가표도 맡지 않아 '평가 미배치'가 돼요. 그 화살표·팀을 이 평가표나 다른 평가표에서 골라 주세요." : "이대로면 위 평가는 어느 평가표에도 체크되지 않아 '평가 미배치'가 돼요. 이 평가표에 다시 체크하거나, 그 평가를 맡을 다른 평가표에서 체크하세요(팀·직급·사람은 평가받는 사람 기준)."}</div>
         </div>
       )}
       {(
@@ -1025,11 +1025,21 @@ const SLOT_GROUPS: { title: React.ReactNode; keys: SlotKey[] }[] = [
   { title: <>상향평가</>, keys: ['up-lead', 'up-exec'] },
 ]
 function SlotPicker({ cycle, v, scope, setScope }: { cycle: Cycle; v: TemplateVersion; scope: VersionScope; setScope: (x: VersionScope) => void }) {
+  const s = useAppState()
   const mine = scope.slots ?? []
   const other = (k: SlotKey) => liveVersions(cycle).find((x) => x.templateId !== v.templateId && x.scope.slots?.includes(k))
-  const flip = (k: SlotKey) => setScope(slotScope(mine.includes(k) ? mine.filter((x) => x !== k) : [...mine, k]))
+  const flip = (k: SlotKey) => setScope(slotScope(mine.includes(k) ? mine.filter((x) => x !== k) : [...mine, k], scope.teams))
+  // D-256: 적용 팀(평가받는 사람의 팀) — 체크박스 중복 선택, 모두 체크 = 전체 팀
+  const teams = activeTeams(s)
+  const picked = (id: string) => scope.teams === 'all' || scope.teams.includes(id)
+  const setTeam = (id: string, on: boolean) => {
+    const cur = scope.teams === 'all' ? teams.map((x) => x.id) : scope.teams
+    const next = on ? [...new Set([...cur, id])] : cur.filter((x) => x !== id)
+    setScope(slotScope(mine, teams.every((x) => next.includes(x.id)) ? 'all' : next))
+  }
   return (
-    <fieldset className="scope-set slot-set"><legend>평가자 → 평가대상 <span className="muted small">이 평가표를 쓸 평가를 누르세요</span></legend>
+    <>
+    <fieldset className="scope-set slot-set"><legend>평가자 → 평가대상</legend>
       {SLOT_GROUPS.map((g, i) => (
         <div key={i} className="slot-row">
           <div className="slot-row-title">{g.title}</div>
@@ -1051,5 +1061,11 @@ function SlotPicker({ cycle, v, scope, setScope }: { cycle: Cycle; v: TemplateVe
         </div>
       ))}
     </fieldset>
+    <fieldset className="scope-set team-set"><legend>적용 팀 <span className="muted small">(중복 선택 가능)</span></legend>
+      <div className="team-checks">
+        {teams.map((tm) => <label key={tm.id} className="check"><input type="checkbox" checked={picked(tm.id)} onChange={(e) => setTeam(tm.id, e.target.checked)} /> {tm.name}</label>)}
+      </div>
+    </fieldset>
+    </>
   )
 }

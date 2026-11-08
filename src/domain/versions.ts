@@ -36,12 +36,16 @@ export const slotOf = (rule: EvaluatorRule, tier?: Tier): SlotKey | undefined =>
 /** 화살표로 정하는 회차(D-211) — 버전 중 하나라도 slots가 있으면 */
 export const slotMode = (c: Pick<Cycle, 'versions'>) => (c.versions ?? []).some((v) => !!v.scope.slots)
 /** 화살표 목록으로 범위 만들기 — 평가 종류는 화살표에서, 팀·직급은 전체 */
-export const slotScope = (slots: SlotKey[]): VersionScope => {
+export const slotScope = (slots: SlotKey[], teams: 'all' | ID[] = 'all'): VersionScope => {
   const ks = SLOTS.filter((x) => slots.includes(x.key))
-  return { mode: 'custom', rules: [...new Set(ks.map((x) => x.rule))], teams: 'all', positions: 'all', slots: ks.map((x) => x.key) }
+  return { mode: 'custom', rules: [...new Set(ks.map((x) => x.rule))], teams, positions: 'all', slots: ks.map((x) => x.key) }
 }
+/** D-256: 화살표 + 적용 팀(평가받는 사람의 팀). 팀을 고르면 그 팀 사람에게만 — 같은 화살표의 '전체 팀' 평가표보다 먼저 */
+const teamHit = (sc: VersionScope, teamId?: ID) => sc.teams === 'all' || (!!teamId && sc.teams.includes(teamId))
+/** 두 범위의 팀이 겹치는가 */
+const teamsOverlap = (a: 'all' | ID[], b: 'all' | ID[]) => a === 'all' || b === 'all' || a.some((x) => b.includes(x))
 /** 이 화살표를 맡은 적용 중 평가표(없으면 undefined = 평가 미배치) */
-export const slotOwner = (c: Pick<Cycle, 'versions'>, key: SlotKey) => liveVersions(c).find((v) => v.scope.slots?.includes(key))
+export const slotOwner = (c: Pick<Cycle, 'versions'>, key: SlotKey) => liveVersions(c).find((v) => v.scope.slots?.includes(key) && v.scope.teams === 'all') ?? liveVersions(c).find((v) => v.scope.slots?.includes(key))
 export interface Resolution { templateId: ID | null; candidates: ID[]; conflict: boolean }
 
 /** 평가받는 사람 조건: 직접 선택한 사람(employees) 또는 팀, 그리고 직급 (D-087) */
@@ -66,7 +70,10 @@ export function resolveVersion(c: Pick<Cycle, 'versions' | 'versionPicks' | 'tem
   // D-211: 화살표 방식 — 그 화살표를 맡은 평가표 하나(겹치지 않음). 맡은 평가표가 없으면 평가 미배치
   if (slotMode(c)) {
     const key = slotOf(x.rule, x.tier)
-    const own = key ? act.filter((v) => v.scope.slots?.includes(key)).map((v) => v.templateId) : []
+    const hits = key ? act.filter((v) => v.scope.slots?.includes(key) && teamHit(v.scope, x.teamId)) : []
+    // D-256: 팀을 고른 평가표가 '전체 팀' 평가표보다 먼저
+    const narrow = hits.filter((v) => v.scope.teams !== 'all')
+    const own = (narrow.length ? narrow : hits).map((v) => v.templateId)
     return { templateId: own.length === 1 ? own[0] : null, candidates: own, conflict: own.length > 1 }
   }
   // D-210: 전체 체크(전체 팀·전체 직급) 평가표는 더 좁게 고른 평가표가 없을 때만 — 이전 '모두에게 동일 적용'과 같은 순서
@@ -121,7 +128,7 @@ export const visibleCount = (t: Template, c: Cycle, a: Assignment) => t.sections
 export const scopeTargets = (c: Pick<Cycle, 'targets'> & Partial<Pick<Cycle, 'assignments'>>, sc: VersionScope): { employeeId: ID }[] => {
   if (sc.slots) { // D-211: 화살표에 해당하는 배정의 평가받는 사람
     const cc = c as Cycle
-    return [...new Set((cc.assignments ?? []).filter((a) => !a.excluded && sc.slots!.includes(slotOf(assignmentCtx(cc, a).rule, assignmentCtx(cc, a).tier) as SlotKey)).map((a) => a.targetId))].map((employeeId) => ({ employeeId }))
+    return [...new Set((cc.assignments ?? []).filter((a) => { if (a.excluded) return false; const x = assignmentCtx(cc, a); return sc.slots!.includes(slotOf(x.rule, x.tier) as SlotKey) && teamHit(sc, x.teamId) }).map((a) => a.targetId))].map((employeeId) => ({ employeeId }))
   }
   const extra = [...new Set((c.assignments ?? []).filter((a) => a.direction === 'up' && !a.excluded && !c.targets.some((t) => t.employeeId === a.targetId)).map((a) => a.targetId))]
     .map((employeeId) => ({ employeeId }))
@@ -135,7 +142,17 @@ export const scopeTargets = (c: Pick<Cycle, 'targets'> & Partial<Pick<Cycle, 'as
 /** 공통 기본(모두에게 동일 적용)은 평가 유형별로 하나만 */
 export function scopeErrors(c: Pick<Cycle, 'versions'>, templateId: ID, scope: VersionScope): string[] {
   const e: string[] = []
-  if (scope.slots) { if (!scope.slots.length) e.push('이 평가표가 맡을 평가(화살표)를 하나 이상 고르세요.'); return e } // D-211: 화살표는 겹치지 않음
+  if (scope.slots) {
+    if (!scope.slots.length) e.push('이 평가표가 맡을 평가(화살표)를 하나 이상 고르세요.')
+    if (scope.teams !== 'all' && !scope.teams.length) e.push('적용 팀을 하나 이상 고르세요.')
+    // D-256: 같은 화살표를 팀을 골라 맡는 다른 평가표와 팀이 일부만 겹치면 어느 쪽인지 정할 수 없음(전체 포함·같은 팀이면 적용 때 옮겨 옴)
+    if (scope.teams !== 'all') for (const v of liveVersions(c)) {
+      if (v.templateId === templateId || v.scope.teams === 'all' || !v.scope.slots?.some((k) => scope.slots!.includes(k))) continue
+      const theirs = v.scope.teams
+      if (teamsOverlap(scope.teams, theirs) && !theirs.every((x) => (scope.teams as ID[]).includes(x))) e.push(`'${v.name}'과(와) 같은 평가에 팀이 일부 겹칩니다. 팀을 겹치지 않게 고르세요.`)
+    }
+    return e
+  }
   if (!scope.rules.length) e.push('적용 평가를 하나 이상 고르세요.')
   if (scope.mode === 'custom') {
     if (scope.employees && !scope.employees.length) e.push('적용할 사람을 한 명 이상 고르세요(또는 전체 팀).')
@@ -273,7 +290,9 @@ export function versionScopesV30(s: AppState): string[] {
 export function withScope(c: Cycle, templateId: ID, name: string, scope: VersionScope): Cycle {
   const t = structuredClone(c)
   const mine = scope.slots ?? []
-  const strip = (sc: VersionScope) => (sc.slots && mine.some((k) => sc.slots!.includes(k)) ? slotScope(sc.slots.filter((k) => !mine.includes(k))) : sc)
+  // D-256: 같은 화살표라도 팀으로 나뉘면 둘 다 둠 — 내 팀이 상대 팀을 모두 덮을 때만(전체끼리 · 고른 팀끼리) 상대에서 뺌
+  const covers = (sc: VersionScope) => (scope.teams === 'all' ? sc.teams === 'all' : sc.teams !== 'all' && sc.teams.every((x) => (scope.teams as ID[]).includes(x)))
+  const strip = (sc: VersionScope) => (sc.slots && covers(sc) && mine.some((k) => sc.slots!.includes(k)) ? slotScope(sc.slots.filter((k) => !mine.includes(k)), sc.teams) : sc)
   t.versions = (t.versions ?? []).map((x) => x.templateId === templateId ? { templateId, name, scope } : { ...x, scope: strip(x.scope), ...(x.pending ? { pending: { ...x.pending, scope: strip(x.pending.scope) } } : {}) })
   return t
 }
