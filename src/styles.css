@@ -1798,3 +1798,12 @@ body.drag-sorting, body.drag-sorting * { cursor: grabbing !important; user-selec
 /* D-256: 평가표 적용 팀 */
 .team-set { margin-top: 12px; }
 .team-set .team-checks { display: flex; flex-wrap: wrap; gap: 6px 18px; }
+/* D-258: 화살표 블록을 줄임 — 왼쪽 '1단계 자기평가' 글자 높이에 맞춤, 안쪽 여백 줄임('평가 미배치'는 같은 줄 오른쪽) */
+.slot-set { gap: 6px; }
+.slot-row { gap: 10px; }
+.slot-btns { gap: 6px; }
+.slot-btn { flex-direction: row; gap: 8px; min-height: 0; height: 32px; padding: 0 30px; border-radius: 8px; min-width: 11em; }
+.slot-btn .slot-arrow { font-size: 15px; line-height: 1; }
+.slot-btn .slot-state { font-size: 12px; line-height: 1; }
+.slot-btn .slot-check { right: 10px; font-size: 15px; }
+@media (max-width: 640px) { .slot-btn { height: 34px; } }
