@@ -1,12 +1,18 @@
 # 시연용 정적 사이트(Render Static Site, 무료). hr-evaluation과 같은 방식: Private GitHub 저장소 → Render Blueprint.
-# 서버·DB 없음 — 데이터는 방문자 브라우저(localStorage)에만 저장된다. 비밀 환경변수 없음.
+# 프로토타입: 데이터는 Supabase(서버 DB)에 저장. 화면은 정적 사이트. 비밀 키는 쓰지 않음(공개 키만).
 services:
   - type: web
-    name: daeyang-hr-mockup
+    name: daeyang-hr-proto
     runtime: static
     buildCommand: npm ci && npm run build
     staticPublishPath: ./dist
     pullRequestPreviewsEnabled: false
+    # 프로토타입: Supabase 연결(공개 주소·공개 키 — 브라우저에 원래 들어가는 값). 비밀(secret/service_role) 키는 넣지 않는다
+    envVars:
+      - key: VITE_SUPABASE_URL
+        value: https://jvywtymyircuanavrxgf.supabase.co
+      - key: VITE_SUPABASE_KEY
+        value: sb_publishable_UrcuswWKOX2Ku_qOOyz6Jg_fG8Ht2nO
     headers:
       - path: /*
         name: X-Robots-Tag

@@ -1,9 +1,9 @@
 import { useRef, useState } from 'react'
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom'
-import { getState, update, useAppState } from '../data/store'
-import { accountText, ADMIN_ACCOUNTS, canSignIn, checkLogin, homeFor, sessionFor, setLoggedIn, useAccount } from '../data/auth'
+import { getState, loadRemote, update, useAppState } from '../data/store'
+import { homeFor, participantAccount, remoteLogin, sessionFor, setLoggedIn, useAccount } from '../data/auth'
 import logoKo from '../assets/logo-ko.png'
-import { loginError, t, tierText, useLang } from '../i18n'
+import { loginError, t, useLang } from '../i18n'
 import { LangSelect } from './employee/mobile'
 import { LoginBackdrop } from '../components/LoginBackdrop'
 
@@ -22,22 +22,29 @@ export default function Login() {
   const [lang, setLang] = useLang() // 직원 로그인 화면 언어 (선택은 이 브라우저에 기억 — 로그인 후 평가 화면에도 적용)
   const cur = account ? sessionFor(s, account) : null
   if (cur) return <Navigate to={homeFor(cur.role)} replace />
-  const fill = (a: string, b: string) => { setId(a); setPw(b); setErr('') }
-
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (busyRef.current) return // 처리 중 중복 클릭 방지
-    const r = checkLogin(getState(), id, pw)
-    if (typeof r === 'string') { setErr(r); return }
     busyRef.current = true
     setBusy(true)
     setErr('')
-    setTimeout(() => {
-      const ses = sessionFor(getState(), r)!
+    // 프로토타입: 서버에서 로그인 확인(첫 로그인이면 계정 생성) → 서버 데이터 불러오기 → 역할에 맞는 첫 화면
+    const r = await remoteLogin(id, pw)
+    try {
+      if (typeof r === 'string') { setErr(r); return }
+      const who = await loadRemote()
+      const acc = who.isAdmin ? r : who.employeeId ? participantAccount(who.employeeId) : null
+      const ses = acc ? sessionFor(getState(), acc) : null
+      if (!acc || !ses) { setErr('아이디 또는 비밀번호가 올바르지 않습니다.'); return }
       update((d) => { d.session = ses })
-      setLoggedIn(r.key)
+      setLoggedIn(acc.key, false)
       nav(homeFor(ses.role), { replace: true })
-    }, 350)
+    } catch (x) {
+      setErr(`서버에서 데이터를 불러오지 못했습니다: ${(x as Error).message}`)
+    } finally {
+      busyRef.current = false
+      setBusy(false)
+    }
   }
 
   return (
@@ -60,31 +67,8 @@ export default function Login() {
         </label>
         {err && <p className="feedback fail" role="alert">✕ {loginError(err, lang)}</p>}
         <button type="submit" className="btn primary login-btn" disabled={busy}>{busy ? t('login.busy', lang) : t('login.submit', lang)}</button>
-        <details className="demo-accounts">
-          <summary>{t('login.demo', lang)}</summary>
-          <p>{t('login.demoHint', lang, { name: t('login.demoName', lang), no: t('login.demoNo', lang), pw: lang === 'ru' ? '(ваш пароль)' : '(직접 정한 비밀번호)' })}</p>{/* 빈 상태 버전: 관리자 비밀번호는 각자 정하므로 화면에 보이지 않음 */}
-          <div className="acc-list">
-            <table className="tbl">
-              <tbody>
-                {ADMIN_ACCOUNTS.map((a) => (
-                  <tr key={a.key}>
-                    <td><button type="button" className="link-btn" onClick={() => fill(a.adminId!, '')}>{a.adminId}</button></td>
-                    <td className="muted">••••••</td>
-                    <td>운영담당자</td>
-                  </tr>
-                ))}
-                {/* 현재 조직 관리 데이터의 재직 직원 (가상 데이터) */}
-                {s.employees.filter(canSignIn).map((e) => (
-                  <tr key={e.id}>
-                    <td><button type="button" className="link-btn" onClick={() => fill(e.name, e.empNo)}>{e.name}</button></td>
-                    <td className="muted">{e.empNo}</td>
-                    <td>{lang === 'ko' ? accountText(s, e) : accountText(s, e).replace(/^[^·]+?(?= ·|$)/, (m) => tierText(m, lang))}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </details>
+        {/* 프로토타입: 공용 시연 계정 목록 없음 — 첫 로그인 안내만 */}
+        <p className="muted small login-first">{lang === 'ru' ? 'Первый вход: логин — ваше имя, пароль — табельный номер. Потом пароль можно сменить.' : '처음 로그인: 아이디 = 이름, 비밀번호 = 사번. 로그인한 뒤 비밀번호를 바꿀 수 있어요.'}</p>
       </form>
     </main>
   )

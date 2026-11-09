@@ -1,92 +1,204 @@
-// ⚠ 목업 전용 가상 저장소 — 이 브라우저의 localStorage에만 저장된다. 서버 저장이 아니다.
-// 실서비스 단계에서는 이 파일의 함수들을 서버 API 호출로 교체하고, 화면·타입·계산 로직은 재사용한다.
+// 프로토타입 저장소: Supabase 데이터베이스(서버)에 저장하고 여러 사람·기기가 같은 데이터를 본다.
+// 화면 코드는 그대로 쓴다 — update(바꾸는 함수)는 화면에 바로 반영한 뒤, 바뀐 부분만 서버로 보낸다.
+//  - 설정(조직·평가·문항·KPI 등) → 관리자만 저장(dy_save_state). 다른 관리자가 먼저 저장했으면 최신 내용 위에 다시 적용
+//  - 평가 응답 → 한 건씩 저장(dy_save_response) — 직원은 자기 응답만(서버가 검사)
+//  - 몇 초마다 서버의 새 내용을 가져와 다른 사람이 바꾼 것을 반영
 import { useSyncExternalStore } from 'react'
-import type { AppState } from '../domain/types'
-import { SCHEMA_VERSION } from '../domain/schemaVersion'
+import type { AppState, Response } from '../domain/types'
 import { createEmptyState } from '../domain/emptyState'
+import { rpc } from './remote'
 
-const KEY = 'daeyang-hr-mockup-v1' // 저장 위치 이름(고정). 데이터 구조 버전은 state.schemaVersion
-/** 이번 페이지 로드에서 이전 저장 데이터를 변환했다면 그 내용 (목업 안내에 표시) */
-export const migrationNotes: string[] = []
-let lastRaw: string | null = null // 이 탭이 마지막으로 읽거나 쓴 저장 내용
-let state: AppState = load()
+/** 관리자만 읽는 항목(서버의 admin_only) — 직원 화면에는 내려가지 않음 */
+const ADMIN_KEYS = ['tokens', 'kpi', 'kpiIndicators', 'adjustments', 'manualScores', 'memos', 'reportNotes', 'adjustNotes'] as const
+const POLL_MS = 8000
+
+export const migrationNotes: string[] = [] // 이전 화면 코드 호환(프로토타입은 변환 없음)
+
+let state: AppState = createEmptyState()
+let version = 0
+let isAdmin = false
+let employeeId: string | null = null
+/** 마지막으로 서버와 맞춘 내용(바뀐 부분 찾기용) */
+let synced = snapshot(state)
+/** 아직 서버에 보내지 않은(또는 보내는 중인) 변경 — 충돌 때 최신 내용 위에 다시 적용 */
+let pending: ((d: AppState) => void)[] = []
+let pushing: Promise<void> | null = null
+let pollTimer: number | null = null
 const listeners = new Set<() => void>()
 
-function load(): AppState {
-  try {
-    const raw = localStorage.getItem(KEY)
-    lastRaw = raw
-    if (raw) {
-      const parsed = JSON.parse(raw)
-      if (parsed.schemaVersion === SCHEMA_VERSION) return parsed as AppState
-      // 빈 상태로 시작하는 버전(empty-start)은 이전 저장 구조가 없다 — 다른 구조는 지우지 않고 백업으로 옮긴 뒤 빈 상태로
-      // 읽을 수 없는 구조: 지우지 않고 백업으로 옮긴 뒤 시드로 시작
-      localStorage.setItem(`${KEY}-unreadable-backup`, raw)
-      migrationNotes.push('이전 저장 데이터를 읽을 수 없어 백업으로 옮기고 처음 상태로 시작했습니다.')
-    }
-  } catch {
-    /* 저장소 사용 불가(사생활 보호 모드 등) → 시드로 시작 */
-  }
-  return createEmptyState()
+export type SyncStatus = { phase: 'idle' | 'loading' | 'ready' | 'error'; saving: boolean; error: string | null }
+let status: SyncStatus = { phase: 'idle', saving: false, error: null }
+const statusListeners = new Set<() => void>()
+function setStatus(p: Partial<SyncStatus>) { status = { ...status, ...p }; statusListeners.forEach((l) => l()) }
+export function useSyncStatus(): SyncStatus {
+  return useSyncExternalStore((cb) => { statusListeners.add(cb); return () => statusListeners.delete(cb) }, () => status)
 }
 
-function persist() {
-  try {
-    lastRaw = JSON.stringify(state)
-    localStorage.setItem(KEY, lastRaw)
-  } catch {
-    /* 저장 실패해도 화면은 메모리 상태로 동작 */
-  }
+function emit() { listeners.forEach((l) => l()) }
+
+function split(s: AppState) {
+  const { responses, session: _session, ...rest } = s
+  const shared: Record<string, unknown> = { ...rest }
+  const admin: Record<string, unknown> = {}
+  for (const k of ADMIN_KEYS) if (k in shared) { admin[k] = shared[k]; delete shared[k] }
+  return { shared, admin, responses }
+}
+function snapshot(s: AppState) {
+  const { shared, admin, responses } = split(s)
+  return { shared: JSON.stringify(shared), admin: JSON.stringify(admin), responses: Object.fromEntries(Object.entries(responses).map(([k, v]) => [k, JSON.stringify(v)])) as Record<string, string> }
 }
 
-export function getState() {
-  return state
-}
+export function getState() { return state }
+export function remoteRole(): { isAdmin: boolean; employeeId: string | null } { return { isAdmin, employeeId } }
 
-/**
- * 다른 탭에서 저장한 내용이 있으면 이 탭 상태를 그것으로 바꾼다 (D-059).
- * 직원 삭제·정보 수정이 다른 탭의 로그인 상태에 바로 반영되고, 오래된 화면 상태로 덮어쓰지 않게 한다.
- */
-function syncFromStorage(): boolean {
+/** 서버에서 전부 읽어 오기(로그인 직후·새로고침·주기적 확인). 처음 쓰는 빈 데이터베이스면 관리자가 빈 상태로 시작 */
+export async function loadRemote(): Promise<{ isAdmin: boolean; employeeId: string | null }> {
+  if (status.phase !== 'ready') setStatus({ phase: 'loading' })
   try {
-    const raw = localStorage.getItem(KEY)
-    if (!raw || raw === lastRaw) return false
-    const parsed = JSON.parse(raw)
-    const next = parsed.schemaVersion === SCHEMA_VERSION ? (parsed as AppState) : null
-    if (!next) return false
-    lastRaw = raw
-    state = { ...next, session: state.session } // 화면 역할(session)은 탭마다 다르다 — 다른 탭의 로그인으로 바꾸지 않음
-    return true
-  } catch {
-    return false
-  }
-}
-if (typeof window !== 'undefined') {
-  window.addEventListener('storage', (e) => {
-    if (e.key === KEY && syncFromStorage()) listeners.forEach((l) => l())
-  })
-}
-
-/** 상태 변경. draft를 직접 수정하는 함수를 넘긴다. 항상 최신 저장 내용 위에서 고친다 */
-export function update(mutator: (draft: AppState) => void) {
-  const synced = syncFromStorage()
-  const draft = structuredClone(state)
-  try {
-    mutator(draft)
+    const [st, rs] = await Promise.all([
+      rpc<{ state: Partial<AppState>; version: number; role: string; employeeId?: string }>('dy_get_state'),
+      rpc<Record<string, Response>>('dy_get_responses'),
+    ])
+    isAdmin = st.role === 'admin'
+    employeeId = st.employeeId ?? null
+    const blank = !st.state || !('schemaVersion' in st.state)
+    const base = createEmptyState()
+    const next: AppState = { ...base, ...(blank ? {} : st.state), responses: rs ?? {}, session: state.session } as AppState
+    // 직원 화면에는 다른 직원의 사번이 내려오지 않음 — 화면 타입을 맞추려고 빈 글자
+    next.employees = next.employees.map((e) => ({ ...e, empNo: e.empNo ?? '' }))
+    state = next
+    version = st.version
+    synced = snapshot(state)
+    if (blank && isAdmin) { synced = { shared: '', admin: '', responses: synced.responses }; await push() } // 빈 데이터베이스 → 빈 상태 틀 저장
+    setStatus({ phase: 'ready', error: null })
+    emit()
+    startPolling()
+    return { isAdmin, employeeId }
   } catch (e) {
-    if (synced) listeners.forEach((l) => l()) // 저장은 막혀도 새로 읽은 내용(예: 직원 삭제)은 화면에 반영
+    setStatus({ phase: 'error', error: (e as Error).message })
     throw e
   }
-  state = draft
-  persist()
-  listeners.forEach((l) => l())
 }
 
-export function resetDemo() {
-  lastRaw = null
-  state = createEmptyState()
-  persist()
-  listeners.forEach((l) => l())
+/** 로그아웃: 화면의 데이터를 지움(서버 데이터는 그대로) */
+export function clearLocal() {
+  stopPolling()
+  state = { ...createEmptyState(), session: { role: 'admin', personaId: null } }
+  version = 0; isAdmin = false; employeeId = null; pending = []
+  synced = snapshot(state)
+  setStatus({ phase: 'idle', error: null, saving: false })
+  emit()
+}
+
+/** 상태 변경: 화면에 바로 반영하고 바뀐 부분을 서버로 보낸다. mutator가 예외를 던지면 아무것도 바꾸지 않음 */
+export function update(mutator: (draft: AppState) => void) {
+  const draft = structuredClone(state)
+  mutator(draft) // 예외는 그대로 위로(저장 직전 확인으로 막힌 경우)
+  state = draft
+  pending.push(mutator)
+  emit()
+  void push().catch(() => resync())
+}
+
+/** 서버가 저장을 거절했을 때: 보내지 못한 변경은 버리고 서버 내용으로 다시 맞춤(오류 문구는 남겨 화면에 알림) */
+let resyncing = false
+async function resync() {
+  if (resyncing) return
+  resyncing = true
+  const err = status.error
+  pending = []
+  try { await loadRemote() } catch { /* 연결 문제 — 다음 확인 때 다시 */ }
+  setStatus({ error: err })
+  resyncing = false
+}
+
+/** 서버로 보내기(한 번에 하나씩). 실패하면 예외 */
+function push(): Promise<void> {
+  if (pushing) return pushing.catch(() => {}).then(() => push())
+  pushing = (async () => {
+    setStatus({ saving: true })
+    try {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const sentPending = pending.length
+        const cur = snapshot(state)
+        const { shared, admin } = split(state)
+        const tasks: Promise<unknown>[] = []
+        // 응답: 바뀐 것만 한 건씩, 사라진 것은 지움
+        const changed = Object.keys(cur.responses).filter((k) => cur.responses[k] !== synced.responses[k])
+        const removed = Object.keys(synced.responses).filter((k) => !(k in cur.responses))
+        for (const k of changed) tasks.push(rpc('dy_save_response', { p_aid: k, p_data: JSON.parse(cur.responses[k]) }))
+        if (removed.length) tasks.push(rpc('dy_delete_responses', { p_aids: removed }))
+        await Promise.all(tasks)
+        synced = { ...synced, responses: cur.responses }
+        // 설정: 관리자만. 직원 화면에서 설정이 바뀌는 일은 없음(바뀌어도 서버로 보내지 않음)
+        if (isAdmin && (cur.shared !== synced.shared || cur.admin !== synced.admin)) {
+          try {
+            version = await rpc<number>('dy_save_state', { p_shared: shared, p_admin: admin, p_version: version })
+            synced = { ...synced, shared: cur.shared, admin: cur.admin }
+          } catch (e) {
+            if (!/conflict/.test((e as Error).message)) throw e
+            // 다른 곳에서 먼저 저장함 → 최신 내용을 받아 아직 안 보낸 변경을 그 위에 다시 적용하고 다시 보냄
+            const keep = pending.slice()
+            const st = await rpc<{ state: AppState; version: number }>('dy_get_state')
+            let base: AppState = { ...createEmptyState(), ...st.state, responses: state.responses, session: state.session }
+            synced = { ...snapshot(base), responses: synced.responses }
+            version = st.version
+            for (const m of keep) { const d = structuredClone(base); try { m(d); base = d } catch { /* 이제는 적용할 수 없는 변경은 건너뜀 */ } }
+            state = base
+            emit()
+            continue
+          }
+        }
+        pending = pending.slice(sentPending)
+        if (!pending.length) break
+      }
+      setStatus({ saving: false, error: null })
+    } catch (e) {
+      setStatus({ saving: false, error: (e as Error).message })
+      throw e
+    } finally {
+      pushing = null
+    }
+  })()
+  return pushing
+}
+
+/** 지금까지의 변경이 서버에 저장될 때까지 기다림(실패하면 예외) */
+export async function flush() {
+  while (pushing) await pushing.catch(() => {})
+  if (pending.length) await push()
+}
+
+/** 다른 사람이 바꾼 내용 가져오기: 내가 보내는 중이 아닐 때만 */
+async function poll() {
+  if (pushing || pending.length || document.visibilityState !== 'visible' || status.phase !== 'ready') return
+  try {
+    const [v, rs] = await Promise.all([rpc<number>('dy_state_version'), rpc<Record<string, Response>>('dy_get_responses')])
+    if (pushing || pending.length) return
+    if (v !== version) { await loadRemote(); return }
+    if (JSON.stringify(rs) !== JSON.stringify(state.responses)) {
+      state = { ...state, responses: rs }
+      synced = { ...synced, responses: snapshot(state).responses }
+      emit()
+    }
+  } catch { /* 다음 확인 때 다시 */ }
+}
+function onFocus() { void poll() }
+function startPolling() {
+  if (pollTimer || typeof window === 'undefined') return
+  pollTimer = window.setInterval(() => { void poll() }, POLL_MS)
+  window.addEventListener('focus', onFocus)
+}
+function stopPolling() {
+  if (pollTimer) window.clearInterval(pollTimer)
+  pollTimer = null
+  if (typeof window !== 'undefined') window.removeEventListener('focus', onFocus)
+}
+
+/** 관리자: 모든 데이터를 지우고 빈 상태로(서버) */
+export async function resetDemo() {
+  await rpc('dy_reset_all')
+  await loadRemote()
 }
 
 export function useAppState(): AppState {
@@ -99,17 +211,17 @@ export function useAppState(): AppState {
   )
 }
 
-/** 저장 지연을 흉내 내는 가상 저장. 실서비스에서는 서버 응답 성공 시에만 "저장됨"을 표시한다. */
-export function simulatedSave(mutator: (draft: AppState) => void, failRate = 0): Promise<void> {
-  return new Promise((resolve, reject) => {
-    setTimeout(() => {
-      if (Math.random() < failRate) return reject(new Error('가상 저장 실패'))
-      try {
-        update(mutator)
-        resolve()
-      } catch (e) {
-        reject(e) // 저장 직전 확인에서 막힘 (예: 로그인한 직원이 삭제됨) — 아무것도 바꾸지 않음
-      }
-    }, 450)
-  })
+/** 저장(응답 작성 화면): 화면에 반영하고 서버 저장이 끝날 때까지 기다림. 서버가 거절하면 화면도 되돌리고 예외 */
+export async function simulatedSave(mutator: (draft: AppState) => void, _failRate = 0): Promise<void> {
+  const before = state.responses
+  update(mutator)
+  try {
+    await flush()
+  } catch (e) {
+    // 서버가 거절한 응답 변경은 되돌림(서버 내용은 그대로이므로 synced는 바꾸지 않음)
+    state = { ...state, responses: before }
+    pending = []
+    emit()
+    throw e
+  }
 }

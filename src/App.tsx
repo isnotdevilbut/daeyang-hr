@@ -1,7 +1,9 @@
-import { useEffect, useLayoutEffect, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useState, type ReactNode } from 'react'
 import { HashRouter, Navigate, NavLink, Outlet, Route, Routes, useNavigate, useParams } from 'react-router-dom'
-import { getState, update, useAppState } from './data/store'
-import { homeFor, sessionFor, setLoggedIn, useAccount, type DemoAccount } from './data/auth'
+import { getState, update, useAppState, useSyncStatus } from './data/store'
+import { changePassword, homeFor, restoreLogin, sessionFor, setLoggedIn, useAccount, type DemoAccount } from './data/auth'
+import { remoteConfigured } from './data/remote'
+import { Modal } from './components/ui'
 import { ADMIN_NAV, can } from './domain/permissions'
 import { ROLE_LABEL, type DemoRole } from './domain/types'
 import logoKo from './assets/logo-ko.png'
@@ -67,8 +69,48 @@ function UserArea({ account, name, role, logout = '로그아웃', extra }: { acc
         <span className="role-pill"><span className="u-name">{name}</span>{role && <><span className="sr-only"> · </span><span className="u-role">{role}</span></>}</span>
       </div>
       {extra}
+      <SyncBadge />
+      <PasswordButton />
       <button className="btn small" onClick={() => { setLoggedIn(null); nav('/login', { replace: true }) }}>{logout}</button>
     </div>
+  )
+}
+
+/** 서버 저장 상태(프로토타입): 저장 중·저장 실패만 작게 표시 */
+function SyncBadge() {
+  const st = useSyncStatus()
+  if (st.error) return <span className="chip draft sync-badge" role="alert" title={st.error}>저장 실패 — 새로고침해 주세요</span>
+  if (st.saving) return <span className="chip info sync-badge" role="status">저장 중…</span>
+  return null
+}
+
+/** 비밀번호 변경(프로토타입 — 서버 계정) */
+function PasswordButton() {
+  const [open, setOpen] = useState(false)
+  const [a, setA] = useState('')
+  const [b, setB] = useState('')
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const [busy, setBusy] = useState(false)
+  const save = async () => {
+    if (a !== b) return setMsg({ ok: false, text: '두 칸의 비밀번호가 다릅니다.' })
+    setBusy(true)
+    const err = await changePassword(a)
+    setBusy(false)
+    if (err) return setMsg({ ok: false, text: err })
+    setMsg({ ok: true, text: '비밀번호를 바꿨습니다. 다음 로그인부터 새 비밀번호를 쓰세요.' }); setA(''); setB('')
+  }
+  return (
+    <>
+      <button className="btn small" onClick={() => { setOpen(true); setMsg(null) }}>비밀번호 변경</button>
+      {open && (
+        <Modal title="비밀번호 변경" onClose={() => setOpen(false)}>
+          <label className="field">새 비밀번호<input type="password" autoComplete="new-password" value={a} onChange={(e) => setA(e.target.value)} /></label>
+          <label className="field">새 비밀번호 확인<input type="password" autoComplete="new-password" value={b} onChange={(e) => setB(e.target.value)} /></label>
+          {msg && <p className={`feedback ${msg.ok ? 'ok' : 'fail'}`} role={msg.ok ? 'status' : 'alert'}>{msg.ok ? '✓' : '✕'} {msg.text}</p>}
+          <div className="row" style={{ marginTop: 12 }}><span className="spacer" /><button className="btn primary" disabled={busy || !a} onClick={save}>{busy ? '바꾸는 중…' : '바꾸기'}</button></div>
+        </Modal>
+      )}
+    </>
   )
 }
 
@@ -145,7 +187,12 @@ function LegacyLink() {
   return <Navigate to={ses ? homeFor(ses.role) : '/login?from=link'} replace />
 }
 
+/** 프로토타입 시작: 서버 연결 설정 확인 → 남아 있는 로그인(세션)이 있으면 서버 데이터를 불러온 뒤 화면 */
 export default function App() {
+  const [ready, setReady] = useState(false)
+  useEffect(() => { void restoreLogin().finally(() => setReady(true)) }, [])
+  if (!remoteConfigured) return <main className="page"><div className="panel pad"><h1>서버 연결 설정이 없습니다</h1><p>배포 설정(환경변수)에 VITE_SUPABASE_URL 과 VITE_SUPABASE_KEY 를 넣고 다시 배포해 주세요.</p></div></main>
+  if (!ready) return <main className="page"><p className="muted" role="status" style={{ textAlign: 'center', marginTop: 80 }}>불러오는 중…</p></main>
   return (
     <HashRouter>
       <Routes>

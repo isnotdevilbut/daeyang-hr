@@ -1824,3 +1824,6 @@ body.drag-sorting, body.drag-sorting * { cursor: grabbing !important; user-selec
 .version-tabs button.on::before { content: ''; position: absolute; inset: 0; border-radius: inherit; padding: 2px 2px 0; pointer-events: none;
   background: linear-gradient(135deg, rgba(9, 82, 158, 0.85), rgba(32, 184, 202, 0.9) 55%, rgba(120, 150, 230, 0.8));
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0); }
+/* 프로토타입: 서버 저장 상태 표시 */
+.sync-badge { white-space: nowrap; }
+.login-first { margin: 12px 0 0; text-align: center; }

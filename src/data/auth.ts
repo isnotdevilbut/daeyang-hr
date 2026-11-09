@@ -1,9 +1,12 @@
-// ⚠ 목업 로그인 — 실제 보안 인증이 아니다.
-// 브라우저에 저장된 조직 데이터와 대조하고, 로그인 상태(계정 키만)를 이 브라우저 탭의 sessionStorage에 둔다.
-// 실서비스에서는 서버 인증(비밀번호 발급·초기화·해시 보관·세션 쿠키·권한 검사)으로 바꾸며, 이 파일의 방식을 발전시켜 쓰지 않는다.
+// 프로토타입 로그인 — Supabase 인증(서버). 비밀번호는 서버에 암호화되어 보관되고, 로그인 상태는 서버가 발급한 세션.
+//  - 관리자: 아이디 admin. 처음 로그인할 때 넣은 비밀번호로 관리자 계정이 만들어진다(한 명).
+//  - 직원: 아이디 = 이름, 첫 비밀번호 = 사번. 첫 로그인 때 서버가 이름·사번을 확인해 계정을 만들고, 이후 '비밀번호 변경'으로 바꿀 수 있다.
+//  - 권한(누가 무엇을 읽고 쓰나)은 데이터베이스 함수가 검사한다(supabase/schema.sql).
 import { useSyncExternalStore } from 'react'
 import { type AppState, type DemoRole, type DemoSession, type Employee } from '../domain/types'
 import { positionName } from '../domain/catalog'
+import { ADMIN_EMAIL, authPassword, rpc, supabase } from './remote'
+import { clearLocal, loadRemote } from './store'
 
 /**
  * 로그인 계정 (D-059).
@@ -19,11 +22,6 @@ export interface DemoAccount {
   personaId: string | null // 참여자 계정의 직원 내부 ID
   finalAdjust?: boolean // 최종 점수·등급 지정 가능 (목업 검토용 가정)
 }
-
-/** 운영담당자 시연 계정의 공용 비밀번호 (가상 값, 실제 계정·비밀번호 아님) */
-// 관리자 비밀번호는 src/admin-password.ts 에서 각자 정한다(빈 상태 버전)
-import { ADMIN_PASSWORD } from '../admin-password'
-export const DEMO_PASSWORD = ADMIN_PASSWORD
 
 export const ADMIN_ACCOUNTS: DemoAccount[] = [
   { key: 'admin', kind: 'admin', adminId: 'admin', personaId: null, finalAdjust: true }, // D-184: admin-final 없앰(이전 로그인은 로그인 화면으로)
@@ -82,23 +80,66 @@ export function homeFor(role: DemoRole): string {
   return role === 'admin' ? '/admin/progress' : '/eval'
 }
 
+const WRONG = '아이디 또는 비밀번호가 올바르지 않습니다.'
+
 /**
- * 로그인 대조. 성공하면 계정, 실패하면 오류 문구.
- *  - 운영담당자: 아이디 admin + 공용 목업 비밀번호
- *  - 평가 참여자: 아이디 = 현재 이름, 비밀번호 = 현재 사번(글자 그대로 — 앞자리 0까지 같아야 함).
- *    동명이인은 사번으로 구분되고, 사번은 직원마다 하나라서 같은 이름·사번 조합은 둘이 될 수 없다.
+ * 로그인(서버). 성공하면 계정, 실패하면 오류 문구.
+ *  - admin: 계정이 있으면 비밀번호 확인, 아직 관리자가 없으면 지금 넣은 비밀번호로 관리자 계정을 만든다
+ *  - 직원: 이름으로 계정 후보(동명이인이면 여러 명)를 찾아 비밀번호 확인. 아직 계정이 없으면 비밀번호가 사번일 때 계정을 만든다(서버가 사번 확인)
  */
-export function checkLogin(s: AppState, id: string, pw: string): DemoAccount | string {
+export async function remoteLogin(id: string, pw: string): Promise<DemoAccount | string> {
   const v = id.trim()
-  const p = pw.trim()
-  if (!v || !p) return '아이디와 비밀번호를 입력하세요.'
-  const admin = ADMIN_ACCOUNTS.find((a) => a.adminId === v)
-  if (admin) return pw === DEMO_PASSWORD ? admin : '아이디 또는 비밀번호가 올바르지 않습니다.'
-  const e = s.employees.find((x) => canSignIn(x) && x.name.trim() === v && x.empNo === p)
-  return e ? participantAccount(e.id) : '아이디 또는 비밀번호가 올바르지 않습니다.'
+  if (!v || !pw.trim()) return '아이디와 비밀번호를 입력하세요.'
+  if (!supabase) return '서버 연결 설정이 없습니다.'
+  const signIn = async (email: string) => !(await supabase!.auth.signInWithPassword({ email, password: authPassword(pw) })).error
+  try {
+    if (v === 'admin') {
+      if (await signIn(ADMIN_EMAIL)) return ADMIN_ACCOUNTS[0]
+      if (await rpc<boolean>('dy_admin_exists')) return WRONG
+      if (pw.length < 4) return '처음 관리자 비밀번호는 4자 이상으로 정해 주세요.'
+      const r = await supabase.auth.signUp({ email: ADMIN_EMAIL, password: authPassword(pw) })
+      if (r.error) return `관리자 계정을 만들지 못했습니다: ${r.error.message}`
+      if (!r.data.session && !(await signIn(ADMIN_EMAIL))) return 'Supabase 설정에서 이메일 확인(Confirm email)을 꺼 주세요.'
+      return ADMIN_ACCOUNTS[0]
+    }
+    const cands = await rpc<{ email: string; hasAccount: boolean }[]>('dy_login_candidates', { p_name: v })
+    for (const c of cands.filter((x) => x.hasAccount)) if (await signIn(c.email)) return participantAccount(c.email.split('@')[0])
+    for (const c of cands.filter((x) => !x.hasAccount)) {
+      // 첫 로그인: 비밀번호 = 사번이면 서버가 계정을 만든다(사번이 다르면 서버가 거절)
+      const r = await supabase.auth.signUp({ email: c.email, password: authPassword(pw), options: { data: { empNo: pw.trim() } } })
+      if (r.error) continue
+      if (r.data.session || (await signIn(c.email))) return participantAccount(c.email.split('@')[0])
+    }
+    return WRONG
+  } catch (e) {
+    return `서버에 연결하지 못했습니다: ${(e as Error).message}`
+  }
 }
 
-export function setLoggedIn(key: string | null) {
+/** 비밀번호 변경(로그인한 본인). 4자 이상 */
+export async function changePassword(next: string): Promise<string | null> {
+  if (!supabase) return '서버 연결 설정이 없습니다.'
+  if (next.trim().length < 4) return '새 비밀번호는 4자 이상으로 정해 주세요.'
+  const { error } = await supabase.auth.updateUser({ password: authPassword(next) })
+  return error ? `바꾸지 못했습니다: ${error.message}` : null
+}
+
+/** 새로고침·재방문: 서버 세션이 남아 있으면 데이터를 불러오고 로그인 상태를 되살린다 */
+export async function restoreLogin(): Promise<void> {
+  if (!supabase) return
+  const { data } = await supabase.auth.getSession()
+  if (!data.session) { setLoggedIn(null, false); return }
+  try {
+    const r = await loadRemote()
+    setLoggedIn(r.isAdmin ? 'admin' : r.employeeId ? `p:${r.employeeId}` : null, false)
+  } catch {
+    await supabase.auth.signOut()
+    setLoggedIn(null, false)
+  }
+}
+
+export function setLoggedIn(key: string | null, signOut = true) {
+  if (!key && signOut && current) { void supabase?.auth.signOut(); clearLocal() } // 로그아웃: 서버 세션 끝내고 화면 데이터 지움
   current = key
   try {
     if (key) sessionStorage.setItem(KEY, key)
