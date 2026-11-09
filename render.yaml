@@ -10,9 +10,9 @@ services:
     # 프로토타입: Supabase 연결(공개 주소·공개 키 — 브라우저에 원래 들어가는 값). 비밀(secret/service_role) 키는 넣지 않는다
     envVars:
       - key: VITE_SUPABASE_URL
-        value: https://jvywtymyircuanavrxgf.supabase.co
+        value: https://llvulnvmsihrlplczvmt.supabase.co
       - key: VITE_SUPABASE_KEY
-        value: sb_publishable_UrcuswWKOX2Ku_qOOyz6Jg_fG8Ht2nO
+        value: sb_publishable_ifiyB6LlFr3wlGmLn84IIg_FpoAG82B
     headers:
       - path: /*
         name: X-Robots-Tag
