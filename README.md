@@ -29,7 +29,7 @@ npm test         # 핵심 로직 자동 테스트
 ## 시연용 공개 배포 (GitHub + Render, hr-evaluation과 같은 방식)
 
 - 공유 주소: https://daeyang-hr-mockup.onrender.com
-- 코드: Private GitHub 저장소 `isnotdevilbut/daeyang-hr-mockup` (`main` 브랜치)
+- 코드: 공개 GitHub 저장소 `isnotdevilbut/daeyang-hr` (`main` 브랜치)
 - 호스팅: Render Static Site(무료) — 루트의 `render.yaml` Blueprint로 생성. 빌드 `npm ci && npm run build`, 게시 폴더 `dist`, Node 버전 `.node-version`
 - 업데이트: 코드 수정 → `git add` → `git commit` → `git push` → Render가 `main`을 다시 빌드해 같은 주소에 반영(Render의 Auto-Deploy가 켜져 있을 때)
 - 반영 확인: GitHub 저장소의 Deployments(또는 Render 대시보드)에서 최신 커밋이 성공으로 표시된 뒤, 첫 화면은 CDN 캐시로 최대 약 5분 늦게 바뀔 수 있다
