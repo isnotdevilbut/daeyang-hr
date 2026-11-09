@@ -65,7 +65,7 @@ export default function Login() {
         <div className="login-lang"><LangSelect lang={lang} onChange={setLang} /></div>
         <img className="login-logo" src={logoKo} alt="ROLLENT 대양롤랜트(주)" />
         <h1>{t('login.title', lang)}</h1>
-        <span className="chip info login-tag">{t('login.tag', lang)}</span>
+        {demoOn && <span className="chip info login-tag">{t('login.tag', lang)}</span>}
         {fromLink && <p className="feedback info" role="status">{t('login.linkGone', lang)}</p>}
         <label className="field">{t('login.id', lang)}
           <input type="text" autoComplete="username" value={id} onChange={(e) => { setId(e.target.value); setErr('') }} autoFocus />
@@ -98,7 +98,7 @@ export default function Login() {
             </div>
           </details>
         )}
-        <p className="muted small login-first">{lang === 'ru' ? 'Первый вход: логин — ваше имя, пароль — табельный номер. Потом пароль можно сменить.' : '처음 로그인: 아이디 = 이름, 비밀번호 = 사번. 로그인한 뒤 비밀번호를 바꿀 수 있어요.'}</p>
+        <p className="muted small login-first">{lang === 'ru' ? 'Логин — ваше имя, пароль — табельный номер.' : '직원: 아이디 = 이름, 비밀번호 = 사번'}</p>
       </form>
     </main>
   )

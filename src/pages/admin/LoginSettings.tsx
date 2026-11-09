@@ -50,9 +50,10 @@ export default function LoginSettings() {
             <div className="grid form-grid">
               <label className="field">관리자 아이디<input type="text" value={id} maxLength={30} onChange={(e) => { setId(e.target.value); setMsg(null) }} /></label>
               <span />
-              <label className="field">새 비밀번호 <span className="muted small">(바꿀 때만, 8자 이상)</span><input type="password" autoComplete="new-password" value={pw1} onChange={(e) => { setPw1(e.target.value); setMsg(null) }} /></label>
+              <label className="field">새 비밀번호<input type="password" autoComplete="new-password" value={pw1} onChange={(e) => { setPw1(e.target.value); setMsg(null) }} /></label>
               <label className="field">새 비밀번호 확인<input type="password" autoComplete="new-password" value={pw2} onChange={(e) => { setPw2(e.target.value); setMsg(null) }} /></label>
             </div>
+            <p className="muted small" style={{ marginTop: 6 }}>비밀번호는 바꿀 때만 입력하세요(8자 이상). 아이디만 바꿀 때는 비워 두면 돼요.</p>
             {msg && <p className={`feedback ${msg.ok ? 'ok' : 'fail'}`} role={msg.ok ? 'status' : 'alert'}>{msg.ok ? '✓' : '✕'} {msg.text}</p>}
             <div className="row" style={{ marginTop: 10 }}><span className="spacer" /><button className="btn primary" disabled={busy} onClick={save}>{busy ? '저장하는 중…' : '저장'}</button></div>
           </>
