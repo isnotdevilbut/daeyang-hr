@@ -36,7 +36,7 @@
 
 ## 다른 브랜치(같은 저장소)
 - `empty-start`: 빈 상태로 시작하는 버전(가상 데이터 없음, 관리자 비밀번호 각자 설정, samples/ CSV) — 노션 재현 가이드용. 작업 폴더 ../daeyang-hr-empty-start
-- `proto`: 프로토타입 — Supabase 서버 저장·로그인·권한(supabase/schema.sql), 새 Render 서비스 daeyang-hr-proto. 작업 폴더 ../daeyang-hr-proto. Supabase 비밀(secret/service_role) 키·DB 비밀번호는 쓰지 않음(공개 키만)
+- `proto`: 프로토타입 — Supabase 서버 저장·로그인·권한(supabase/schema.sql), Supabase 서울 프로젝트, 새 Render 서비스 daeyang-hr-proto. 직원 로그인 = 이름 + 사번 고정, 관리자 아이디·비밀번호는 조직 관리 → 로그인 설정(D-265). 작업 폴더 ../daeyang-hr-proto. Supabase 비밀(secret/service_role) 키·DB 비밀번호는 쓰지 않음(공개 키만)
 
 ## 사용자에게 남은 질문(답 대기)
 - 새 직무·직급 이름이 CSV에 있을 때 오류 문구만 안내형으로 바꿀지.
