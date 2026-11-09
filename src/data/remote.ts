@@ -29,3 +29,6 @@ export async function rpc<T = unknown>(fn: string, args?: Record<string, unknown
   if (error) throw new Error(error.message)
   return data as T
 }
+
+/** 시연용 관리자 비밀번호 — 로그인 화면 '시연 계정 보기'에 표시(사용자 결정). 서버의 관리자 비밀번호도 이 값. 관리자 화면에서는 비밀번호를 바꾸지 않음(잠김 방지) */
+export const DEMO_ADMIN_PW = 'admin1234!'

@@ -56,6 +56,7 @@ const PARTICIPANT: DemoRole[] = ['member', 'lead', 'exec']
  */
 function UserArea({ account, name, role, logout = '로그아웃', extra }: { account: DemoAccount; name: string; role: string; logout?: string; extra?: ReactNode }) {
   const nav = useNavigate()
+  const demo = !!useAppState().demo
   const initial = account.kind === 'participant' ? [...name.trim()][0] ?? '' : ''
   return (
     <div className={extra ? 'hdr-user has-extra' : 'hdr-user'}>
@@ -70,7 +71,8 @@ function UserArea({ account, name, role, logout = '로그아웃', extra }: { acc
       </div>
       {extra}
       <SyncBadge />
-      <PasswordButton />
+      {/* 시연 계정으로 쓰는 동안은 비밀번호를 바꾸지 않음 — 관리자는 항상(로그인 화면에 비밀번호 표시), 직원은 시연 데이터일 때 */}
+      {account.kind === 'participant' && !demo && <PasswordButton />}
       <button className="btn small" onClick={() => { setLoggedIn(null); nav('/login', { replace: true }) }}>{logout}</button>
     </div>
   )

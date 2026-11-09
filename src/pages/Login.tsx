@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { getState, loadRemote, update, useAppState } from '../data/store'
 import { accountText, canSignIn, homeFor, participantAccount, remoteLogin, sessionFor, setLoggedIn, useAccount } from '../data/auth'
-import { rpc } from '../data/remote'
+import { DEMO_ADMIN_PW, rpc } from '../data/remote'
 import { createSeed } from '../domain/seed'
 import logoKo from '../assets/logo-ko.png'
 import { loginError, t, tierText, useLang } from '../i18n'
@@ -82,11 +82,11 @@ export default function Login() {
         {demoOn && (
           <details className="demo-accounts">
             <summary>{t('login.demo', lang)}</summary>
-            <p>{t('login.demoHint', lang, { name: t('login.demoName', lang), no: t('login.demoNo', lang), pw: lang === 'ru' ? '(пароль администратора)' : '(관리자에게 받은 비밀번호)' })}</p>
+            <p>{t('login.demoHint', lang, { name: t('login.demoName', lang), no: t('login.demoNo', lang), pw: DEMO_ADMIN_PW })}</p>
             <div className="acc-list">
               <table className="tbl">
                 <tbody>
-                  <tr><td><button type="button" className="link-btn" onClick={() => fill('admin', '')}>admin</button></td><td className="muted">••••••</td><td>운영담당자</td></tr>
+                  <tr><td><button type="button" className="link-btn" onClick={() => fill('admin', DEMO_ADMIN_PW)}>admin</button></td><td className="muted">{DEMO_ADMIN_PW}</td><td>운영담당자</td></tr>
                   {demoPeople.map((e) => (
                     <tr key={e.id}>
                       <td><button type="button" className="link-btn" onClick={() => fill(e.name, e.empNo)}>{e.name}</button></td>
