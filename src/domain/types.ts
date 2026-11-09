@@ -369,6 +369,8 @@ export interface AppState {
   reportNotes?: Record<string, string>
   /** 결과 상세 '보정 사유'(D-199): 키 = `${회차 ID}|${직원 ID}`. 선택 입력 — 그 칸에만 기록(변경 내역·리포트에 넣지 않음), 점수에 영향 없음 */
   adjustNotes?: Record<string, string>
+  /** 프로토타입: 시연용 가상 데이터가 들어 있는 상태(평가 삭제 = 전부 초기화) */
+  demo?: boolean
   /** 직무·직급 목록 (D-080) */
   jobs?: JobDef[]
   positions?: PositionDef[]

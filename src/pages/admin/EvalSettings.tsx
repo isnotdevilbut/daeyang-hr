@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { update, useAppState } from '../../data/store'
+import { resetDemo, update, useAppState } from '../../data/store'
 import { confirmLeave, useDirty } from '../../data/dirty'
 import { applyParticipation, assignmentProblems, cloneCycle, cycleLabel, deleteCycle, participation } from '../../domain/cycle'
 import { selfApplies } from '../../domain/progress'
@@ -205,6 +205,23 @@ export default function EvalSettings({ cycle, onCreate, onSelect, part }: { cycl
 function DeleteModal({ cycle, onClose, onDone }: { cycle: Cycle; onClose: () => void; onDone: (nextId: string | null) => void }) {
   const s = useAppState()
   const answered = cycle.assignments.filter((a) => s.responses[a.id]).length
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  // 프로토타입: 시연용 가상 데이터가 들어 있으면 평가 삭제 = 모든 가상 데이터 초기화(웹앱 틀만 남김)
+  if (s.demo) {
+    const wipe = async () => {
+      setBusy(true); setErr('')
+      try { await resetDemo(); onDone(null) } catch (e) { setErr(`초기화하지 못했습니다: ${(e as Error).message}`); setBusy(false) }
+    }
+    return (
+      <Modal title="평가 삭제" onClose={busy ? () => {} : onClose}>
+        <p><b>모든 가상 데이터가 초기화되고, 웹앱 프레임만 남은 상태가 됩니다.</b></p>
+        <p className="muted" style={{ marginTop: 8 }}>시연용 직원·팀·평가·문항·응답·점수·KPI와 직원 로그인 계정이 모두 지워지고 되돌릴 수 없어요. 관리자 계정은 남아요. 이후 직원 명단·문항을 올려 새로 시작하면 돼요.</p>
+        {err && <p className="feedback fail" role="alert">✕ {err}</p>}
+        <div className="row" style={{ marginTop: 14 }}><span className="spacer" /><button className="btn" disabled={busy} onClick={onClose}>취소</button><button className="btn danger" disabled={busy} onClick={wipe}>{busy ? '초기화하는 중…' : '초기화하고 삭제'}</button></div>
+      </Modal>
+    )
+  }
   const go = () => {
     let next: string | null = null
     update((d) => {

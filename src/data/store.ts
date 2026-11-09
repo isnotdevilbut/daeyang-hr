@@ -6,6 +6,7 @@
 import { useSyncExternalStore } from 'react'
 import type { AppState, Response } from '../domain/types'
 import { createEmptyState } from '../domain/emptyState'
+import { createSeed } from '../domain/seed'
 import { rpc } from './remote'
 
 /** 관리자만 읽는 항목(서버의 admin_only) — 직원 화면에는 내려가지 않음 */
@@ -193,6 +194,26 @@ function stopPolling() {
   if (pollTimer) window.clearInterval(pollTimer)
   pollTimer = null
   if (typeof window !== 'undefined') window.removeEventListener('focus', onFocus)
+}
+
+/**
+ * 관리자: 시연 데이터 넣기 — 원본 시연 사이트와 같은 가상 직원 35명·평가·응답·KPI를 서버에 넣는다(지금 데이터·직원 계정은 지워짐).
+ * 표시 demo = true → 로그인 화면에 시연 계정 목록, 평가 삭제 = 전부 초기화
+ */
+export async function loadDemo(onProgress?: (done: number, total: number) => void) {
+  await rpc('dy_reset_all')
+  await loadRemote() // 빈 상태 틀 저장
+  const seed: AppState = { ...createSeed(), demo: true, session: state.session }
+  const { shared, admin, responses } = split(seed)
+  version = await rpc<number>('dy_save_state', { p_shared: shared, p_admin: admin, p_version: version })
+  const list = Object.entries(responses)
+  let done = 0
+  for (let i = 0; i < list.length; i += 8) {
+    await Promise.all(list.slice(i, i + 8).map(([aid, r]) => rpc('dy_save_response', { p_aid: aid, p_data: r })))
+    done = Math.min(list.length, i + 8)
+    onProgress?.(done, list.length)
+  }
+  await loadRemote()
 }
 
 /** 관리자: 모든 데이터를 지우고 빈 상태로(서버) */

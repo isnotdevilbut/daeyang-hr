@@ -1,9 +1,11 @@
-import { useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { getState, loadRemote, update, useAppState } from '../data/store'
-import { homeFor, participantAccount, remoteLogin, sessionFor, setLoggedIn, useAccount } from '../data/auth'
+import { accountText, canSignIn, homeFor, participantAccount, remoteLogin, sessionFor, setLoggedIn, useAccount } from '../data/auth'
+import { rpc } from '../data/remote'
+import { createSeed } from '../domain/seed'
 import logoKo from '../assets/logo-ko.png'
-import { loginError, t, useLang } from '../i18n'
+import { loginError, t, tierText, useLang } from '../i18n'
 import { LangSelect } from './employee/mobile'
 import { LoginBackdrop } from '../components/LoginBackdrop'
 
@@ -20,6 +22,16 @@ export default function Login() {
   const [busy, setBusy] = useState(false)
   const busyRef = useRef(false)
   const [lang, setLang] = useLang() // 직원 로그인 화면 언어 (선택은 이 브라우저에 기억 — 로그인 후 평가 화면에도 적용)
+  // 프로토타입: 서버에 시연 데이터가 들어 있을 때만 시연 계정 목록(원본 시연 사이트와 같은 가상 직원). 평가 삭제로 초기화하면 사라짐
+  const demo = useMemo(() => createSeed(), [])
+  const demoPeople = demo.employees.filter(canSignIn)
+  const [demoOn, setDemoOn] = useState(false)
+  useEffect(() => {
+    const probe = demoPeople.find((e) => !e.isExecutive)?.name
+    if (!probe) return
+    rpc<{ email: string }[]>('dy_login_candidates', { p_name: probe }).then((r) => setDemoOn(r.length > 0)).catch(() => setDemoOn(false))
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  const fill = (a: string, b: string) => { setId(a); setPw(b); setErr('') }
   const cur = account ? sessionFor(s, account) : null
   if (cur) return <Navigate to={homeFor(cur.role)} replace />
   const submit = async (e: React.FormEvent) => {
@@ -67,7 +79,26 @@ export default function Login() {
         </label>
         {err && <p className="feedback fail" role="alert">✕ {loginError(err, lang)}</p>}
         <button type="submit" className="btn primary login-btn" disabled={busy}>{busy ? t('login.busy', lang) : t('login.submit', lang)}</button>
-        {/* 프로토타입: 공용 시연 계정 목록 없음 — 첫 로그인 안내만 */}
+        {demoOn && (
+          <details className="demo-accounts">
+            <summary>{t('login.demo', lang)}</summary>
+            <p>{t('login.demoHint', lang, { name: t('login.demoName', lang), no: t('login.demoNo', lang), pw: lang === 'ru' ? '(пароль администратора)' : '(관리자에게 받은 비밀번호)' })}</p>
+            <div className="acc-list">
+              <table className="tbl">
+                <tbody>
+                  <tr><td><button type="button" className="link-btn" onClick={() => fill('admin', '')}>admin</button></td><td className="muted">••••••</td><td>운영담당자</td></tr>
+                  {demoPeople.map((e) => (
+                    <tr key={e.id}>
+                      <td><button type="button" className="link-btn" onClick={() => fill(e.name, e.empNo)}>{e.name}</button></td>
+                      <td className="muted">{e.empNo}</td>
+                      <td>{lang === 'ko' ? accountText(demo, e) : accountText(demo, e).replace(/^[^·]+?(?= ·|$)/, (m) => tierText(m, lang))}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </details>
+        )}
         <p className="muted small login-first">{lang === 'ru' ? 'Первый вход: логин — ваше имя, пароль — табельный номер. Потом пароль можно сменить.' : '처음 로그인: 아이디 = 이름, 비밀번호 = 사번. 로그인한 뒤 비밀번호를 바꿀 수 있어요.'}</p>
       </form>
     </main>
