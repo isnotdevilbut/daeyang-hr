@@ -263,7 +263,7 @@ export function ReportSheet({ s, cycle, parts, m }: { s: AppState; cycle: Cycle;
 function Answers({ title, as, qs, s, cycle, showWho, name }: { title: string; as: Assignment[]; qs: Question[]; s: AppState; cycle: Cycle; showWho?: boolean; name?: (id: string) => string }) {
   return (
     <div className="rp-block">
-      {/* D-227: 담당자가 한 명이면 제목과 같은 줄에(팀장평가 이준호) — 여럿이면 사람마다 줄 */}
+      {/* D-227: 담당자가 한 명이면 제목과 같은 줄에(예: 팀장평가 ○○○) — 여럿이면 사람마다 줄 */}
       {(() => { const one = showWho && name && as.length === 1 ? as[0] : null; return <h3>{title}{one && <span className="rp-who-inline">{name!(one.evaluatorId)}{s.responses[one.id]?.status !== 'submitted' && <span className="muted"> · 미제출</span>}</span>}</h3> })()}
       {as.map((a) => {
         const resp = s.responses[a.id]

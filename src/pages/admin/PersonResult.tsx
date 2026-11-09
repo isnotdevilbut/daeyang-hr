@@ -7,7 +7,7 @@ import { cycleLabel, rejectRecord } from '../../domain/cycle'
 import { fmt, personResult, weightsFor } from '../../domain/scoring'
 import { activeWriteAssignments, appliedStages, assignmentCell, isActiveAssignment, personSnap, resultPerson, stageAssignments, STAGE_OF_RULE, statusOf, upwardAssignments, type CellStatus } from '../../domain/progress'
 import { UPWARD_KIND_TEXT, upwardKind } from '../../domain/upward'
-import { displayAnswer } from '../../domain/seed'
+const displayAnswer = (v: string) => v // 빈 상태 버전: 시연 응답 꼬리말 없음
 import { type AdjustKind, type Assignment, type Cycle, type Lang, type Response, type Stage, type Template } from '../../domain/types'
 import { optLabel, qTitle, t as tr } from '../../i18n'
 import { Forbidden } from '../../components/ui'

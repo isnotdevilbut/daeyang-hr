@@ -2,8 +2,8 @@
 // 실서비스 단계에서는 이 파일의 함수들을 서버 API 호출로 교체하고, 화면·타입·계산 로직은 재사용한다.
 import { useSyncExternalStore } from 'react'
 import type { AppState } from '../domain/types'
-import { createSeed, SCHEMA_VERSION } from '../domain/seed'
-import { migrate } from './migrate'
+import { SCHEMA_VERSION } from '../domain/schemaVersion'
+import { createEmptyState } from '../domain/emptyState'
 
 const KEY = 'daeyang-hr-mockup-v1' // 저장 위치 이름(고정). 데이터 구조 버전은 state.schemaVersion
 /** 이번 페이지 로드에서 이전 저장 데이터를 변환했다면 그 내용 (목업 안내에 표시) */
@@ -19,17 +19,7 @@ function load(): AppState {
     if (raw) {
       const parsed = JSON.parse(raw)
       if (parsed.schemaVersion === SCHEMA_VERSION) return parsed as AppState
-      const m = migrate(parsed)
-      if (m) {
-        migrationNotes.push(...m.notes)
-        // 변환 전 데이터를 되돌릴 수 있게 한 번만 따로 보관 (D-065)
-        const bk = `${KEY}-before-v${SCHEMA_VERSION}`
-        if (!localStorage.getItem(bk)) localStorage.setItem(bk, raw)
-        try { localStorage.setItem(`${KEY}-migration-notes`, JSON.stringify(m.notes)) } catch { /* 무시 */ }
-        lastRaw = JSON.stringify(m.state)
-        localStorage.setItem(KEY, lastRaw) // 새로고침해도 이전 상향평가가 되살아나지 않게 즉시 저장
-        return m.state
-      }
+      // 빈 상태로 시작하는 버전(empty-start)은 이전 저장 구조가 없다 — 다른 구조는 지우지 않고 백업으로 옮긴 뒤 빈 상태로
       // 읽을 수 없는 구조: 지우지 않고 백업으로 옮긴 뒤 시드로 시작
       localStorage.setItem(`${KEY}-unreadable-backup`, raw)
       migrationNotes.push('이전 저장 데이터를 읽을 수 없어 백업으로 옮기고 처음 상태로 시작했습니다.')
@@ -37,7 +27,7 @@ function load(): AppState {
   } catch {
     /* 저장소 사용 불가(사생활 보호 모드 등) → 시드로 시작 */
   }
-  return createSeed()
+  return createEmptyState()
 }
 
 function persist() {
@@ -62,7 +52,7 @@ function syncFromStorage(): boolean {
     const raw = localStorage.getItem(KEY)
     if (!raw || raw === lastRaw) return false
     const parsed = JSON.parse(raw)
-    const next = parsed.schemaVersion === SCHEMA_VERSION ? (parsed as AppState) : migrate(parsed)?.state
+    const next = parsed.schemaVersion === SCHEMA_VERSION ? (parsed as AppState) : null
     if (!next) return false
     lastRaw = raw
     state = { ...next, session: state.session } // 화면 역할(session)은 탭마다 다르다 — 다른 탭의 로그인으로 바꾸지 않음
@@ -94,7 +84,7 @@ export function update(mutator: (draft: AppState) => void) {
 
 export function resetDemo() {
   lastRaw = null
-  state = createSeed()
+  state = createEmptyState()
   persist()
   listeners.forEach((l) => l())
 }

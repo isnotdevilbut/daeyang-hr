@@ -19,7 +19,7 @@ export const CELL_LABEL: Record<CellStatus, string> = {
 export const CELL_ICON: Record<CellStatus, string> = { na: '—', unassigned: '⚠', locked: '…', notStarted: '○', draft: '✎', submitted: '✓' }
 export const CELL_HELP: Record<CellStatus, string> = {
   na: '이 대상자의 평가 경로에 없는 단계입니다',
-  unassigned: '이 단계를 평가할 사람이 배정되지 않았습니다. 회차·배정 메뉴에서 확인하세요',
+  unassigned: '이 단계를 평가할 사람이 배정되지 않았습니다. 평가 관리 → 평가자 배정에서 확인하세요',
   locked: '앞 단계가 제출되면 작성할 수 있습니다',
   notStarted: '작성할 수 있지만 아직 시작하지 않았습니다',
   draft: '임시저장만 되어 있고 제출되지 않았습니다',

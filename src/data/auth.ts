@@ -21,7 +21,9 @@ export interface DemoAccount {
 }
 
 /** 운영담당자 시연 계정의 공용 비밀번호 (가상 값, 실제 계정·비밀번호 아님) */
-export const DEMO_PASSWORD = 'demo1234'
+// 관리자 비밀번호는 src/admin-password.ts 에서 각자 정한다(빈 상태 버전)
+import { ADMIN_PASSWORD } from '../admin-password'
+export const DEMO_PASSWORD = ADMIN_PASSWORD
 
 export const ADMIN_ACCOUNTS: DemoAccount[] = [
   { key: 'admin', kind: 'admin', adminId: 'admin', personaId: null, finalAdjust: true }, // D-184: admin-final 없앰(이전 로그인은 로그인 화면으로)

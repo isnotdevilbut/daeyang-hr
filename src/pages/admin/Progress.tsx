@@ -33,7 +33,7 @@ export default function Progress() {
           </div>
         )}
       </div>
-      {!cycle ? <Empty>평가 회차가 없습니다. 회차·배정 메뉴에서 회차를 만들어 주세요.</Empty> : <Body key={cycle.id} s={s} cycle={cycle} />}
+      {!cycle ? <Empty>평가 회차가 없습니다. 평가 관리에서 '+ 평가 만들기'로 평가를 만들어 주세요.</Empty> : <Body key={cycle.id} s={s} cycle={cycle} />}
     </div>
   )
 }

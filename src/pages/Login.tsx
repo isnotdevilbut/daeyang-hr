@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { getState, update, useAppState } from '../data/store'
-import { accountText, ADMIN_ACCOUNTS, canSignIn, checkLogin, DEMO_PASSWORD, homeFor, sessionFor, setLoggedIn, useAccount } from '../data/auth'
+import { accountText, ADMIN_ACCOUNTS, canSignIn, checkLogin, homeFor, sessionFor, setLoggedIn, useAccount } from '../data/auth'
 import logoKo from '../assets/logo-ko.png'
 import { loginError, t, tierText, useLang } from '../i18n'
 import { LangSelect } from './employee/mobile'
@@ -62,14 +62,14 @@ export default function Login() {
         <button type="submit" className="btn primary login-btn" disabled={busy}>{busy ? t('login.busy', lang) : t('login.submit', lang)}</button>
         <details className="demo-accounts">
           <summary>{t('login.demo', lang)}</summary>
-          <p>{t('login.demoHint', lang, { name: t('login.demoName', lang), no: t('login.demoNo', lang), pw: DEMO_PASSWORD })}</p>
+          <p>{t('login.demoHint', lang, { name: t('login.demoName', lang), no: t('login.demoNo', lang), pw: lang === 'ru' ? '(ваш пароль)' : '(직접 정한 비밀번호)' })}</p>{/* 빈 상태 버전: 관리자 비밀번호는 각자 정하므로 화면에 보이지 않음 */}
           <div className="acc-list">
             <table className="tbl">
               <tbody>
                 {ADMIN_ACCOUNTS.map((a) => (
                   <tr key={a.key}>
-                    <td><button type="button" className="link-btn" onClick={() => fill(a.adminId!, DEMO_PASSWORD)}>{a.adminId}</button></td>
-                    <td className="muted">{DEMO_PASSWORD}</td>
+                    <td><button type="button" className="link-btn" onClick={() => fill(a.adminId!, '')}>{a.adminId}</button></td>
+                    <td className="muted">••••••</td>
                     <td>운영담당자</td>
                   </tr>
                 ))}

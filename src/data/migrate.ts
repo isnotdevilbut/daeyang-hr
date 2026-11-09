@@ -224,7 +224,7 @@ export function migrate(raw: any, opts: { until?: number } = {}): MigrationResul
   }
 
   if (s.schemaVersion === 20) {
-    // v20 → v21 (D-121): 장현우가 받는 팀원→팀장평가 5/6(시연 응답 한 건만 미제출로, 사용자 응답 그대로)
+    // v20 → v21 (D-121): 시연 팀장 한 명이 받는 팀원→팀장평가 5/6(시연 응답 한 건만 미제출로, 사용자 응답 그대로)
     notes.push(...leadUpwardOpen(s))
     s.schemaVersion = 21
   }

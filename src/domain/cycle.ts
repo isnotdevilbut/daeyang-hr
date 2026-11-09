@@ -5,6 +5,7 @@ import { templateFor } from './catalog'
 import { ensureExecUpward, ensureUpwardTemplate, syncUpward } from './upward'
 import { applyVersions, ensureVersions, scopesToCustom, toSlots } from './versions'
 import { splitByRule } from './splitV37'
+import { emptyForms } from './emptyState'
 import { cycleExecs, distributeExecs } from './execPlan'
 
 export { cycleExecs }
@@ -154,7 +155,7 @@ export function createCycle(
   if (!oneExec) distributeExecs(s, cycle)
   ensureVersions(cycle) // 평가표 버전: 지금 문항을 "공통 평가표"로 (D-082)
   if (upward) { cycle.upwardToExec = true; ensureUpwardTemplate(cycle); ensureExecUpward(s, cycle); syncUpward(s, cycle) } // 팀원→팀장평가 평가표·배정 (D-114)
-  if (upward) { scopesToCustom(cycle); toSlots(s, cycle); applyVersions(s, cycle); splitByRule(cycle) } // D-210·D-211: 평가표 범위 = 화살표(누가 → 누구를), D-255: 평가별 평가표
+  if (upward) { scopesToCustom(cycle); toSlots(s, cycle); applyVersions(s, cycle); splitByRule(cycle); emptyForms(s, cycle) } // D-210·D-211: 평가표 범위 = 화살표(누가 → 누구를), D-255: 평가별 평가표, 빈 상태 버전: 문항 없는 6개 평가표 틀
   return cycle
 }
 

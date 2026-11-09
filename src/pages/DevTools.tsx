@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { resetDemo, useAppState } from '../data/store'
-import { accountText, ADMIN_ACCOUNTS, canSignIn, DEMO_PASSWORD, setLoggedIn } from '../data/auth'
+import { accountText, ADMIN_ACCOUNTS, canSignIn, setLoggedIn } from '../data/auth'
 
 /** 개발·시연 준비용 화면 (#/dev). 제품 화면에서는 링크하지 않는다. */
 export default function DevTools() {
@@ -12,10 +12,10 @@ export default function DevTools() {
       <h1>개발 도구</h1>
       <section className="panel pad">
         <h2>시연 계정</h2>
-        <p>직원: 아이디 이름 · 비밀번호 사번 (조직 관리 데이터 그대로) / 운영담당자 비밀번호 <b>{DEMO_PASSWORD}</b> · <Link to="/login">로그인 화면</Link></p>
+        <p>직원: 아이디 이름 · 비밀번호 사번 (조직 관리 데이터 그대로) / 운영담당자 비밀번호 <b>(src/admin-password.ts 에서 정한 값)</b> · <Link to="/login">로그인 화면</Link></p>
         <table className="tbl">
           <tbody>
-            {ADMIN_ACCOUNTS.map((a) => <tr key={a.key}><td><b>{a.adminId}</b></td><td>{DEMO_PASSWORD}</td><td>운영담당자</td></tr>)}
+            {ADMIN_ACCOUNTS.map((a) => <tr key={a.key}><td><b>{a.adminId}</b></td><td>••••••</td><td>운영담당자</td></tr>)}
             {s.employees.filter(canSignIn).map((e) => <tr key={e.id}><td><b>{e.name}</b></td><td>{e.empNo}</td><td>{accountText(s, e)}</td></tr>)}
           </tbody>
         </table>
