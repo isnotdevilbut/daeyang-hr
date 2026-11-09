@@ -14,7 +14,7 @@
 - 범위 밖(디자인·권한 등)은 요청 없이 바꾸지 않는다. 결정이 사용자 몫이면 묻는다.
 
 ## 배포 흐름 (사용자 요청: 수정할 때마다 commit + push 후 배포 완료 알림)
-- GitHub 비공개 저장소 `isnotdevilbut/daeyang-hr-mockup`(main) → **Render** Blueprint 정적 사이트(`render.yaml`) 자동 배포.
+- GitHub 공개 저장소 `isnotdevilbut/daeyang-hr-mockup`(main — 교수님 평가용으로 공개, 원본 회사 자료는 올리지 않음) → **Render** Blueprint 정적 사이트(`render.yaml`) 자동 배포.
 - 공개 주소: https://daeyang-hr-mockup.onrender.com
 - 확인: `gh api repos/isnotdevilbut/daeyang-hr-mockup/deployments`, 또는 사이트 `index.html`의 `index-*.js` 이름이 로컬 `dist/assets`와 같은지. CDN이 약 5분 이전 파일을 줄 수 있음.
 - 커밋 메시지는 한국어 `feat:`/`fix:`/`style:`/`docs:` 접두어, 결정은 `docs/decisions.md`에 한 줄(D-번호) 추가.
