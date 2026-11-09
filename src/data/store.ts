@@ -7,7 +7,7 @@ import { useSyncExternalStore } from 'react'
 import type { AppState, Response } from '../domain/types'
 import { createEmptyState } from '../domain/emptyState'
 import { createSeed } from '../domain/seed'
-import { rpc } from './remote'
+import { authPassword, DEMO_ADMIN_PW, rpc, supabase } from './remote'
 
 /** 관리자만 읽는 항목(서버의 admin_only) — 직원 화면에는 내려가지 않음 */
 const ADMIN_KEYS = ['tokens', 'kpi', 'kpiIndicators', 'adjustments', 'manualScores', 'memos', 'reportNotes', 'adjustNotes'] as const
@@ -213,6 +213,9 @@ export async function loadDemo(onProgress?: (done: number, total: number) => voi
     done = Math.min(list.length, i + 8)
     onProgress?.(done, list.length)
   }
+  // 시연 중 관리자 로그인 = 로그인 화면에 보이는 admin · admin1234! 로 맞춤
+  await rpc('dy_set_admin_login', { p_id: 'admin' })
+  await supabase?.auth.updateUser({ password: authPassword(DEMO_ADMIN_PW) })
   await loadRemote()
 }
 

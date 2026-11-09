@@ -1,3 +1,4 @@
+import LoginSettings from './LoginSettings'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { update, useAppState } from '../../data/store'
@@ -17,8 +18,8 @@ const blank = (teamId: string): Employee => ({
   isExecutive: false, isCeo: false, active: true, evalExcluded: false,
 })
 
-type Tab = 'emp' | 'org' | 'upload'
-const TABS: [Tab, string][] = [['emp', '직원 목록'], ['org', '조직 설정'], ['upload', '일괄 업로드']]
+type Tab = 'emp' | 'org' | 'upload' | 'login'
+const TABS: [Tab, string][] = [['emp', '직원 목록'], ['org', '조직 설정'], ['upload', '일괄 업로드'], ['login', '로그인 설정']]
 
 export default function People() {
   const s = useAppState()
@@ -35,6 +36,7 @@ export default function People() {
       {tab === 'emp' && <EmployeeList />}
       {tab === 'org' && <OrgEditor />}
       {tab === 'upload' && <Upload />}
+      {tab === 'login' && <LoginSettings />}
     </div>
   )
 }

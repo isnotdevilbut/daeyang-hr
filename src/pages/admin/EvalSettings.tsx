@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { resetDemo, update, useAppState } from '../../data/store'
+import { changePassword } from '../../data/auth'
 import { confirmLeave, useDirty } from '../../data/dirty'
 import { applyParticipation, assignmentProblems, cloneCycle, cycleLabel, deleteCycle, participation } from '../../domain/cycle'
 import { selfApplies } from '../../domain/progress'
@@ -207,16 +208,31 @@ function DeleteModal({ cycle, onClose, onDone }: { cycle: Cycle; onClose: () => 
   const answered = cycle.assignments.filter((a) => s.responses[a.id]).length
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
+  const [pw1, setPw1] = useState('')
+  const [pw2, setPw2] = useState('')
   // 프로토타입: 시연용 가상 데이터가 들어 있으면 평가 삭제 = 모든 가상 데이터 초기화(웹앱 틀만 남김)
   if (s.demo) {
+    // 실제 업무로 넘어가므로 공개된 시연용 관리자 비밀번호(admin1234!)를 새 비밀번호로 바꾼다
     const wipe = async () => {
+      if (pw1.length < 8) return setErr('새 관리자 비밀번호는 8자 이상으로 정해 주세요.')
+      if (pw1 !== pw2) return setErr('두 칸의 비밀번호가 다릅니다.')
       setBusy(true); setErr('')
-      try { await resetDemo(); onDone(null) } catch (e) { setErr(`초기화하지 못했습니다: ${(e as Error).message}`); setBusy(false) }
+      try {
+        await resetDemo()
+        const e2 = await changePassword(pw1)
+        if (e2) throw new Error(e2)
+        onDone(null)
+      } catch (e) { setErr(`초기화하지 못했습니다: ${(e as Error).message}`); setBusy(false) }
     }
     return (
       <Modal title="평가 삭제" onClose={busy ? () => {} : onClose}>
         <p><b>모든 가상 데이터가 초기화되고, 웹앱 프레임만 남은 상태가 됩니다.</b></p>
-        <p className="muted" style={{ marginTop: 8 }}>시연용 직원·팀·평가·문항·응답·점수·KPI와 직원 로그인 계정이 모두 지워지고 되돌릴 수 없어요. 관리자 계정은 남아요. 이후 직원 명단·문항을 올려 새로 시작하면 돼요.</p>
+        <p className="muted" style={{ marginTop: 8 }}>시연용 직원·팀·평가·문항·응답·점수·KPI와 직원 로그인 계정이 모두 지워지고 되돌릴 수 없어요. 로그인 화면의 시연 계정 목록도 사라져요. 관리자 계정은 남아요.</p>
+        <p style={{ marginTop: 12 }}><b>새 관리자 비밀번호</b> <span className="muted small">(시연용 admin1234! 대신 — 8자 이상, 아이디는 admin 그대로)</span></p>
+        <div className="grid form-grid">
+          <label className="field">새 비밀번호<input type="password" autoComplete="new-password" value={pw1} disabled={busy} onChange={(e) => { setPw1(e.target.value); setErr('') }} /></label>
+          <label className="field">새 비밀번호 확인<input type="password" autoComplete="new-password" value={pw2} disabled={busy} onChange={(e) => { setPw2(e.target.value); setErr('') }} /></label>
+        </div>
         {err && <p className="feedback fail" role="alert">✕ {err}</p>}
         <div className="row" style={{ marginTop: 14 }}><span className="spacer" /><button className="btn" disabled={busy} onClick={onClose}>취소</button><button className="btn danger" disabled={busy} onClick={wipe}>{busy ? '초기화하는 중…' : '초기화하고 삭제'}</button></div>
       </Modal>

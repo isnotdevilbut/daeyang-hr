@@ -27,10 +27,9 @@ export default function Login() {
   const demoPeople = demo.employees.filter(canSignIn)
   const [demoOn, setDemoOn] = useState(false)
   useEffect(() => {
-    const probe = demoPeople.find((e) => !e.isExecutive)?.name
-    if (!probe) return
-    rpc<{ email: string }[]>('dy_login_candidates', { p_name: probe }).then((r) => setDemoOn(r.length > 0)).catch(() => setDemoOn(false))
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+    // 서버에 시연 데이터가 들어 있을 때만(실제 업무 데이터일 때는 목록을 보이지 않음)
+    rpc<boolean>('dy_is_demo').then((v) => setDemoOn(!!v)).catch(() => setDemoOn(false))
+  }, [])
   const fill = (a: string, b: string) => { setId(a); setPw(b); setErr('') }
   const cur = account ? sessionFor(s, account) : null
   if (cur) return <Navigate to={homeFor(cur.role)} replace />

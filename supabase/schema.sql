@@ -36,6 +36,8 @@ create table if not exists public.responses (
 create table if not exists public.admins (
   user_id uuid primary key references auth.users (id) on delete cascade
 );
+-- 관리자 로그인 아이디(관리자 페이지 '로그인 설정'에서 바꿈, 기본 admin). 전체 데이터 초기화로 지워지지 않음
+alter table public.admins add column if not exists login_id text not null default 'admin';
 
 alter table public.app_state enable row level security;
 alter table public.responses enable row level security;
@@ -222,10 +224,75 @@ begin
   delete from auth.users where email like '%@staff.daeyang-hr.app';
 end $$;
 
+-- ── 로그인 설정(관리자 아이디·직원 비밀번호 = 사번) ─────────────
+/** 이 아이디가 관리자 로그인 아이디인가(관리자가 아직 없으면 admin) */
+create or replace function public.dy_admin_login_matches(p_id text) returns boolean
+language sql stable security definer set search_path = public as $$
+  select case when exists (select 1 from public.admins) then exists (select 1 from public.admins where login_id = trim(p_id))
+              else trim(p_id) = 'admin' end;
+$$;
+
+/** 관리자만: 지금 관리자 아이디 */
+create or replace function public.dy_admin_login_id() returns text
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not public.dy_is_admin() then raise exception 'not allowed'; end if;
+  return (select login_id from public.admins where user_id = auth.uid());
+end $$;
+
+/** 관리자만: 관리자 아이디 바꾸기(빈 칸·30자 넘음·직원 이름과 같은 아이디는 안 됨) */
+create or replace function public.dy_set_admin_login(p_id text) returns void
+language plpgsql security definer set search_path = public as $$
+declare v text := trim(coalesce(p_id, ''));
+begin
+  if not public.dy_is_admin() then raise exception 'not allowed'; end if;
+  if v = '' or length(v) > 30 then raise exception 'bad login id'; end if;
+  if exists (select 1 from public.app_state s, jsonb_array_elements(coalesce(s.shared -> 'employees', '[]'::jsonb)) e where s.id = 1 and trim(e ->> 'name') = v) then
+    raise exception 'same as employee name';
+  end if;
+  update public.admins set login_id = v where user_id = auth.uid();
+end $$;
+
+/**
+ * 직원 로그인 준비: 이름 + 사번이 맞는 재직 직원의 계정 이메일. 계정이 이미 있으면 비밀번호를 지금 사번으로 맞춤
+ * (직원 로그인은 항상 아이디 = 이름, 비밀번호 = 사번 — 관리자가 사번을 바꾸면 다음 로그인부터 바뀐 사번)
+ */
+create or replace function public.dy_prepare_staff_login(p_name text, p_empno text) returns jsonb
+language plpgsql security definer set search_path = public, extensions as $$
+declare
+  out jsonb := '[]'::jsonb;
+  r record;
+  em text;
+begin
+  for r in
+    select e from public.app_state s, jsonb_array_elements(coalesce(s.shared -> 'employees', '[]'::jsonb)) e
+    where s.id = 1 and trim(e ->> 'name') = trim(p_name) and coalesce(e ->> 'empNo', '') = trim(p_empno) and trim(p_empno) <> ''
+      and coalesce((e ->> 'active')::boolean, false) and not coalesce((e ->> 'isCeo')::boolean, false)
+  loop
+    em := lower(r.e ->> 'id') || '@staff.daeyang-hr.app';
+    if exists (select 1 from auth.users where email = em) then
+      update auth.users set encrypted_password = extensions.crypt('dyhr::' || trim(p_empno), extensions.gen_salt('bf')) where email = em;
+      out := out || jsonb_build_array(jsonb_build_object('email', em, 'hasAccount', true));
+    else
+      out := out || jsonb_build_array(jsonb_build_object('email', em, 'hasAccount', false));
+    end if;
+  end loop;
+  return out;
+end $$;
+
+/** 시연 데이터가 들어 있는가(로그인 화면의 '시연 계정 보기'는 이때만) */
+create or replace function public.dy_is_demo() returns boolean
+language sql stable security definer set search_path = public as $$
+  select coalesce((select (shared ->> 'demo')::boolean from public.app_state where id = 1), false);
+$$;
+
 -- 함수 실행 권한: 로그인 도우미 두 개만 로그인 전(anon)에도, 나머지는 로그인한 사람만
 revoke all on function public.dy_is_admin(), public.dy_my_employee(), public.dy_login_candidates(text), public.dy_admin_exists(),
   public.dy_get_state(), public.dy_save_state(jsonb, jsonb, bigint), public.dy_state_version(), public.dy_get_responses(),
   public.dy_save_response(text, jsonb), public.dy_delete_responses(text[]), public.dy_reset_all(), public.dy_on_new_user() from public, anon, authenticated;
 grant execute on function public.dy_login_candidates(text), public.dy_admin_exists() to anon, authenticated;
+revoke all on function public.dy_admin_login_matches(text), public.dy_admin_login_id(), public.dy_set_admin_login(text), public.dy_prepare_staff_login(text, text), public.dy_is_demo() from public, anon, authenticated;
+grant execute on function public.dy_admin_login_matches(text), public.dy_prepare_staff_login(text, text), public.dy_is_demo() to anon, authenticated;
+grant execute on function public.dy_admin_login_id(), public.dy_set_admin_login(text) to authenticated;
 grant execute on function public.dy_is_admin(), public.dy_get_state(), public.dy_save_state(jsonb, jsonb, bigint), public.dy_state_version(),
   public.dy_get_responses(), public.dy_save_response(text, jsonb), public.dy_delete_responses(text[]), public.dy_reset_all() to authenticated;

@@ -84,16 +84,16 @@ const WRONG = '아이디 또는 비밀번호가 올바르지 않습니다.'
 
 /**
  * 로그인(서버). 성공하면 계정, 실패하면 오류 문구.
- *  - admin: 계정이 있으면 비밀번호 확인, 아직 관리자가 없으면 지금 넣은 비밀번호로 관리자 계정을 만든다
- *  - 직원: 이름으로 계정 후보(동명이인이면 여러 명)를 찾아 비밀번호 확인. 아직 계정이 없으면 비밀번호가 사번일 때 계정을 만든다(서버가 사번 확인)
+ *  - 관리자: 관리자 로그인 아이디(기본 admin, 관리자 페이지 '로그인 설정'에서 바꿈). 아직 관리자가 없으면 지금 넣은 비밀번호로 관리자 계정을 만든다
+ *  - 직원: 항상 아이디 = 이름, 비밀번호 = 사번. 서버가 이름·사번을 확인하고(계정이 있으면 비밀번호를 지금 사번으로 맞춤), 계정이 없으면 만든다
  */
 export async function remoteLogin(id: string, pw: string): Promise<DemoAccount | string> {
   const v = id.trim()
   if (!v || !pw.trim()) return '아이디와 비밀번호를 입력하세요.'
   if (!supabase) return '서버 연결 설정이 없습니다.'
-  const signIn = async (email: string) => !(await supabase!.auth.signInWithPassword({ email, password: authPassword(pw) })).error
+  const signIn = async (email: string, p = pw) => !(await supabase!.auth.signInWithPassword({ email, password: authPassword(p) })).error
   try {
-    if (v === 'admin') {
+    if (await rpc<boolean>('dy_admin_login_matches', { p_id: v })) {
       if (await signIn(ADMIN_EMAIL)) return ADMIN_ACCOUNTS[0]
       if (await rpc<boolean>('dy_admin_exists')) return WRONG
       if (pw.length < 4) return '처음 관리자 비밀번호는 4자 이상으로 정해 주세요.'
@@ -102,18 +102,34 @@ export async function remoteLogin(id: string, pw: string): Promise<DemoAccount |
       if (!r.data.session && !(await signIn(ADMIN_EMAIL))) return 'Supabase 설정에서 이메일 확인(Confirm email)을 꺼 주세요.'
       return ADMIN_ACCOUNTS[0]
     }
-    const cands = await rpc<{ email: string; hasAccount: boolean }[]>('dy_login_candidates', { p_name: v })
-    for (const c of cands.filter((x) => x.hasAccount)) if (await signIn(c.email)) return participantAccount(c.email.split('@')[0])
-    for (const c of cands.filter((x) => !x.hasAccount)) {
-      // 첫 로그인: 비밀번호 = 사번이면 서버가 계정을 만든다(사번이 다르면 서버가 거절)
-      const r = await supabase.auth.signUp({ email: c.email, password: authPassword(pw), options: { data: { empNo: pw.trim() } } })
+    const no = pw.trim()
+    const cands = await rpc<{ email: string; hasAccount: boolean }[]>('dy_prepare_staff_login', { p_name: v, p_empno: no })
+    for (const c of cands) {
+      if (c.hasAccount) { if (await signIn(c.email, no)) return participantAccount(c.email.split('@')[0]); continue }
+      // 첫 로그인: 계정 만들기(서버가 이름·사번 다시 확인)
+      const r = await supabase.auth.signUp({ email: c.email, password: authPassword(no), options: { data: { empNo: no } } })
       if (r.error) continue
-      if (r.data.session || (await signIn(c.email))) return participantAccount(c.email.split('@')[0])
+      if (r.data.session || (await signIn(c.email, no))) return participantAccount(c.email.split('@')[0])
     }
     return WRONG
   } catch (e) {
     return `서버에 연결하지 못했습니다: ${(e as Error).message}`
   }
+}
+
+/** 관리자: 지금 관리자 로그인 아이디 */
+export const adminLoginId = () => rpc<string>('dy_admin_login_id')
+
+/** 관리자: 로그인 아이디·비밀번호 바꾸기(빈 칸은 그대로). 오류 문구 또는 null */
+export async function saveAdminLogin(loginId: string | null, password: string | null): Promise<string | null> {
+  try {
+    if (loginId !== null) await rpc('dy_set_admin_login', { p_id: loginId })
+  } catch (e) {
+    const m = (e as Error).message
+    return /same as employee/.test(m) ? '직원 이름과 같은 아이디는 쓸 수 없어요.' : /bad login/.test(m) ? '아이디는 1~30자로 정해 주세요.' : `아이디를 바꾸지 못했습니다: ${m}`
+  }
+  if (password !== null) return changePassword(password)
+  return null
 }
 
 /** 비밀번호 변경(로그인한 본인). 4자 이상 */

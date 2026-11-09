@@ -1,9 +1,8 @@
 import { useEffect, useLayoutEffect, useState, type ReactNode } from 'react'
 import { HashRouter, Navigate, NavLink, Outlet, Route, Routes, useNavigate, useParams } from 'react-router-dom'
 import { getState, update, useAppState, useSyncStatus } from './data/store'
-import { changePassword, homeFor, restoreLogin, sessionFor, setLoggedIn, useAccount, type DemoAccount } from './data/auth'
+import { homeFor, restoreLogin, sessionFor, setLoggedIn, useAccount, type DemoAccount } from './data/auth'
 import { remoteConfigured } from './data/remote'
-import { Modal } from './components/ui'
 import { ADMIN_NAV, can } from './domain/permissions'
 import { ROLE_LABEL, type DemoRole } from './domain/types'
 import logoKo from './assets/logo-ko.png'
@@ -56,7 +55,6 @@ const PARTICIPANT: DemoRole[] = ['member', 'lead', 'exec']
  */
 function UserArea({ account, name, role, logout = '로그아웃', extra }: { account: DemoAccount; name: string; role: string; logout?: string; extra?: ReactNode }) {
   const nav = useNavigate()
-  const demo = !!useAppState().demo
   const initial = account.kind === 'participant' ? [...name.trim()][0] ?? '' : ''
   return (
     <div className={extra ? 'hdr-user has-extra' : 'hdr-user'}>
@@ -71,8 +69,7 @@ function UserArea({ account, name, role, logout = '로그아웃', extra }: { acc
       </div>
       {extra}
       <SyncBadge />
-      {/* 시연 계정으로 쓰는 동안은 비밀번호를 바꾸지 않음 — 관리자는 항상(로그인 화면에 비밀번호 표시), 직원은 시연 데이터일 때 */}
-      {account.kind === 'participant' && !demo && <PasswordButton />}
+      {/* 직원 로그인은 항상 이름 + 사번(비밀번호 변경 없음). 관리자 아이디·비밀번호는 조직 관리 → 조직 설정 → 로그인 설정 */}
       <button className="btn small" onClick={() => { setLoggedIn(null); nav('/login', { replace: true }) }}>{logout}</button>
     </div>
   )
@@ -86,35 +83,6 @@ function SyncBadge() {
   return null
 }
 
-/** 비밀번호 변경(프로토타입 — 서버 계정) */
-function PasswordButton() {
-  const [open, setOpen] = useState(false)
-  const [a, setA] = useState('')
-  const [b, setB] = useState('')
-  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
-  const [busy, setBusy] = useState(false)
-  const save = async () => {
-    if (a !== b) return setMsg({ ok: false, text: '두 칸의 비밀번호가 다릅니다.' })
-    setBusy(true)
-    const err = await changePassword(a)
-    setBusy(false)
-    if (err) return setMsg({ ok: false, text: err })
-    setMsg({ ok: true, text: '비밀번호를 바꿨습니다. 다음 로그인부터 새 비밀번호를 쓰세요.' }); setA(''); setB('')
-  }
-  return (
-    <>
-      <button className="btn small" onClick={() => { setOpen(true); setMsg(null) }}>비밀번호 변경</button>
-      {open && (
-        <Modal title="비밀번호 변경" onClose={() => setOpen(false)}>
-          <label className="field">새 비밀번호<input type="password" autoComplete="new-password" value={a} onChange={(e) => setA(e.target.value)} /></label>
-          <label className="field">새 비밀번호 확인<input type="password" autoComplete="new-password" value={b} onChange={(e) => setB(e.target.value)} /></label>
-          {msg && <p className={`feedback ${msg.ok ? 'ok' : 'fail'}`} role={msg.ok ? 'status' : 'alert'}>{msg.ok ? '✓' : '✕'} {msg.text}</p>}
-          <div className="row" style={{ marginTop: 12 }}><span className="spacer" /><button className="btn primary" disabled={busy || !a} onClick={save}>{busy ? '바꾸는 중…' : '바꾸기'}</button></div>
-        </Modal>
-      )}
-    </>
-  )
-}
 
 function AdminLayout() {
   const s = useAppState()
