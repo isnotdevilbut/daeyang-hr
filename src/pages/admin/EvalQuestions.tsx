@@ -836,7 +836,8 @@ function ScopeEditor({ cycle, v, onDup, onRemove, msg, setMsg }: { cycle: Cycle;
       {/* D-155: 공통 기본 평가표의 '이 평가표는 적용 평가 중 …' 안내는 표시하지 않음 */}
       {/* D-122: 팀·직급·사람 조건은 평가받는 사람 기준 — 팀원→팀장평가는 평가받는 사람이 팀장(평가하는 팀원이 아님) */}
       {!arrows && scope.rules.includes('upward') && <p className="muted small scope-hint">팀·직급·사람은 <b>평가받는 사람</b> 기준이에요. 상향평가는 평가받는 사람이 <b>팀장·임원</b>이라, 직급을 고를 때 '팀장'·'임원'을 넣어야 해요.</p>}
-      {preview.length > 0 && (
+      {/* D-263: 화살표 방식(평가자 → 평가대상 + 적용 팀)에서는 '이대로 적용하면 — 평가 미배치' 안내를 띄우지 않음 — 아무도 안 맡은 화살표는 블록의 '평가 미배치' 글자로 보임 */}
+      {!arrows && preview.length > 0 && (
         <div className="feedback fail scope-preview" role="status">
           ⚠ 이대로 적용하면 — {problemText(cycle, preview, s)}
           <div className="muted small">{arrows ? "이대로면 위 평가는 어느 평가표도 맡지 않아 '평가 미배치'가 돼요. 그 화살표·팀을 이 평가표나 다른 평가표에서 골라 주세요." : "이대로면 위 평가는 어느 평가표에도 체크되지 않아 '평가 미배치'가 돼요. 이 평가표에 다시 체크하거나, 그 평가를 맡을 다른 평가표에서 체크하세요(팀·직급·사람은 평가받는 사람 기준)."}</div>
