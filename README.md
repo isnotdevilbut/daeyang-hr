@@ -21,7 +21,7 @@ npm run build    # 배포용 파일 만들기(dist 폴더)
 
 | 파일 | 올리는 곳 |
 |---|---|
-| `1_employees.csv` | 조직 관리 → 일괄 업로드 (먼저 조직 설정에서 팀 4개를 만든 뒤) |
+| `1_employees.csv` | 원본 사이트와 같은 가상 직원 35명 — 조직 관리 → 일괄 업로드 (먼저 조직 설정에서 팀 4개를 만든 뒤) |
 | `2_questions_self_member.csv` | 평가 관리 → 문항 관리 → '자기평가(사원)' 탭 → 엑셀·CSV 가져오기 (러시아어 번역 포함) |
 | `3_questions_lead_eval.csv` | '팀장평가표' 탭 |
 | `4_questions_exec_eval.csv` | '임원평가표' 탭 |
